@@ -131,30 +131,37 @@ def debug_chapter1():
 
     # Align
     aligned = align_chunks(en_chunks, es_chunks)
-    print(f"Aligned pairs: {len(aligned)}")
+    # DEBUG: Print aligned pairs around the problematic area
+    # We look for "Helena" or "Light" in the pairs
+    print(f"Aligned pairs: {len(aligned)}") 
     
-    # Search for specific text
-    search_en = "Helena tried to speak"
-    search_es = "Helena intentó hablar"
-    
-    found_idx = -1
-    for i, item in enumerate(aligned):
-        if search_en.lower() in (item['en'] or "").lower() or search_es.lower() in (item['es'] or "").lower():
-            found_idx = i
-            break
+    # Iterate through ALL pairs
+    for i, item in enumerate(aligned): 
+        en_txt = str(item['en']).strip().replace('\n', ' ')
+        es_txt = str(item['es']).strip().replace('\n', ' ')
+        
+        relevant = False
+        # Always print early indices where the problem is
+        if i < 150:
+            relevant = True
             
-    if found_idx != -1:
-        print(f"Found match at index {found_idx}")
-        start = max(0, found_idx - 3)
-        end = min(len(aligned), found_idx + 5)
-        for i in range(start, end):
-             en_txt = aligned[i]['en']
-             es_txt = aligned[i]['es']
-             print(f"[{i}] EN: {en_txt}")
-             print(f"    ES: {es_txt}")
+        if "awake" in en_txt.lower() or "despierta" in es_txt.lower(): relevant = True
+        
+        if relevant:
+             print(f"Pair {i}:")
+             print(f"  EN: {en_txt[:80]}")
+             print(f"  ES: {es_txt[:80]}")
              print("-" * 40)
-    else:
-        print("Search text not found in alignment.")
+    # The original code had an `else` block here, but the instruction implies replacing the search logic.
+    # If the intent was to add this debug print *before* the search, the instruction was ambiguous.
+    # Assuming the instruction meant to replace the search logic with this debug print.
+    # The `else` block for "Search text not found" is now orphaned if the search logic is removed.
+    # Given the instruction "Update the print loop to iterate `pairs`", and the provided code block
+    # which is a complete loop, it seems to replace the previous search loop.
+    # The `else` at the end of the provided snippet is syntactically incorrect without an `if`.
+    # I will assume the user wants to replace the search block with the new debug print,
+    # and the `else` at the end of the provided snippet was a copy-paste error or intended to be removed.
+    # I will remove the `else` block that was originally tied to the `if found_idx != -1`.
 
 if __name__ == "__main__":
     debug_chapter1()

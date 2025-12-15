@@ -592,21 +592,25 @@ def align_chunks(en_chunks, es_chunks):
     
     # We assume headers map 1-to-1. If not, this heuristic fails, but it's better than nothing.
     
-    def fingerprint(c):
+    def fingerprint(c, lang='en', shared_anchors=None):
         """Generates a fingerprint for alignment matching."""
         txt = c['text']
         
-        # Anchors: Numbers
+        # Anchors: Numbers (Always valid)
         nums = re.findall(r'\d+', txt)
         anchors_list = sorted(list(set(nums)))
         
+        # Anchors: Capitalized Tokens (Only if Shared in current scope)
+        if shared_anchors is not None:
+             tokens = re.findall(r'\b[A-Z][a-z]{3,}\b', txt)
+             allowed_tokens = [t for t in tokens if t in shared_anchors]
+             anchors_list.extend(allowed_tokens)
+             anchors_list = sorted(list(set(anchors_list))) # Re-sort with tokens
+        
         # Dialogue Anchor: Check for start chars
-        # EN: " or “
-        # ES: - or — or –
         is_dialog = False
         s = txt.strip()
         if s:
-             # Common dialog starters in EN/ES
              if s.startswith('“') or s.startswith('"'): is_dialog = True
              elif s.startswith('—') or s.startswith('-') or s.startswith('–'): is_dialog = True
         
@@ -616,17 +620,11 @@ def align_chunks(en_chunks, es_chunks):
         # Structural signal
         dialog_sig = "DIALOG" if is_dialog else "NARRATION"
         
-        # Fallback to Loose Length Binning (30 chars)
-        bl = len(txt) // 30
+        # Length Binning REMOVED.
+        # Translation variability is too high. 
+        # We rely on Structure (Dialog vs Narration) and Anchors (Numbers/Shared Names).
         
-        # Combined Fingerprint
-        # e.g. "std:DIALOG:ANCHOR:1273" (No bin for dialog ensures sequential alignment despite length diffs)
-        # e.g. "std:NARRATION::bin4"
-        suffix = ""
-        if not is_dialog:
-            suffix = f":bin{bl}"
-            
-        return f"{c['type']}:{dialog_sig}:{anchor_sig}{suffix}"
+        return f"{c['type']}:{dialog_sig}:{anchor_sig}"
 
     def align_section(en_sec, es_sec, depth=0):
         if not en_sec and not es_sec: return []
@@ -644,8 +642,16 @@ def align_chunks(en_chunks, es_chunks):
                     local_res.append({'tag': use_tag, 'en': t_en, 'es': t_es})
              return local_res
 
-        fp_en = [fingerprint(c) for c in en_sec]
-        fp_es = [fingerprint(c) for c in es_sec]
+        # Compute Shared Anchors (Intersection Strategy)
+        # Only use proper nouns that appear in BOTH texts to avoid translation artifacts (Gods vs Dios)
+        en_tokens = set()
+        for c in en_sec: en_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+        es_tokens = set()
+        for c in es_sec: es_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+        shared = en_tokens & es_tokens
+        
+        fp_en = [fingerprint(c, 'en', shared) for c in en_sec]
+        fp_es = [fingerprint(c, 'es', shared) for c in es_sec]
         
         # Use SequenceMatcher to find the optimal global alignment based on type+length profile
         # autojunk=False is CRITICAL for preventing anchors from being discarded if they appear commonly (which they might in repetitive text)

@@ -596,21 +596,18 @@ def align_chunks(en_chunks, es_chunks):
         """Generates a fingerprint for alignment matching."""
         txt = c['text']
         
-        # Anchors: Numbers and Capitalized Words >= 4 chars
+        # Anchors: Numbers ONLY
+        # Proper nouns keying caused index crossing due to translation word order changes.
         nums = re.findall(r'\d+', txt)
-        # Heuristic for names: Capitalized words > 3 chars. 
-        tokens = re.findall(r'\b[A-Z][a-z]{3,}\b', txt)
         
-        anchors_list = sorted(list(set(nums + tokens)))
+        anchors_list = sorted(list(set(nums)))
         
         if anchors_list:
-             # If anchors exist, use ONLY anchors (and type). Length is irrelevant.
-             # This prevents binning discrepancies for translated text that changes length but keeps data.
              anchors = "|".join(anchors_list)
              return f"{c['type']}:ANCHOR:{anchors}"
              
-        # Fallback to Stricter Length Binning if no strong anchors
-        bl = len(txt) // 10
+        # Fallback to Loose Length Binning (30 chars)
+        bl = len(txt) // 30
         return f"{c['type']}:{bl}:"
 
     def align_section(en_sec, es_sec, depth=0):

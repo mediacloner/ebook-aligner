@@ -1,0 +1,138 @@
+import os
+import zipfile
+import shutil
+import uuid
+import threading
+import time
+from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
+from werkzeug.utils import secure_filename # Added this import
+from align_book import create_bilingual_epub
+
+app = Flask(__name__)
+app.secret_key = 'supersecretkey'
+UPLOAD_FOLDER = 'uploads'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def clean_old_uploads(max_age_seconds=7200): # 2 hours
+    print("Cleaning old uploads...")
+    if not os.path.exists(UPLOAD_FOLDER): return
+    now = time.time()
+    for item in os.listdir(UPLOAD_FOLDER):
+        path = os.path.join(UPLOAD_FOLDER, item)
+        try:
+            if os.path.getmtime(path) < now - max_age_seconds:
+                if os.path.isdir(path): shutil.rmtree(path)
+                else: os.remove(path)
+                print(f"Removed old upload: {item}")
+        except Exception as e:
+            print(f"Failed to remove {item}: {e}")
+
+# Clean on startup
+clean_old_uploads()
+
+# Global dictionary to store job status
+# Format: job_id -> { 'status': 'queued'|'processing'|'completed'|'error', 'progress': 0, 'message': '', 'file': path }
+active_jobs = {}
+
+def unzip_file(zip_path, extract_to):
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to)
+
+def find_oebps(root_dir):
+    """Finds the folder containing the OPF file."""
+    for root, dirs, files in os.walk(root_dir):
+        for f in files:
+            if f.endswith('.opf'):
+                return root
+    return root_dir # Fallback
+
+def process_job_worker(job_id, en_path, es_path, job_dir):
+    try:
+        active_jobs[job_id]['status'] = 'processing'
+        active_jobs[job_id]['message'] = 'Unzipping files...'
+        
+        # Unpack
+        en_extract = os.path.join(job_dir, 'en_extract')
+        es_extract = os.path.join(job_dir, 'es_extract')
+        
+        unzip_file(en_path, en_extract)
+        unzip_file(es_path, es_extract)
+        
+        # Find OEBPS
+        en_oebps = find_oebps(en_extract)
+        es_oebps = find_oebps(es_extract)
+        
+        output_filename = 'bilingual_aligned.epub'
+        output_path = os.path.join(job_dir, output_filename)
+        
+        def update_progress(current, total, msg):
+            pct = int((current / total) * 100)
+            active_jobs[job_id]['progress'] = pct
+            active_jobs[job_id]['message'] = msg
+            
+        # Run alignment
+        create_bilingual_epub(en_oebps, es_oebps, output_path, progress_callback=update_progress)
+        
+        active_jobs[job_id]['status'] = 'completed'
+        active_jobs[job_id]['progress'] = 100
+        active_jobs[job_id]['message'] = 'Complete!'
+        active_jobs[job_id]['file'] = output_path
+        
+    except Exception as e:
+        active_jobs[job_id]['status'] = 'error'
+        active_jobs[job_id]['message'] = str(e)
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    if 'en_file' not in request.files or 'es_file' not in request.files:
+        return jsonify({'error': 'Missing files'}), 400
+    
+    en_file = request.files['en_file']
+    es_file = request.files['es_file']
+    
+    # Create a unique session ID for this job
+    job_id = str(uuid.uuid4())
+    job_dir = os.path.join(UPLOAD_FOLDER, job_id)
+    os.makedirs(job_dir)
+    
+    en_path = os.path.join(job_dir, 'en.epub')
+    es_path = os.path.join(job_dir, 'es.epub')
+    
+    en_file.save(en_path)
+    es_file.save(es_path)
+    
+    # Initialize job status
+    active_jobs[job_id] = {
+        'status': 'queued',
+        'progress': 0,
+        'message': 'Queued...',
+        'file': None
+    }
+    
+    # Start thread
+    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir))
+    thread.start()
+    
+    return jsonify({'job_id': job_id})
+
+@app.route('/progress/<job_id>', methods=['GET'])
+def get_progress(job_id):
+    job = active_jobs.get(job_id)
+    if not job:
+        return jsonify({'error': 'Job not found'}), 404
+    return jsonify(job)
+
+@app.route('/download/<job_id>', methods=['GET'])
+def download_file(job_id):
+    job = active_jobs.get(job_id)
+    if not job or job['status'] != 'completed':
+        return "File not ready or job not found", 404
+    
+    return send_file(job['file'], as_attachment=True, download_name='bilingual_aligned.epub')
+
+if __name__ == '__main__':
+    app.run(debug=True, port=8080)

@@ -1,0 +1,198 @@
+<package xmlns="http://www.idpf.org/2007/opf" prefix="rendition: http://www.idpf.org/vocab/rendition/# schema: http://schema.org/" unique-identifier="uid" version="3.0" xml:lang="en">
+<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+<dc:title id="title">Artificial Intelligence</dc:title>
+<dc:identifier id="uid">9780374715236</dc:identifier>
+<meta property="identifier-type" refines="#uid" scheme="onix:codelist5">15</meta>
+<dc:language>en-US</dc:language>
+<dc:creator id="creator">Melanie Mitchell</dc:creator>
+<dc:publisher>Farrar, Straus and Giroux</dc:publisher>
+<dc:source id="src-id">urn:isbn:9780374257835</dc:source>
+<meta property="identifier-type" refines="#src-id" scheme="onix:codelist5">15</meta>
+<dc:rights>All rights reserved</dc:rights>
+<meta property="title-type" refines="#title">main</meta>
+<meta property="dcterms:modified">2019-08-28T10:16:07Z</meta>
+<meta id="auth" property="dcterms:creator">Melanie Mitchell</meta>
+<meta property="dcterms:date">2019</meta>
+<meta property="rendition:orientation">auto</meta>
+<meta property="rendition:spread">auto</meta>
+<meta content="cover-image" name="cover"/>
+<meta property="schema:accessMode">textual</meta>
+<meta property="schema:accessModeSufficient">textual,visual</meta>
+<meta property="schema:accessibilityFeature">structuralNavigation</meta>
+<meta property="schema:accessibilityFeature">captions</meta>
+<meta property="schema:accessibilitySummary">This publication conforms to the EPUB Accessibility specification at WCAG Level A.</meta>
+<description xmlns="http://purl.org/dc/elements/1.1/">&lt;p&gt;No recent scientific enterprise has proved as alluring, terrifying, and filled with extravagant promise and frustrating setbacks as artificial intelligence. The award-winning author Melanie Mitchell, a leading computer scientist, now reveals its turbulent history and the recent surge of apparent successes, grand hopes, and emerging fears that surround AI.&lt;/p&gt;&lt;p&gt;In &lt;i&gt;Artificial Intelligence&lt;/i&gt;, Mitchell turns to the most urgent questions concerning AI today: How intelligent&amp;#8212;really&amp;#8212;are the best AI programs? How do they work? What can they actually do, and when do they fail? How humanlike do we expect them to become, and how soon do we need to worry about them surpassing us? Along the way, she introduces the dominant methods of modern AI and machine learning, describing cutting-edge AI programs, their human inventors, and the historical lines of thought that led to recent achievements. She meets with fellow experts like Douglas Hofstadter, the cognitive scientist and...</description>
+</metadata>
+<manifest>
+<item href="nav.xhtml" id="nav" media-type="application/xhtml+xml" properties="nav"/>
+<item href="toc.ncx" id="toc" media-type="application/x-dtbncx+xml"/>
+<item href="xhtml/cover.xhtml" id="html-cover-page" media-type="application/xhtml+xml"/>
+<item href="xhtml/title.xhtml" id="tit" media-type="application/xhtml+xml"/>
+<item href="xhtml/mini_toc.xhtml" id="mini_toc" media-type="application/xhtml+xml"/>
+<item href="xhtml/copyrightnotice.xhtml" id="copyrightnotice" media-type="application/xhtml+xml"/>
+<item href="xhtml/dedication.xhtml" id="dedication" media-type="application/xhtml+xml"/>
+<item href="xhtml/prologue.xhtml" id="prologue" media-type="application/xhtml+xml"/>
+<item href="xhtml/part1.xhtml" id="part1" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter1.xhtml" id="chapter1" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter2.xhtml" id="chapter2" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter3.xhtml" id="chapter3" media-type="application/xhtml+xml"/>
+<item href="xhtml/part2.xhtml" id="part2" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter4.xhtml" id="chapter4" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter5.xhtml" id="chapter5" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter6.xhtml" id="chapter6" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter7.xhtml" id="chapter7" media-type="application/xhtml+xml"/>
+<item href="xhtml/part3.xhtml" id="part3" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter8.xhtml" id="chapter8" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter9.xhtml" id="chapter9" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter10.xhtml" id="chapter10" media-type="application/xhtml+xml"/>
+<item href="xhtml/part4.xhtml" id="part4" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter11.xhtml" id="chapter11" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter12.xhtml" id="chapter12" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter13.xhtml" id="chapter13" media-type="application/xhtml+xml"/>
+<item href="xhtml/part5.xhtml" id="part5" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter14.xhtml" id="chapter14" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter15.xhtml" id="chapter15" media-type="application/xhtml+xml"/>
+<item href="xhtml/chapter16.xhtml" id="chapter16" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-fm3.xhtml" id="notes-fm3" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch1.xhtml" id="notes-ch1" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch2.xhtml" id="notes-ch2" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch3.xhtml" id="notes-ch3" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch4.xhtml" id="notes-ch4" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch5.xhtml" id="notes-ch5" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch6.xhtml" id="notes-ch6" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch7.xhtml" id="notes-ch7" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch8.xhtml" id="notes-ch8" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch9.xhtml" id="notes-ch9" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch10.xhtml" id="notes-ch10" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch11.xhtml" id="notes-ch11" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch12.xhtml" id="notes-ch12" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch13.xhtml" id="notes-ch13" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch14.xhtml" id="notes-ch14" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch15.xhtml" id="notes-ch15" media-type="application/xhtml+xml"/>
+<item href="xhtml/notes-ch16.xhtml" id="notes-ch16" media-type="application/xhtml+xml"/>
+<item href="xhtml/acknowledgments.xhtml" id="acknowledgments" media-type="application/xhtml+xml"/>
+<item href="xhtml/index.xhtml" id="index" media-type="application/xhtml+xml"/>
+<item href="xhtml/illustration.xhtml" id="illustration" media-type="application/xhtml+xml"/>
+<item href="xhtml/adcard.xhtml" id="adcard" media-type="application/xhtml+xml"/>
+<item href="xhtml/abouttheauthor.xhtml" id="abouttheauthor" media-type="application/xhtml+xml"/>
+<item href="xhtml/newsletter.xhtml" id="newsletter" media-type="application/xhtml+xml"/>
+<item href="xhtml/contents.xhtml" id="contents" media-type="application/xhtml+xml"/>
+<item href="xhtml/copyright.xhtml" id="copyright" media-type="application/xhtml+xml"/>
+<item href="fonts/TSC_UKai_M-UAN.ttf" id="myfont-01" media-type="application/vnd.ms-opentype"/>
+<item href="images/9780374715236.jpg" id="cover-image" media-type="image/jpeg"/>
+<item href="images/author.jpg" id="image-002" media-type="image/jpeg"/>
+<item href="images/Figure1.jpg" id="image-003" media-type="image/jpeg"/>
+<item href="images/Figure10.jpg" id="image-004" media-type="image/jpeg"/>
+<item href="images/Figure11.jpg" id="image-005" media-type="image/jpeg"/>
+<item href="images/Figure12.jpg" id="image-006" media-type="image/jpeg"/>
+<item href="images/Figure13.jpg" id="image-007" media-type="image/jpeg"/>
+<item href="images/Figure14.jpg" id="image-008" media-type="image/jpeg"/>
+<item href="images/Figure15.jpg" id="image-009" media-type="image/jpeg"/>
+<item href="images/Figure16.jpg" id="image-0010" media-type="image/jpeg"/>
+<item href="images/Figure17.jpg" id="image-0011" media-type="image/jpeg"/>
+<item href="images/Figure18.jpg" id="image-0012" media-type="image/jpeg"/>
+<item href="images/Figure19.jpg" id="image-0013" media-type="image/jpeg"/>
+<item href="images/Figure2.jpg" id="image-0014" media-type="image/jpeg"/>
+<item href="images/Figure20.jpg" id="image-0015" media-type="image/jpeg"/>
+<item href="images/Figure21.jpg" id="image-0016" media-type="image/jpeg"/>
+<item href="images/Figure22.jpg" id="image-0017" media-type="image/jpeg"/>
+<item href="images/Figure23.jpg" id="image-0018" media-type="image/jpeg"/>
+<item href="images/Figure27.jpg" id="image-0019" media-type="image/jpeg"/>
+<item href="images/Figure28.jpg" id="image-0020" media-type="image/jpeg"/>
+<item href="images/Figure29.jpg" id="image-0021" media-type="image/jpeg"/>
+<item href="images/Figure3.jpg" id="image-0022" media-type="image/jpeg"/>
+<item href="images/Figure30.jpg" id="image-0023" media-type="image/jpeg"/>
+<item href="images/Figure31.jpg" id="image-0024" media-type="image/jpeg"/>
+<item href="images/Figure32.jpg" id="image-0025" media-type="image/jpeg"/>
+<item href="images/Figure33.jpg" id="image-0026" media-type="image/jpeg"/>
+<item href="images/Figure34.jpg" id="image-0027" media-type="image/jpeg"/>
+<item href="images/Figure35.jpg" id="image-0028" media-type="image/jpeg"/>
+<item href="images/Figure36.jpg" id="image-0029" media-type="image/jpeg"/>
+<item href="images/Figure37.jpg" id="image-0030" media-type="image/jpeg"/>
+<item href="images/Figure38.jpg" id="image-0031" media-type="image/jpeg"/>
+<item href="images/Figure39.jpg" id="image-0032" media-type="image/jpeg"/>
+<item href="images/Figure4.jpg" id="image-0033" media-type="image/jpeg"/>
+<item href="images/Figure40.jpg" id="image-0034" media-type="image/jpeg"/>
+<item href="images/Figure41.jpg" id="image-0035" media-type="image/jpeg"/>
+<item href="images/Figure42.jpg" id="image-0036" media-type="image/jpeg"/>
+<item href="images/Figure43.jpg" id="image-0037" media-type="image/jpeg"/>
+<item href="images/Figure44.jpg" id="image-0038" media-type="image/jpeg"/>
+<item href="images/Figure45.jpg" id="image-0039" media-type="image/jpeg"/>
+<item href="images/Figure46.jpg" id="image-0040" media-type="image/jpeg"/>
+<item href="images/Figure47.jpg" id="image-0041" media-type="image/jpeg"/>
+<item href="images/Figure48.jpg" id="image-0042" media-type="image/jpeg"/>
+<item href="images/Figure49.jpg" id="image-0043" media-type="image/jpeg"/>
+<item href="images/Figure5.jpg" id="image-0044" media-type="image/jpeg"/>
+<item href="images/Figure50.jpg" id="image-0045" media-type="image/jpeg"/>
+<item href="images/Figure6.jpg" id="image-0046" media-type="image/jpeg"/>
+<item href="images/Figure7.jpg" id="image-0047" media-type="image/jpeg"/>
+<item href="images/Figure8.jpg" id="image-0048" media-type="image/jpeg"/>
+<item href="images/Figure9.jpg" id="image-0049" media-type="image/jpeg"/>
+<item href="images/title.jpg" id="image-0051" media-type="image/jpeg"/>
+<item href="images/Figure24.jpg" id="image-0052" media-type="image/jpeg"/>
+<item href="images/Figure25.jpg" id="image-0053" media-type="image/jpeg"/>
+<item href="images/Figure26.jpg" id="image-0054" media-type="image/jpeg"/>
+<item href="styles/stylesheet.css" id="css" media-type="text/css"/>
+<item href="images/NewsletterSignup.jpg" id="image-0002" media-type="image/jpeg"/>
+<item href="images/twitter_logo.png" id="image-0003" media-type="image/png"/>
+</manifest>
+<spine page-progression-direction="ltr" toc="toc">
+<itemref idref="html-cover-page"/>
+<itemref idref="tit"/>
+<itemref idref="mini_toc"/>
+<itemref idref="copyrightnotice"/>
+<itemref idref="dedication"/>
+<itemref idref="prologue"/>
+<itemref idref="part1"/>
+<itemref idref="chapter1"/>
+<itemref idref="chapter2"/>
+<itemref idref="chapter3"/>
+<itemref idref="part2"/>
+<itemref idref="chapter4"/>
+<itemref idref="chapter5"/>
+<itemref idref="chapter6"/>
+<itemref idref="chapter7"/>
+<itemref idref="part3"/>
+<itemref idref="chapter8"/>
+<itemref idref="chapter9"/>
+<itemref idref="chapter10"/>
+<itemref idref="part4"/>
+<itemref idref="chapter11"/>
+<itemref idref="chapter12"/>
+<itemref idref="chapter13"/>
+<itemref idref="part5"/>
+<itemref idref="chapter14"/>
+<itemref idref="chapter15"/>
+<itemref idref="chapter16"/>
+<itemref idref="notes-fm3"/>
+<itemref idref="notes-ch1"/>
+<itemref idref="notes-ch2"/>
+<itemref idref="notes-ch3"/>
+<itemref idref="notes-ch4"/>
+<itemref idref="notes-ch5"/>
+<itemref idref="notes-ch6"/>
+<itemref idref="notes-ch7"/>
+<itemref idref="notes-ch8"/>
+<itemref idref="notes-ch9"/>
+<itemref idref="notes-ch10"/>
+<itemref idref="notes-ch11"/>
+<itemref idref="notes-ch12"/>
+<itemref idref="notes-ch13"/>
+<itemref idref="notes-ch14"/>
+<itemref idref="notes-ch15"/>
+<itemref idref="notes-ch16"/>
+<itemref idref="acknowledgments"/>
+<itemref idref="index"/>
+<itemref idref="illustration"/>
+<itemref idref="adcard"/>
+<itemref idref="abouttheauthor"/>
+<itemref idref="newsletter"/>
+<itemref idref="contents" linear="no"/>
+<itemref idref="copyright"/>
+</spine>
+<guide>
+<reference href="xhtml/cover.xhtml" title="Begining" type="start"/>
+<reference href="xhtml/cover.xhtml" title="Cover Image" type="cover"/>
+<reference href="xhtml/contents.xhtml" title="Contents" type="toc"/>
+</guide>
+</package>

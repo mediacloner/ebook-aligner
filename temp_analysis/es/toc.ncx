@@ -1,0 +1,537 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="eng">
+  <head>
+    <meta name="dtb:uid" content="46639bc9-41fe-41d9-8ab0-2b4895b5700e"/>
+    <meta name="dtb:depth" content="3"/>
+    <meta name="dtb:generator" content="calibre (6.5.0)"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>The Will of the Many</text>
+  </docTitle>
+  <navMap>
+    <navPoint id="num_1" playOrder="1" class="chapter">
+      <navLabel>
+        <text>Página de título</text>
+      </navLabel>
+      <content src="index_split_002.html"/>
+    </navPoint>
+    <navPoint id="num_2" playOrder="2" class="chapter">
+      <navLabel>
+        <text>Dedicación</text>
+      </navLabel>
+      <content src="index_split_004.html"/>
+    </navPoint>
+    <navPoint id="num_3" playOrder="3" class="chapter">
+      <navLabel>
+        <text>Clasificaciones de Catenan</text>
+      </navLabel>
+      <content src="index_split_005.html"/>
+    </navPoint>
+    <navPoint id="num_4" playOrder="4" class="chapter">
+      <navLabel>
+        <text>Parte I: Imperium Sine Fine</text>
+      </navLabel>
+      <content src="index_split_006.html"/>
+      <navPoint id="num_5" playOrder="5" class="chapter">
+        <navLabel>
+          <text>Capítulo I</text>
+        </navLabel>
+        <content src="index_split_007.html"/>
+      </navPoint>
+      <navPoint id="num_6" playOrder="6" class="chapter">
+        <navLabel>
+          <text>Capítulo II</text>
+        </navLabel>
+        <content src="index_split_008.html"/>
+      </navPoint>
+      <navPoint id="num_7" playOrder="7" class="chapter">
+        <navLabel>
+          <text>Capítulo III</text>
+        </navLabel>
+        <content src="index_split_009.html"/>
+      </navPoint>
+      <navPoint id="num_8" playOrder="8" class="chapter">
+        <navLabel>
+          <text>Capítulo IV</text>
+        </navLabel>
+        <content src="index_split_010.html"/>
+      </navPoint>
+      <navPoint id="num_9" playOrder="9" class="chapter">
+        <navLabel>
+          <text>Capítulo V</text>
+        </navLabel>
+        <content src="index_split_011.html"/>
+      </navPoint>
+      <navPoint id="num_10" playOrder="10" class="chapter">
+        <navLabel>
+          <text>Capítulo VI</text>
+        </navLabel>
+        <content src="index_split_012.html"/>
+      </navPoint>
+      <navPoint id="num_11" playOrder="11" class="chapter">
+        <navLabel>
+          <text>Capítulo VII</text>
+        </navLabel>
+        <content src="index_split_013.html"/>
+      </navPoint>
+      <navPoint id="num_12" playOrder="12" class="chapter">
+        <navLabel>
+          <text>Capítulo VIII</text>
+        </navLabel>
+        <content src="index_split_014.html"/>
+      </navPoint>
+      <navPoint id="num_13" playOrder="13" class="chapter">
+        <navLabel>
+          <text>Capítulo IX</text>
+        </navLabel>
+        <content src="index_split_015.html"/>
+      </navPoint>
+      <navPoint id="num_14" playOrder="14" class="chapter">
+        <navLabel>
+          <text>Capítulo X</text>
+        </navLabel>
+        <content src="index_split_016.html"/>
+      </navPoint>
+      <navPoint id="num_15" playOrder="15" class="chapter">
+        <navLabel>
+          <text>Capítulo XI</text>
+        </navLabel>
+        <content src="index_split_017.html"/>
+      </navPoint>
+      <navPoint id="num_16" playOrder="16" class="chapter">
+        <navLabel>
+          <text>Capítulo XII</text>
+        </navLabel>
+        <content src="index_split_018.html"/>
+      </navPoint>
+      <navPoint id="num_17" playOrder="17" class="chapter">
+        <navLabel>
+          <text>Capítulo XIII</text>
+        </navLabel>
+        <content src="index_split_019.html"/>
+      </navPoint>
+      <navPoint id="num_18" playOrder="18" class="chapter">
+        <navLabel>
+          <text>Capítulo XIV</text>
+        </navLabel>
+        <content src="index_split_020.html"/>
+      </navPoint>
+      <navPoint id="num_19" playOrder="19" class="chapter">
+        <navLabel>
+          <text>Capítulo XV</text>
+        </navLabel>
+        <content src="index_split_021.html"/>
+      </navPoint>
+      <navPoint id="num_20" playOrder="20" class="chapter">
+        <navLabel>
+          <text>Capítulo XVI</text>
+        </navLabel>
+        <content src="index_split_022.html"/>
+      </navPoint>
+      <navPoint id="num_21" playOrder="21" class="chapter">
+        <navLabel>
+          <text>Capítulo XVII</text>
+        </navLabel>
+        <content src="index_split_023.html"/>
+      </navPoint>
+      <navPoint id="num_22" playOrder="22" class="chapter">
+        <navLabel>
+          <text>Capítulo XVIII</text>
+        </navLabel>
+        <content src="index_split_024.html"/>
+      </navPoint>
+      <navPoint id="num_23" playOrder="23" class="chapter">
+        <navLabel>
+          <text>Capítulo XIX</text>
+        </navLabel>
+        <content src="index_split_025.html"/>
+      </navPoint>
+      <navPoint id="num_24" playOrder="24" class="chapter">
+        <navLabel>
+          <text>Capítulo XX</text>
+        </navLabel>
+        <content src="index_split_026.html"/>
+      </navPoint>
+      <navPoint id="num_25" playOrder="25" class="chapter">
+        <navLabel>
+          <text>Capítulo XXI</text>
+        </navLabel>
+        <content src="index_split_027.html"/>
+      </navPoint>
+      <navPoint id="num_26" playOrder="26" class="chapter">
+        <navLabel>
+          <text>Capítulo XXII</text>
+        </navLabel>
+        <content src="index_split_028.html"/>
+      </navPoint>
+      <navPoint id="num_27" playOrder="27" class="chapter">
+        <navLabel>
+          <text>Capítulo XXIII</text>
+        </navLabel>
+        <content src="index_split_029.html"/>
+      </navPoint>
+      <navPoint id="num_28" playOrder="28" class="chapter">
+        <navLabel>
+          <text>Capítulo XXIV</text>
+        </navLabel>
+        <content src="index_split_030.html"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="num_29" playOrder="29" class="chapter">
+      <navLabel>
+        <text>Parte II: Deus Nolens Exituus</text>
+      </navLabel>
+      <content src="index_split_031.html"/>
+      <navPoint id="num_30" playOrder="30" class="chapter">
+        <navLabel>
+          <text>Capítulo XXV</text>
+        </navLabel>
+        <content src="index_split_032.html"/>
+      </navPoint>
+      <navPoint id="num_31" playOrder="31" class="chapter">
+        <navLabel>
+          <text>Capítulo XXVI</text>
+        </navLabel>
+        <content src="index_split_033.html"/>
+      </navPoint>
+      <navPoint id="num_32" playOrder="32" class="chapter">
+        <navLabel>
+          <text>Capítulo XXVII</text>
+        </navLabel>
+        <content src="index_split_034.html"/>
+      </navPoint>
+      <navPoint id="num_33" playOrder="33" class="chapter">
+        <navLabel>
+          <text>Capítulo XXVIII</text>
+        </navLabel>
+        <content src="index_split_035.html"/>
+      </navPoint>
+      <navPoint id="num_34" playOrder="34" class="chapter">
+        <navLabel>
+          <text>Capítulo XXIX</text>
+        </navLabel>
+        <content src="index_split_036.html"/>
+      </navPoint>
+      <navPoint id="num_35" playOrder="35" class="chapter">
+        <navLabel>
+          <text>Capítulo XXX</text>
+        </navLabel>
+        <content src="index_split_037.html"/>
+      </navPoint>
+      <navPoint id="num_36" playOrder="36" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXI</text>
+        </navLabel>
+        <content src="index_split_038.html"/>
+      </navPoint>
+      <navPoint id="num_37" playOrder="37" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXII</text>
+        </navLabel>
+        <content src="index_split_039.html"/>
+      </navPoint>
+      <navPoint id="num_38" playOrder="38" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXIII</text>
+        </navLabel>
+        <content src="index_split_040.html"/>
+      </navPoint>
+      <navPoint id="num_39" playOrder="39" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXIV</text>
+        </navLabel>
+        <content src="index_split_041.html"/>
+      </navPoint>
+      <navPoint id="num_40" playOrder="40" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXV</text>
+        </navLabel>
+        <content src="index_split_042.html"/>
+      </navPoint>
+      <navPoint id="num_41" playOrder="41" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXVI</text>
+        </navLabel>
+        <content src="index_split_043.html"/>
+      </navPoint>
+      <navPoint id="num_42" playOrder="42" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXVII</text>
+        </navLabel>
+        <content src="index_split_044.html"/>
+      </navPoint>
+      <navPoint id="num_43" playOrder="43" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXVIII</text>
+        </navLabel>
+        <content src="index_split_045.html"/>
+      </navPoint>
+      <navPoint id="num_44" playOrder="44" class="chapter">
+        <navLabel>
+          <text>Capítulo XXXIX</text>
+        </navLabel>
+        <content src="index_split_046.html"/>
+      </navPoint>
+      <navPoint id="num_45" playOrder="45" class="chapter">
+        <navLabel>
+          <text>Capítulo XL</text>
+        </navLabel>
+        <content src="index_split_047.html"/>
+      </navPoint>
+      <navPoint id="num_46" playOrder="46" class="chapter">
+        <navLabel>
+          <text>Capítulo XLI</text>
+        </navLabel>
+        <content src="index_split_048.html"/>
+      </navPoint>
+      <navPoint id="num_47" playOrder="47" class="chapter">
+        <navLabel>
+          <text>Capítulo XLII</text>
+        </navLabel>
+        <content src="index_split_049.html"/>
+      </navPoint>
+      <navPoint id="num_48" playOrder="48" class="chapter">
+        <navLabel>
+          <text>Capítulo XLIII</text>
+        </navLabel>
+        <content src="index_split_050.html"/>
+      </navPoint>
+      <navPoint id="num_49" playOrder="49" class="chapter">
+        <navLabel>
+          <text>Capítulo XLIV</text>
+        </navLabel>
+        <content src="index_split_051.html"/>
+      </navPoint>
+      <navPoint id="num_50" playOrder="50" class="chapter">
+        <navLabel>
+          <text>Capítulo XLV</text>
+        </navLabel>
+        <content src="index_split_052.html"/>
+      </navPoint>
+      <navPoint id="num_51" playOrder="51" class="chapter">
+        <navLabel>
+          <text>Capítulo XLVI</text>
+        </navLabel>
+        <content src="index_split_053.html"/>
+      </navPoint>
+      <navPoint id="num_52" playOrder="52" class="chapter">
+        <navLabel>
+          <text>Capítulo XLVII</text>
+        </navLabel>
+        <content src="index_split_054.html"/>
+      </navPoint>
+      <navPoint id="num_53" playOrder="53" class="chapter">
+        <navLabel>
+          <text>Capítulo XLVIII</text>
+        </navLabel>
+        <content src="index_split_055.html"/>
+      </navPoint>
+      <navPoint id="num_54" playOrder="54" class="chapter">
+        <navLabel>
+          <text>Capítulo XLIX</text>
+        </navLabel>
+        <content src="index_split_056.html"/>
+      </navPoint>
+      <navPoint id="num_55" playOrder="55" class="chapter">
+        <navLabel>
+          <text>Capítulo L</text>
+        </navLabel>
+        <content src="index_split_057.html"/>
+      </navPoint>
+      <navPoint id="num_56" playOrder="56" class="chapter">
+        <navLabel>
+          <text>Capítulo LI</text>
+        </navLabel>
+        <content src="index_split_058.html"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="num_57" playOrder="57" class="chapter">
+      <navLabel>
+        <text>Parte III: En Cauda Venenum</text>
+      </navLabel>
+      <content src="index_split_059.html"/>
+      <navPoint id="num_58" playOrder="58" class="chapter">
+        <navLabel>
+          <text>Capítulo LII</text>
+        </navLabel>
+        <content src="index_split_060.html"/>
+      </navPoint>
+      <navPoint id="num_59" playOrder="59" class="chapter">
+        <navLabel>
+          <text>Capítulo LIII</text>
+        </navLabel>
+        <content src="index_split_061.html"/>
+      </navPoint>
+      <navPoint id="num_60" playOrder="60" class="chapter">
+        <navLabel>
+          <text>Capítulo LIV</text>
+        </navLabel>
+        <content src="index_split_062.html"/>
+      </navPoint>
+      <navPoint id="num_61" playOrder="61" class="chapter">
+        <navLabel>
+          <text>Capítulo LV</text>
+        </navLabel>
+        <content src="index_split_063.html"/>
+      </navPoint>
+      <navPoint id="num_62" playOrder="62" class="chapter">
+        <navLabel>
+          <text>Capítulo LVI</text>
+        </navLabel>
+        <content src="index_split_064.html"/>
+      </navPoint>
+      <navPoint id="num_63" playOrder="63" class="chapter">
+        <navLabel>
+          <text>Capítulo LVII</text>
+        </navLabel>
+        <content src="index_split_065.html"/>
+      </navPoint>
+      <navPoint id="num_64" playOrder="64" class="chapter">
+        <navLabel>
+          <text>Capítulo LVIII</text>
+        </navLabel>
+        <content src="index_split_066.html"/>
+      </navPoint>
+      <navPoint id="num_65" playOrder="65" class="chapter">
+        <navLabel>
+          <text>Capítulo LIX</text>
+        </navLabel>
+        <content src="index_split_067.html"/>
+      </navPoint>
+      <navPoint id="num_66" playOrder="66" class="chapter">
+        <navLabel>
+          <text>Capítulo LX</text>
+        </navLabel>
+        <content src="index_split_068.html"/>
+      </navPoint>
+      <navPoint id="num_67" playOrder="67" class="chapter">
+        <navLabel>
+          <text>Capítulo LXI</text>
+        </navLabel>
+        <content src="index_split_069.html"/>
+      </navPoint>
+      <navPoint id="num_68" playOrder="68" class="chapter">
+        <navLabel>
+          <text>Capítulo LXII</text>
+        </navLabel>
+        <content src="index_split_070.html"/>
+      </navPoint>
+      <navPoint id="num_69" playOrder="69" class="chapter">
+        <navLabel>
+          <text>Capítulo LXIII</text>
+        </navLabel>
+        <content src="index_split_071.html"/>
+      </navPoint>
+      <navPoint id="num_70" playOrder="70" class="chapter">
+        <navLabel>
+          <text>Capítulo LXIV</text>
+        </navLabel>
+        <content src="index_split_072.html"/>
+      </navPoint>
+      <navPoint id="num_71" playOrder="71" class="chapter">
+        <navLabel>
+          <text>Capítulo LXV</text>
+        </navLabel>
+        <content src="index_split_073.html"/>
+      </navPoint>
+      <navPoint id="num_72" playOrder="72" class="chapter">
+        <navLabel>
+          <text>Capítulo LXVI</text>
+        </navLabel>
+        <content src="index_split_074.html"/>
+      </navPoint>
+      <navPoint id="num_73" playOrder="73" class="chapter">
+        <navLabel>
+          <text>Capítulo LXVII</text>
+        </navLabel>
+        <content src="index_split_075.html"/>
+      </navPoint>
+      <navPoint id="num_74" playOrder="74" class="chapter">
+        <navLabel>
+          <text>Capítulo LXVIII</text>
+        </navLabel>
+        <content src="index_split_076.html"/>
+      </navPoint>
+      <navPoint id="num_75" playOrder="75" class="chapter">
+        <navLabel>
+          <text>Capítulo LXIX</text>
+        </navLabel>
+        <content src="index_split_077.html"/>
+      </navPoint>
+      <navPoint id="num_76" playOrder="76" class="chapter">
+        <navLabel>
+          <text>Capítulo LXX</text>
+        </navLabel>
+        <content src="index_split_078.html"/>
+      </navPoint>
+      <navPoint id="num_77" playOrder="77" class="chapter">
+        <navLabel>
+          <text>Capítulo LXXI</text>
+        </navLabel>
+        <content src="index_split_079.html"/>
+      </navPoint>
+      <navPoint id="num_78" playOrder="78" class="chapter">
+        <navLabel>
+          <text>Capítulo LXXII</text>
+        </navLabel>
+        <content src="index_split_080.html"/>
+      </navPoint>
+      <navPoint id="num_79" playOrder="79" class="chapter">
+        <navLabel>
+          <text>Capítulo LXXIII</text>
+        </navLabel>
+        <content src="index_split_081.html"/>
+      </navPoint>
+      <navPoint id="num_80" playOrder="80" class="chapter">
+        <navLabel>
+          <text>Capítulo LXXIV</text>
+        </navLabel>
+        <content src="index_split_082.html"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="num_81" playOrder="81" class="chapter">
+      <navLabel>
+        <text>Sincronismo: Ex Uno Plures</text>
+      </navLabel>
+      <content src="index_split_083.html"/>
+    </navPoint>
+    <navPoint id="num_82" playOrder="82" class="chapter">
+      <navLabel>
+        <text>Expresiones de gratitud</text>
+      </navLabel>
+      <content src="index_split_086.html"/>
+    </navPoint>
+    <navPoint id="num_83" playOrder="83" class="chapter">
+      <navLabel>
+        <text>Personajes principales</text>
+      </navLabel>
+      <content src="index_split_087.html"/>
+    </navPoint>
+    <navPoint id="num_84" playOrder="84" class="chapter">
+      <navLabel>
+        <text>Glosario</text>
+      </navLabel>
+      <content src="index_split_088.html"/>
+    </navPoint>
+    <navPoint id="num_85" playOrder="85" class="chapter">
+      <navLabel>
+        <text>Ubicaciones</text>
+      </navLabel>
+      <content src="index_split_089.html"/>
+    </navPoint>
+    <navPoint id="num_86" playOrder="86" class="chapter">
+      <navLabel>
+        <text>Acerca del autor</text>
+      </navLabel>
+      <content src="index_split_090.html"/>
+    </navPoint>
+    <navPoint id="num_87" playOrder="87" class="chapter">
+      <navLabel>
+        <text>Derechos de autor</text>
+      </navLabel>
+      <content src="index_split_092.html"/>
+    </navPoint>
+  </navMap>
+</ncx>

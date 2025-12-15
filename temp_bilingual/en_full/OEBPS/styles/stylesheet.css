@@ -1,0 +1,986 @@
+@font-face {
+font-family: "UKai AN";
+font-style: normal;
+font-weight: bold;
+src:url(../fonts/TSC_UKai_M-UAN.ttf);
+}
+
+img#cover_image:only-of-type { /*overrides the previous setting, but only in newer systems that support CSS3 */
+    height: 99vh;
+}body.cover {
+	margin-top: 0px;
+	margin-left: 0px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+	text-align: center;
+	background-color:#000000;
+}
+a{
+	text-decoration: none;
+	display: inline;
+}
+@page {
+	margin: 5pt;
+}
+div.cover {
+	text-align: center;
+}
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+/* added styles by EK*/
+ol.footnotes {
+	padding-left: 0em;
+	margin : 0em 0em 0em 0em;
+}
+li {
+	list-style-type:none;
+}
+p.TNIS {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.2em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+
+p.LINESPACE {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 100%;
+}
+p.HALFSPACE {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 50%;
+}
+li.TOC {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.TOC-1 {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.TOC-BOT {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.TOC-PT {
+	font-size:1em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0.51em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.TOC-BMH {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+figure.IMG {
+	display: block;
+	margin-bottom: 1em;
+	margin-top: 1em;
+	text-indent: 0em;
+	margin-right: 0em;
+	margin-left: 0em;
+	text-align: center;
+}
+img.img90 {
+	width:90%;
+}
+img.img70 {
+	width:70%;
+}
+img.img80 {
+	width:80%;
+}
+img.img60 {
+	width:60%;
+}
+img.img50 {
+	width:50%;
+}
+img.img40 {
+	width:40%;
+}
+body {
+	line-height: 1.25;
+}
+p.BL {
+	font-size:0.83em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:3.4em;
+	margin-right:1.8em;
+	margin-top:0.5em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:-0.8em;
+}
+p.EXBL {
+	font-size:0.83em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:3.4em;
+	margin-right:1.8em;
+	margin-top:0.5em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:-0.8em;
+}
+p.BMCO {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.BMH {
+	-epub-line-break:normal;
+	font-size:1.6em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:2.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:3.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.BMTX {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.8em;
+}
+p.CAP {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0.50em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.CN {
+	-epub-line-break:normal;
+	font-size:1.6em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:3.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.CN-Only {
+	-epub-line-break:normal;
+	font-size:1.6em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:2.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:3.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.CO {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.CT {
+	-epub-line-break:normal;
+	font-size:1.6em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:2.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.DIA {
+	font-size:0.875em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.7em;
+	margin-right:1.2em;
+	margin-top:0.3em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:-0.9em;
+}
+p.DIAF {
+	font-size:0.875em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.7em;
+	margin-right:1.2em;
+	margin-top:1.2em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:-0.9em;
+}
+h2.ENH {
+	-epub-line-break:normal;
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.EX {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.EXC {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.book-title {
+	font-size:0.708em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.book-title1 {
+	font-size:0.85em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.50em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.EXCF {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.EXI {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.2em;
+}
+li.EXNL {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:3.2em;
+	margin-right:1.8em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:-1.3em;
+}
+p.EXSB {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.EXSN {
+	font-size:0.708em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.FMH {
+	-epub-line-break:normal;
+	font-size:1.67em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:2.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:3.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h2.H1 {
+	-epub-line-break:normal;
+	font-size:1.1em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0.80em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1.5em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h2.H1F {
+	-epub-line-break:normal;
+	font-size:0.896em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1.5em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h3.H2 {
+	-epub-line-break:normal;
+	font-size:1.0em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0.5em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1.0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.NTX {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.5em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:-1.9em;
+}
+h1.PN {
+	-epub-line-break:normal;
+	font-size:1.8em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:3.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+h1.PT {
+	-epub-line-break:normal;
+	font-size:1.8em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.STNI {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.STNIS {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.2em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.STX {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.8em;
+}
+p.STXS {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.2em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:1.2em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.8em;
+}
+p.TNI {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.TX {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.8em;
+}
+p.TXS {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:1.2em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:1.8em;
+}
+p.UL {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:1em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+span.accent {
+	font-style:normal;
+	font-weight:normal;
+}
+span.ePub-BI-SUP {
+	vertical-align: super;
+	font-style:italic;
+	font-weight:bold;
+}
+span.bl {
+	font-style:normal;
+	font-weight:normal;
+}
+span.cap_symbol {
+	font-style:normal;
+	font-weight:normal;
+}
+span.exh1 {
+	font-size:0.70em;
+	font-style:normal;
+	font-weight:bold;
+}
+span.ntx_MS-Gothic {
+	font-family: "UKai AN";
+	font-style:normal;
+	font-weight:normal;
+}
+span.ntx_Malgun-Gothic-Semilight {
+	font-family: "UKai AN";
+	font-style:normal;
+	font-weight:normal;
+}
+span.ntx_Microsoft-JhengHei {
+	font-family: "UKai AN";
+	font-style:normal;
+	font-weight:normal;
+}
+span.ntx_accent {
+	font-style:normal;
+	font-weight:normal;
+}
+span.ntx_symbol {
+	font-style:normal;
+	font-weight:normal;
+}
+span.symbol {
+	font-style:normal;
+	font-weight:normal;
+}
+p.DED-TOP {
+	font-size:0.91em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:3.90em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.DED {
+	font-size:0.91em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.8em;
+	margin-right:1.8em;
+	margin-top:0.50em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.IX {
+	font-size:0.833em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:left;
+	text-decoration:none;
+	text-indent:0em;
+}
+li.IXA {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:2.0em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+span.ix_accent {
+	font-style:normal;
+	font-weight:normal;
+}
+p.ABMH {
+	-epub-line-break:normal;
+	font-size:1.4em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:2em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:3.20em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.ILL {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:1.30em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.ILL-1 {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0.0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+span.illpg {
+	font-style:normal;
+	text-align:top;
+	font-weight:normal;
+}
+td {
+ vertical-align: top;
+}
+p.ACH {
+	-epub-line-break:normal;
+	font-size:1.2em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0.5em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:3.30em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.ACL {
+	font-size:0.91em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0.3em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.ATA {
+	font-size:0.92em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:0em;
+	margin-right:0em;
+	margin-top:0em;
+	text-align:justify;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.CRT {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.4em;
+	margin-right:2.4em;
+	margin-top:0.2em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.CRTF {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.4em;
+	margin-right:2.4em;
+	margin-top:1.50em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+p.CRTF-TOP {
+	font-size:0.75em;
+	font-style:normal;
+	font-weight:normal;
+	margin-bottom:0em;
+	margin-left:2.4em;
+	margin-right:2.4em;
+	margin-top:5em;
+	text-align:center;
+	text-decoration:none;
+	text-indent:0em;
+}
+ul.ind {
+    padding : 0em;
+    margin : 0em;
+    list-style-type : none;
+}
+ul {
+    padding-left: 0em;
+    margin-left: 0em;
+}
+small {
+    font-size: 0.70em;
+}
+blockquote {
+    margin: 1.20em 0em 1.20em 0em;
+}
+sup {
+    vertical-align: super;
+    font-size: 0.65em;
+    vertical-align: 35%;
+}
+sub {
+    vertical-align: sub;
+    font-size: 0.65em;
+    vertical-align: -18%;
+}
+span.ePub-I-SUB {
+    vertical-align: sub;
+    font-style: italic;
+    font-size: 0.65em;
+    vertical-align: -18%;
+}
+span.ePub-I-SUP {
+    vertical-align: super;
+    font-size: 0.65em;
+    vertical-align: 35%;
+    font-style: italic;
+}
+ol.toc {
+    padding : 0em;
+    margin : 0em;
+    list-style-type : none;
+}
+figure.TIT {
+	display: block;
+	margin-bottom: 0.00em;
+	margin-top: 0.00em;
+	text-indent: 0.00em;
+	margin-right: 0.00em;
+	margin-left: 0.00em;
+	text-align: center;
+}
+hr.transition_sb {
+	width: 0;
+	margin: 0.5em 0;
+}
+span.MDASH {
+	vertical-align: super;
+}
+
+
+p.fut_tit {
+	display: block;
+	text-align: center;
+	text-indent: 0em;
+	margin-top: 0em;
+	margin-bottom: 0em;
+	margin-left: 0em;
+	margin-right: 0em;
+}
+p.fut_toc {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 0.90em;
+	text-decoration: none;
+	font-variant: normal;
+	text-indent: 0em;
+	text-align: center;
+	margin: 0em 0em 0em 0em;
+}
+p.fut_toc1 {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 0.90em;
+	text-decoration: none;
+	font-variant: normal;
+	text-indent: 0em;
+	text-align: center;
+	margin: 0em 0em 1.50em 0em;
+}
+p.fut_logo {
+	font-weight: normal;
+	font-style: normal;
+	font-size: 1.31em;
+	text-decoration: none;
+	font-variant: normal;
+	text-indent: 0em;
+	text-align: center;
+	margin: 1.20em 0em 1.20em 0em;
+}
+
+div.body {
+	margin: 0em 1.2em 0em 1.2em;
+}
+img.epub {
+	display: inline;
+}
+img.sign-up {
+	display: none;
+}
+img.fb {
+	display: none;
+}
+@media amzn-kf8 {
+	div.body {
+		margin: 0em 0em 0em 0em;
+	}
+	body {
+		margin: 0em 1.2em 0em 1.2em;
+	}
+	img.epub {
+		display: none;
+	}
+	img.sign-up {
+		width: 3.5em;
+		display: inline;
+	}
+	img.fb {
+		width: 1em;
+		display: inline;
+	}
+}
+@media amzn-mobi {
+	div.body {
+		margin: 0em 0em 0em 0em;
+	}
+	body {
+		margin: 0em 1.2em 0em 1.2em;
+	}
+	img.epub {
+		display: none;
+	}
+	img.sign-up {
+		width: 3.5em;
+		display: inline;
+	}
+	img.fb {
+		width: 1em;
+		display: inline;
+	}
+	sup {
+		vertical-align: super;
+		font-size: 0.65em;
+		vertical-align: 35%;
+	}
+	sub {
+		vertical-align: sub;
+		font-size: 0.65em;
+		vertical-align: -35%;
+	}
+}

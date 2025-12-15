@@ -1,0 +1,21 @@
+.DRMH {
+font-family: sans-serif;
+font-size: 2em;
+line-height: 1.4em;
+margin-bottom: 2em;
+margin-top: 10%;
+text-align: center;
+}
+.DRMF {
+font-family: sans-serif;
+font-size: 1em;
+line-height: 1.4em;
+margin-bottom: 1em;
+text-align: justify;
+}
+.DRMTX {
+font-family: sans-serif;
+font-size: 1em;
+line-height: 1.4em;
+text-align: justify;
+}

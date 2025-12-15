@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="en">
+<head>
+<meta name="dtb:uid" content="9781982141196"/>
+</head>
+<docTitle>
+<text>The Will of the Many</text>
+</docTitle>
+<navMap>
+<navPoint id="navpoint_1" playOrder="1"><navLabel><text>Cover</text></navLabel><content src="e9781982141196/xhtml/cover.xhtml"/></navPoint>
+<navPoint id="navpoint_2" playOrder="2"><navLabel><text>Title Page</text></navLabel><content src="e9781982141196/xhtml/title.xhtml"/></navPoint>
+<navPoint id="navpoint_3" playOrder="3"><navLabel><text>Dedication</text></navLabel><content src="e9781982141196/xhtml/dedication.xhtml"/></navPoint>
+<navPoint id="navpoint_4" playOrder="4"><navLabel><text>Catenan Rankings</text></navLabel><content src="e9781982141196/xhtml/fm01.xhtml"/></navPoint>
+<navPoint id="navpoint_5" playOrder="5"><navLabel><text>Part I: Imperium Sine Fine</text></navLabel><content src="e9781982141196/xhtml/part01.xhtml"/>
+<navPoint id="navpoint_6" playOrder="6"><navLabel><text>Chapter I</text></navLabel><content src="e9781982141196/xhtml/ch01.xhtml"/></navPoint>
+<navPoint id="navpoint_7" playOrder="7"><navLabel><text>Chapter II</text></navLabel><content src="e9781982141196/xhtml/ch02.xhtml"/></navPoint>
+<navPoint id="navpoint_8" playOrder="8"><navLabel><text>Chapter III</text></navLabel><content src="e9781982141196/xhtml/ch03.xhtml"/></navPoint>
+<navPoint id="navpoint_9" playOrder="9"><navLabel><text>Chapter IV</text></navLabel><content src="e9781982141196/xhtml/ch04.xhtml"/></navPoint>
+<navPoint id="navpoint_10" playOrder="10"><navLabel><text>Chapter V</text></navLabel><content src="e9781982141196/xhtml/ch05.xhtml"/></navPoint>
+<navPoint id="navpoint_11" playOrder="11"><navLabel><text>Chapter VI</text></navLabel><content src="e9781982141196/xhtml/ch06.xhtml"/></navPoint>
+<navPoint id="navpoint_12" playOrder="12"><navLabel><text>Chapter VII</text></navLabel><content src="e9781982141196/xhtml/ch07.xhtml"/></navPoint>
+<navPoint id="navpoint_13" playOrder="13"><navLabel><text>Chapter VIII</text></navLabel><content src="e9781982141196/xhtml/ch08.xhtml"/></navPoint>
+<navPoint id="navpoint_14" playOrder="14"><navLabel><text>Chapter IX</text></navLabel><content src="e9781982141196/xhtml/ch09.xhtml"/></navPoint>
+<navPoint id="navpoint_15" playOrder="15"><navLabel><text>Chapter X</text></navLabel><content src="e9781982141196/xhtml/ch10.xhtml"/></navPoint>
+<navPoint id="navpoint_16" playOrder="16"><navLabel><text>Chapter XI</text></navLabel><content src="e9781982141196/xhtml/ch11.xhtml"/></navPoint>
+<navPoint id="navpoint_17" playOrder="17"><navLabel><text>Chapter XII</text></navLabel><content src="e9781982141196/xhtml/ch12.xhtml"/></navPoint>
+<navPoint id="navpoint_18" playOrder="18"><navLabel><text>Chapter XIII</text></navLabel><content src="e9781982141196/xhtml/ch13.xhtml"/></navPoint>
+<navPoint id="navpoint_19" playOrder="19"><navLabel><text>Chapter XIV</text></navLabel><content src="e9781982141196/xhtml/ch14.xhtml"/></navPoint>
+<navPoint id="navpoint_20" playOrder="20"><navLabel><text>Chapter XV</text></navLabel><content src="e9781982141196/xhtml/ch15.xhtml"/></navPoint>
+<navPoint id="navpoint_21" playOrder="21"><navLabel><text>Chapter XVI</text></navLabel><content src="e9781982141196/xhtml/ch16.xhtml"/></navPoint>
+<navPoint id="navpoint_22" playOrder="22"><navLabel><text>Chapter XVII</text></navLabel><content src="e9781982141196/xhtml/ch17.xhtml"/></navPoint>
+<navPoint id="navpoint_23" playOrder="23"><navLabel><text>Chapter XVIII</text></navLabel><content src="e9781982141196/xhtml/ch18.xhtml"/></navPoint>
+<navPoint id="navpoint_24" playOrder="24"><navLabel><text>Chapter XIX</text></navLabel><content src="e9781982141196/xhtml/ch19.xhtml"/></navPoint>
+<navPoint id="navpoint_25" playOrder="25"><navLabel><text>Chapter XX</text></navLabel><content src="e9781982141196/xhtml/ch20.xhtml"/></navPoint>
+<navPoint id="navpoint_26" playOrder="26"><navLabel><text>Chapter XXI</text></navLabel><content src="e9781982141196/xhtml/ch21.xhtml"/></navPoint>
+<navPoint id="navpoint_27" playOrder="27"><navLabel><text>Chapter XXII</text></navLabel><content src="e9781982141196/xhtml/ch22.xhtml"/></navPoint>
+<navPoint id="navpoint_28" playOrder="28"><navLabel><text>Chapter XXIII</text></navLabel><content src="e9781982141196/xhtml/ch23.xhtml"/></navPoint>
+<navPoint id="navpoint_29" playOrder="29"><navLabel><text>Chapter XXIV</text></navLabel><content src="e9781982141196/xhtml/ch24.xhtml"/></navPoint>
+</navPoint>
+<navPoint id="navpoint_30" playOrder="30"><navLabel><text>Part II: Deus Nolens Exituus</text></navLabel><content src="e9781982141196/xhtml/part02.xhtml"/>
+<navPoint id="navpoint_31" playOrder="31"><navLabel><text>Chapter XXV</text></navLabel><content src="e9781982141196/xhtml/ch25.xhtml"/></navPoint>
+<navPoint id="navpoint_32" playOrder="32"><navLabel><text>Chapter XXVI</text></navLabel><content src="e9781982141196/xhtml/ch26.xhtml"/></navPoint>
+<navPoint id="navpoint_33" playOrder="33"><navLabel><text>Chapter XXVII</text></navLabel><content src="e9781982141196/xhtml/ch27.xhtml"/></navPoint>
+<navPoint id="navpoint_34" playOrder="34"><navLabel><text>Chapter XXVIII</text></navLabel><content src="e9781982141196/xhtml/ch28.xhtml"/></navPoint>
+<navPoint id="navpoint_35" playOrder="35"><navLabel><text>Chapter XXIX</text></navLabel><content src="e9781982141196/xhtml/ch29.xhtml"/></navPoint>
+<navPoint id="navpoint_36" playOrder="36"><navLabel><text>Chapter XXX</text></navLabel><content src="e9781982141196/xhtml/ch30.xhtml"/></navPoint>
+<navPoint id="navpoint_37" playOrder="37"><navLabel><text>Chapter XXXI</text></navLabel><content src="e9781982141196/xhtml/ch31.xhtml"/></navPoint>
+<navPoint id="navpoint_38" playOrder="38"><navLabel><text>Chapter XXXII</text></navLabel><content src="e9781982141196/xhtml/ch32.xhtml"/></navPoint>
+<navPoint id="navpoint_39" playOrder="39"><navLabel><text>Chapter XXXIII</text></navLabel><content src="e9781982141196/xhtml/ch33.xhtml"/></navPoint>
+<navPoint id="navpoint_40" playOrder="40"><navLabel><text>Chapter XXXIV</text></navLabel><content src="e9781982141196/xhtml/ch34.xhtml"/></navPoint>
+<navPoint id="navpoint_41" playOrder="41"><navLabel><text>Chapter XXXV</text></navLabel><content src="e9781982141196/xhtml/ch35.xhtml"/></navPoint>
+<navPoint id="navpoint_42" playOrder="42"><navLabel><text>Chapter XXXVI</text></navLabel><content src="e9781982141196/xhtml/ch36.xhtml"/></navPoint>
+<navPoint id="navpoint_43" playOrder="43"><navLabel><text>Chapter XXXVII</text></navLabel><content src="e9781982141196/xhtml/ch37.xhtml"/></navPoint>
+<navPoint id="navpoint_44" playOrder="44"><navLabel><text>Chapter XXXVIII</text></navLabel><content src="e9781982141196/xhtml/ch38.xhtml"/></navPoint>
+<navPoint id="navpoint_45" playOrder="45"><navLabel><text>Chapter XXXIX</text></navLabel><content src="e9781982141196/xhtml/ch39.xhtml"/></navPoint>
+<navPoint id="navpoint_46" playOrder="46"><navLabel><text>Chapter XL</text></navLabel><content src="e9781982141196/xhtml/ch40.xhtml"/></navPoint>
+<navPoint id="navpoint_47" playOrder="47"><navLabel><text>Chapter XLI</text></navLabel><content src="e9781982141196/xhtml/ch41.xhtml"/></navPoint>
+<navPoint id="navpoint_48" playOrder="48"><navLabel><text>Chapter XLII</text></navLabel><content src="e9781982141196/xhtml/ch42.xhtml"/></navPoint>
+<navPoint id="navpoint_49" playOrder="49"><navLabel><text>Chapter XLIII</text></navLabel><content src="e9781982141196/xhtml/ch43.xhtml"/></navPoint>
+<navPoint id="navpoint_50" playOrder="50"><navLabel><text>Chapter XLIV</text></navLabel><content src="e9781982141196/xhtml/ch44.xhtml"/></navPoint>
+<navPoint id="navpoint_51" playOrder="51"><navLabel><text>Chapter XLV</text></navLabel><content src="e9781982141196/xhtml/ch45.xhtml"/></navPoint>
+<navPoint id="navpoint_52" playOrder="52"><navLabel><text>Chapter XLVI</text></navLabel><content src="e9781982141196/xhtml/ch46.xhtml"/></navPoint>
+<navPoint id="navpoint_53" playOrder="53"><navLabel><text>Chapter XLVII</text></navLabel><content src="e9781982141196/xhtml/ch47.xhtml"/></navPoint>
+<navPoint id="navpoint_54" playOrder="54"><navLabel><text>Chapter XLVIII</text></navLabel><content src="e9781982141196/xhtml/ch48.xhtml"/></navPoint>
+<navPoint id="navpoint_55" playOrder="55"><navLabel><text>Chapter XLIX</text></navLabel><content src="e9781982141196/xhtml/ch49.xhtml"/></navPoint>
+<navPoint id="navpoint_56" playOrder="56"><navLabel><text>Chapter L</text></navLabel><content src="e9781982141196/xhtml/ch50.xhtml"/></navPoint>
+<navPoint id="navpoint_57" playOrder="57"><navLabel><text>Chapter LI</text></navLabel><content src="e9781982141196/xhtml/ch51.xhtml"/></navPoint>
+</navPoint>
+<navPoint id="navpoint_58" playOrder="58"><navLabel><text>Part III: In Cauda Venenum</text></navLabel><content src="e9781982141196/xhtml/part03.xhtml"/>
+<navPoint id="navpoint_59" playOrder="59"><navLabel><text>Chapter LII</text></navLabel><content src="e9781982141196/xhtml/ch52.xhtml"/></navPoint>
+<navPoint id="navpoint_60" playOrder="60"><navLabel><text>Chapter LIII</text></navLabel><content src="e9781982141196/xhtml/ch53.xhtml"/></navPoint>
+<navPoint id="navpoint_61" playOrder="61"><navLabel><text>Chapter LIV</text></navLabel><content src="e9781982141196/xhtml/ch54.xhtml"/></navPoint>
+<navPoint id="navpoint_62" playOrder="62"><navLabel><text>Chapter LV</text></navLabel><content src="e9781982141196/xhtml/ch55.xhtml"/></navPoint>
+<navPoint id="navpoint_63" playOrder="63"><navLabel><text>Chapter LVI</text></navLabel><content src="e9781982141196/xhtml/ch56.xhtml"/></navPoint>
+<navPoint id="navpoint_64" playOrder="64"><navLabel><text>Chapter LVII</text></navLabel><content src="e9781982141196/xhtml/ch57.xhtml"/></navPoint>
+<navPoint id="navpoint_65" playOrder="65"><navLabel><text>Chapter LVIII</text></navLabel><content src="e9781982141196/xhtml/ch58.xhtml"/></navPoint>
+<navPoint id="navpoint_66" playOrder="66"><navLabel><text>Chapter LIX</text></navLabel><content src="e9781982141196/xhtml/ch59.xhtml"/></navPoint>
+<navPoint id="navpoint_67" playOrder="67"><navLabel><text>Chapter LX</text></navLabel><content src="e9781982141196/xhtml/ch60.xhtml"/></navPoint>
+<navPoint id="navpoint_68" playOrder="68"><navLabel><text>Chapter LXI</text></navLabel><content src="e9781982141196/xhtml/ch61.xhtml"/></navPoint>
+<navPoint id="navpoint_69" playOrder="69"><navLabel><text>Chapter LXII</text></navLabel><content src="e9781982141196/xhtml/ch62.xhtml"/></navPoint>
+<navPoint id="navpoint_70" playOrder="70"><navLabel><text>Chapter LXIII</text></navLabel><content src="e9781982141196/xhtml/ch63.xhtml"/></navPoint>
+<navPoint id="navpoint_71" playOrder="71"><navLabel><text>Chapter LXIV</text></navLabel><content src="e9781982141196/xhtml/ch64.xhtml"/></navPoint>
+<navPoint id="navpoint_72" playOrder="72"><navLabel><text>Chapter LXV</text></navLabel><content src="e9781982141196/xhtml/ch65.xhtml"/></navPoint>
+<navPoint id="navpoint_73" playOrder="73"><navLabel><text>Chapter LXVI</text></navLabel><content src="e9781982141196/xhtml/ch66.xhtml"/></navPoint>
+<navPoint id="navpoint_74" playOrder="74"><navLabel><text>Chapter LXVII</text></navLabel><content src="e9781982141196/xhtml/ch67.xhtml"/></navPoint>
+<navPoint id="navpoint_75" playOrder="75"><navLabel><text>Chapter LXVIII</text></navLabel><content src="e9781982141196/xhtml/ch68.xhtml"/></navPoint>
+<navPoint id="navpoint_76" playOrder="76"><navLabel><text>Chapter LXIX</text></navLabel><content src="e9781982141196/xhtml/ch69.xhtml"/></navPoint>
+<navPoint id="navpoint_77" playOrder="77"><navLabel><text>Chapter LXX</text></navLabel><content src="e9781982141196/xhtml/ch70.xhtml"/></navPoint>
+<navPoint id="navpoint_78" playOrder="78"><navLabel><text>Chapter LXXI</text></navLabel><content src="e9781982141196/xhtml/ch71.xhtml"/></navPoint>
+<navPoint id="navpoint_79" playOrder="79"><navLabel><text>Chapter LXXII</text></navLabel><content src="e9781982141196/xhtml/ch72.xhtml"/></navPoint>
+<navPoint id="navpoint_80" playOrder="80"><navLabel><text>Chapter LXXIII</text></navLabel><content src="e9781982141196/xhtml/ch73.xhtml"/></navPoint>
+<navPoint id="navpoint_81" playOrder="81"><navLabel><text>Chapter LXXIV</text></navLabel><content src="e9781982141196/xhtml/ch74.xhtml"/></navPoint>
+</navPoint>
+<navPoint id="navpoint_82" playOrder="82"><navLabel><text>Synchronism: Ex Uno Plures</text></navLabel><content src="e9781982141196/xhtml/part04.xhtml"/></navPoint>
+<navPoint id="navpoint_83" playOrder="83"><navLabel><text>Acknowledgments</text></navLabel><content src="e9781982141196/xhtml/ack.xhtml"/></navPoint>
+<navPoint id="navpoint_84" playOrder="84"><navLabel><text>Major Characters</text></navLabel><content src="e9781982141196/xhtml/bm01.xhtml"/></navPoint>
+<navPoint id="navpoint_85" playOrder="85"><navLabel><text>Glossary</text></navLabel><content src="e9781982141196/xhtml/glossary.xhtml"/></navPoint>
+<navPoint id="navpoint_86" playOrder="86"><navLabel><text>Locations</text></navLabel><content src="e9781982141196/xhtml/bm02.xhtml"/></navPoint>
+<navPoint id="navpoint_87" playOrder="87"><navLabel><text>About the Author</text></navLabel><content src="e9781982141196/xhtml/authorbio.xhtml"/></navPoint>
+<navPoint id="navpoint_88" playOrder="88"><navLabel><text>Copyright</text></navLabel><content src="e9781982141196/xhtml/copyright.xhtml"/></navPoint>
+</navMap>
+</ncx>

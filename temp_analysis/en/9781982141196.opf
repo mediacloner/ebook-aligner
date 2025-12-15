@@ -1,0 +1,245 @@
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="eisbn" version="3.0" xml:lang="en-us">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title id="t1">The Will of the Many</dc:title>
+    <dc:creator id="id-1">James Islington</dc:creator>
+    <dc:identifier>calibre:75205</dc:identifier>
+    <dc:identifier>uuid:587a82e7-3fa4-4a73-b0ef-d242292bd631</dc:identifier>
+    <dc:identifier id="eisbn">9781982141196</dc:identifier>
+    <dc:source id="srcisbn">9781982141172</dc:source>
+    <dc:language>en-US</dc:language>
+    <dc:contributor id="id">calibre (6.22.0) [https://calibre-ebook.com]</dc:contributor>
+    <dc:date>2023-05-23T00:00:00+00:00</dc:date>
+    <dc:description>&lt;B&gt;At the elite Catenan Academy, a young fugitive uncovers layered mysteries and world-changing secrets in this new fantasy series by internationally bestselling author of The Licanius Trilogy, James Islington.&lt;/B&gt;&lt;BR&gt;&lt;B&gt;&lt;I&gt;AUDI. VIDE. TACE.&lt;/I&gt;&lt;/B&gt;&lt;BR&gt; &lt;BR&gt;The Catenan Republic&amp;#8212;the Hierarchy&amp;#8212;may rule the world now, but they do not know everything.&lt;BR&gt; &lt;BR&gt;I tell them my name is Vis Telimus. I tell them I was orphaned after a tragic accident three years ago, and that good fortune alone has led to my acceptance into their most prestigious school. I tell them that once I graduate, I will gladly join the rest of civilised society in allowing my strength, my drive and my focus&amp;#8212;what they call Will&amp;#8212;to be leeched away and added to the power of those above me, as millions already do. As all must eventually do.&lt;BR&gt; &lt;BR&gt;I tell them that I belong, and they believe me.&lt;BR&gt; &lt;BR&gt;But the truth is that I have been sent to the Academy to find answers. To solve a murder. To...</dc:description>
+    <dc:publisher>Gallery / Saga Press</dc:publisher>
+    <opf:meta refines="#t1" property="title-type">main</opf:meta>
+    <opf:meta refines="#t1" property="file-as">The Will of the Many</opf:meta>
+    <meta property="source-of" refines="#srcisbn">pagination</meta>
+    <meta property="dcterms:modified">2023-05-23T12:00:00Z</meta>
+    <meta content="cover-image" name="cover"/>
+    <opf:meta refines="#id" property="role" scheme="marc:relators">bkp</opf:meta>
+    <opf:meta refines="#id-1" property="role" scheme="marc:relators">aut</opf:meta>
+    <opf:meta refines="#id-1" property="file-as">James Islington</opf:meta>
+  </metadata>
+  <manifest>
+    <item href="e9781982141196/xhtml/cover.xhtml" id="cover" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/SS_US_adult_signup_front.xhtml" id="SS_US_adult_signup_front" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/title.xhtml" id="title" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/SS_DRM_notice.xhtml" id="SS_DRM_notice" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/dedication.xhtml" id="dedication" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/fm01.xhtml" id="fm01" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part01.xhtml" id="part01" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch01.xhtml" id="ch01" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch02.xhtml" id="ch02" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch03.xhtml" id="ch03" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch04.xhtml" id="ch04" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch05.xhtml" id="ch05" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch06.xhtml" id="ch06" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch07.xhtml" id="ch07" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch08.xhtml" id="ch08" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch09.xhtml" id="ch09" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch10.xhtml" id="ch10" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch11.xhtml" id="ch11" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch12.xhtml" id="ch12" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch13.xhtml" id="ch13" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch14.xhtml" id="ch14" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch15.xhtml" id="ch15" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch16.xhtml" id="ch16" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch17.xhtml" id="ch17" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch18.xhtml" id="ch18" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch19.xhtml" id="ch19" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch20.xhtml" id="ch20" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch21.xhtml" id="ch21" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch22.xhtml" id="ch22" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch23.xhtml" id="ch23" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch24.xhtml" id="ch24" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part02.xhtml" id="part02" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch25.xhtml" id="ch25" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch26.xhtml" id="ch26" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch27.xhtml" id="ch27" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch28.xhtml" id="ch28" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch29.xhtml" id="ch29" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch30.xhtml" id="ch30" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch31.xhtml" id="ch31" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch32.xhtml" id="ch32" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch33.xhtml" id="ch33" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch34.xhtml" id="ch34" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch35.xhtml" id="ch35" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch36.xhtml" id="ch36" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch37.xhtml" id="ch37" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch38.xhtml" id="ch38" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch39.xhtml" id="ch39" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch40.xhtml" id="ch40" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch41.xhtml" id="ch41" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch42.xhtml" id="ch42" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch43.xhtml" id="ch43" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch44.xhtml" id="ch44" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch45.xhtml" id="ch45" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch46.xhtml" id="ch46" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch47.xhtml" id="ch47" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch48.xhtml" id="ch48" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch49.xhtml" id="ch49" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch50.xhtml" id="ch50" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch51.xhtml" id="ch51" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part03.xhtml" id="part03" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch52.xhtml" id="ch52" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch53.xhtml" id="ch53" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch54.xhtml" id="ch54" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch55.xhtml" id="ch55" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch56.xhtml" id="ch56" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch57.xhtml" id="ch57" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch58.xhtml" id="ch58" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch59.xhtml" id="ch59" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch60.xhtml" id="ch60" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch61.xhtml" id="ch61" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch62.xhtml" id="ch62" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch63.xhtml" id="ch63" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch64.xhtml" id="ch64" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch65.xhtml" id="ch65" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch66.xhtml" id="ch66" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch67.xhtml" id="ch67" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch68.xhtml" id="ch68" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch69.xhtml" id="ch69" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch70.xhtml" id="ch70" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch71.xhtml" id="ch71" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch72.xhtml" id="ch72" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch73.xhtml" id="ch73" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ch74.xhtml" id="ch74" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part04.xhtml" id="part04" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part04_sub01.xhtml" id="part04_sub01" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/part04_sub02.xhtml" id="part04_sub02" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/ack.xhtml" id="ack" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/bm01.xhtml" id="bm01" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/glossary.xhtml" id="glossary" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/bm02.xhtml" id="bm02" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/authorbio.xhtml" id="authorbio" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/SS_US_adult_signup_back.xhtml" id="SS_US_adult_signup_back" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/copyright.xhtml" id="copyright" media-type="application/xhtml+xml"/>
+    <item href="e9781982141196/xhtml/nav.xhtml" id="nav" media-type="application/xhtml+xml" properties="nav"/>
+    <item href="toc.ncx" id="ncx" media-type="application/x-dtbncx+xml"/>
+    <item href="e9781982141196/styles/9781982141196.css" id="css" media-type="text/css"/>
+    <item href="e9781982141196/styles/SS_DRM_notice.css" id="cssdrm" media-type="text/css"/>
+    <item href="e9781982141196/styles/SS_global.css" id="css1" media-type="text/css"/>
+    <item href="e9781982141196/styles/SS_signup.css" id="SS_signup" media-type="text/css"/>
+    <item href="e9781982141196/images/9781982141196.jpg" id="cover-image" media-type="image/jpeg" properties="cover-image"/>
+    <item href="e9781982141196/images/common01.jpg" id="common01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0001-01.jpg" id="f0001-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0218-01.jpg" id="f0218-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0437-01.jpg" id="f0437-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0613-01.jpg" id="f0613-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0615-01.jpg" id="f0615-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/f0619-01.jpg" id="f0619-01" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/facebook.jpg" id="facebook" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/instagram.jpg" id="instagram" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/logo.jpg" id="logo" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/title.jpg" id="titlea" media-type="image/jpeg"/>
+    <item href="e9781982141196/images/twitter.jpg" id="twitter" media-type="image/jpeg"/>
+    <item href="e9781982141196/fonts/EBGaramond-Bold.ttf" id="EBGaramond-Bold" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/EBGaramond-BoldItalic.ttf" id="EBGaramond-BoldItalic" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/EBGaramond-Italic.ttf" id="EBGaramond-Italic" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/EBGaramond-Regular.ttf" id="EBGaramond-Regular" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/LexendTera-Bold.ttf" id="LexendTera-Bold" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/LexendTera-Light.ttf" id="LexendTera-Light" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/Spectral-Light.ttf" id="Spectral-Light" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/Spectral-Regular.ttf" id="Spectral-Regular" media-type="application/vnd.ms-opentype"/>
+    <item href="e9781982141196/fonts/Spectral-SemiBold.ttf" id="Spectral-SemiBold" media-type="application/vnd.ms-opentype"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="cover"/>
+    <itemref idref="SS_US_adult_signup_front"/>
+    <itemref idref="title"/>
+    <itemref idref="SS_DRM_notice"/>
+    <itemref idref="dedication"/>
+    <itemref idref="fm01"/>
+    <itemref idref="part01"/>
+    <itemref idref="ch01"/>
+    <itemref idref="ch02"/>
+    <itemref idref="ch03"/>
+    <itemref idref="ch04"/>
+    <itemref idref="ch05"/>
+    <itemref idref="ch06"/>
+    <itemref idref="ch07"/>
+    <itemref idref="ch08"/>
+    <itemref idref="ch09"/>
+    <itemref idref="ch10"/>
+    <itemref idref="ch11"/>
+    <itemref idref="ch12"/>
+    <itemref idref="ch13"/>
+    <itemref idref="ch14"/>
+    <itemref idref="ch15"/>
+    <itemref idref="ch16"/>
+    <itemref idref="ch17"/>
+    <itemref idref="ch18"/>
+    <itemref idref="ch19"/>
+    <itemref idref="ch20"/>
+    <itemref idref="ch21"/>
+    <itemref idref="ch22"/>
+    <itemref idref="ch23"/>
+    <itemref idref="ch24"/>
+    <itemref idref="part02"/>
+    <itemref idref="ch25"/>
+    <itemref idref="ch26"/>
+    <itemref idref="ch27"/>
+    <itemref idref="ch28"/>
+    <itemref idref="ch29"/>
+    <itemref idref="ch30"/>
+    <itemref idref="ch31"/>
+    <itemref idref="ch32"/>
+    <itemref idref="ch33"/>
+    <itemref idref="ch34"/>
+    <itemref idref="ch35"/>
+    <itemref idref="ch36"/>
+    <itemref idref="ch37"/>
+    <itemref idref="ch38"/>
+    <itemref idref="ch39"/>
+    <itemref idref="ch40"/>
+    <itemref idref="ch41"/>
+    <itemref idref="ch42"/>
+    <itemref idref="ch43"/>
+    <itemref idref="ch44"/>
+    <itemref idref="ch45"/>
+    <itemref idref="ch46"/>
+    <itemref idref="ch47"/>
+    <itemref idref="ch48"/>
+    <itemref idref="ch49"/>
+    <itemref idref="ch50"/>
+    <itemref idref="ch51"/>
+    <itemref idref="part03"/>
+    <itemref idref="ch52"/>
+    <itemref idref="ch53"/>
+    <itemref idref="ch54"/>
+    <itemref idref="ch55"/>
+    <itemref idref="ch56"/>
+    <itemref idref="ch57"/>
+    <itemref idref="ch58"/>
+    <itemref idref="ch59"/>
+    <itemref idref="ch60"/>
+    <itemref idref="ch61"/>
+    <itemref idref="ch62"/>
+    <itemref idref="ch63"/>
+    <itemref idref="ch64"/>
+    <itemref idref="ch65"/>
+    <itemref idref="ch66"/>
+    <itemref idref="ch67"/>
+    <itemref idref="ch68"/>
+    <itemref idref="ch69"/>
+    <itemref idref="ch70"/>
+    <itemref idref="ch71"/>
+    <itemref idref="ch72"/>
+    <itemref idref="ch73"/>
+    <itemref idref="ch74"/>
+    <itemref idref="part04"/>
+    <itemref idref="part04_sub01"/>
+    <itemref idref="part04_sub02"/>
+    <itemref idref="ack"/>
+    <itemref idref="bm01"/>
+    <itemref idref="glossary"/>
+    <itemref idref="bm02"/>
+    <itemref idref="authorbio"/>
+    <itemref idref="SS_US_adult_signup_back"/>
+    <itemref idref="copyright"/>
+  </spine>
+  <guide>
+    <reference href="e9781982141196/xhtml/cover.xhtml" title="Cover" type="cover"/>
+    <reference href="e9781982141196/xhtml/cover.xhtml" title="SRL" type="text"/>
+  </guide>
+</package>

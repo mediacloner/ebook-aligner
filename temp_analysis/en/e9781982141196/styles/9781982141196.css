@@ -1,0 +1,338 @@
+@font-face {
+font-family: "EBGaramond";
+src: url(../fonts/EBGaramond-Regular.ttf);
+font-style: normal;
+font-weight: normal;
+}
+@font-face {
+font-family: "EBGaramond";
+src: url(../fonts/EBGaramond-Bold.ttf);
+font-style: normal;
+font-weight: bold;
+}
+@font-face {
+font-family: "EBGaramond";
+src: url(../fonts/EBGaramond-Italic.ttf);
+font-style: italic;
+font-weight: normal;
+}
+@font-face {
+font-family: "EBGaramond";
+src: url(../fonts/EBGaramond-BoldItalic.ttf);
+font-style: italic;
+font-weight: bold;
+}
+@font-face {
+font-family: "Spectral-Semi";
+src: url(../fonts/Spectral-SemiBold.ttf);
+font-style: normal;
+font-weight: bold;
+}
+@font-face {
+font-family: "Spectral-Light";
+src: url(../fonts/Spectral-Light.ttf);
+font-style: normal;
+font-weight: normal;
+}
+@font-face {
+font-family: "Spectral";
+src: url(../fonts/Spectral-Regular.ttf);
+font-style: normal;
+font-weight: normal;
+}
+@font-face {
+font-family: "LexendTera-Light";
+src: url(../fonts/LexendTera-Light.ttf);
+font-style: normal;
+font-weight: normal;
+}
+@font-face {
+font-family: "LexendTera";
+src: url(../fonts/LexendTera-Bold.ttf);
+font-style: normal;
+font-weight: bold;
+}
+.ipadfp {
+margin: 0;
+height: 98vh;
+text-align: center;
+}
+.imagefp {
+margin: 0em;
+height: 100%;
+text-align: center;
+}
+.copy2 {
+margin-top: 7%;
+margin-bottom: 0.2em;
+text-align: center;
+}
+.copy {
+font-family: "EBGaramond", serif;
+font-size: 0.9em;
+margin-top: 0em;
+margin-bottom: 0em;
+text-align: center;
+}
+.copyb {
+font-family: "EBGaramond", serif;
+font-size: 0.9em;
+margin-top: 0em;
+margin-bottom: 1em;
+text-align: center;
+}
+.ded {
+font-family: "EBGaramond", serif;
+margin-top: 14%;
+margin-bottom: 0em;
+margin-left: 7%;
+margin-right: 7%;
+text-align: center;
+}
+.h1fm {
+font-family: "Spectral-Semi", serif;
+font-size: 2em;
+font-weight: bold;
+margin-top: 14%;
+margin-bottom: 0.5em;
+page-break-after: avoid;
+text-align: center;
+}
+.table {
+border-spacing: 0;
+margin-top: 0em;
+margin-bottom: 0em;
+border-collapse: collapse;
+width: 100%;
+border: double 3px;
+}
+.table td {
+padding: .08em .08em 0em .08em;
+background-color: #F3F4F4;
+}
+.table th {
+padding: .08em .08em 0em .08em;
+background-color: #F3F4F4;
+}
+.line_30bg {
+vertical-align: middle;
+width: 45%;
+border: solid 1px #97999B;
+}
+.line_60bg {
+vertical-align: middle;
+width: 45%;
+border: solid 1px #97999B;
+}
+.line_30 {
+vertical-align: top;
+width: 45%;
+border: solid 1px #97999B;
+}
+.line_60 {
+vertical-align: top;
+width: 45%;
+border: solid 1px #97999B;
+}
+.thead {
+font-family: "LexendTera-Light", sans-serif;
+font-size: 0.9em;
+font-weight: normal;
+margin-top: 0em;
+padding: 0.2em;
+margin-bottom: 0em;
+text-indent: 0em;
+text-align: left;
+}
+.thead1 {
+font-family: "LexendTera-Light", sans-serif;
+font-size: 0.9em;
+font-weight: normal;
+margin-top: 0em;
+padding: 0.2em;
+margin-bottom: 0em;
+text-align: center;
+}
+.tpara {
+font-family: "LexendTera-Light", sans-serif;
+font-size: 0.9em;
+margin-top: 0em;
+padding: 0.2em;
+margin-bottom: 0em;
+text-indent: 0em;
+text-align: left;
+}
+.tparac {
+font-family: "LexendTera-Light", sans-serif;
+font-size: 0.9em;
+margin-top: 0em;
+padding: 0.2em;
+margin-bottom: 0em;
+text-align: center;
+}
+.h2chap {
+font-family: "Spectral-Semi", serif;
+font-size: 1.8em;
+font-weight: bold;
+margin-top: 14%;
+margin-bottom: 2em;
+page-break-after: avoid;
+text-align: center;
+}
+.noindent {
+font-family: "EBGaramond", serif;
+margin-top: 0em;
+margin-bottom: 0em;
+text-indent: 0em;
+}
+.indent {
+font-family: "EBGaramond", serif;
+margin-top: 0em;
+margin-bottom: 0em;
+text-indent: 1.2em;
+}
+.secbreak {
+background: url('../images/common01.jpg') no-repeat center;
+height: 9px;
+border: none;
+margin: 1em 0em;
+}
+.c1 {
+font-family: "EBGaramond", serif;
+color: #6A6B6D;
+}
+.h1bm {
+font-family: "Spectral", serif;
+font-size: 1.8em;
+font-weight: normal;
+margin-top: 14%;
+margin-bottom: 2em;
+page-break-after: avoid;
+text-align: center;
+}
+.f3 {
+font-family: "Spectral", serif;
+font-size: 1.2em;
+line-height: 0.8;
+}
+.midd {
+vertical-align: middle;
+}
+.authorsn {
+font-family: "sans-serif", sans-serif;
+font-size: 0.8em;
+margin-top: 2em;
+margin-bottom: 0em;
+text-align: center;
+}
+.authorm1 {
+font-family: "sans-serif", sans-serif;
+font-size: 0.8em;
+margin-top: 1.2em;
+margin-bottom: 0em;
+text-align: center;
+}
+.center5n {
+font-family: "Spectral", serif;
+font-size: 0.95em;
+margin-top: 1em;
+margin-bottom: 0em;
+margin-left: 5%;
+margin-right: 5%;
+text-align: center;
+}
+.center5 {
+font-family: "Spectral", serif;
+font-size: 0.95em;
+margin-top: 0em;
+margin-bottom: 0em;
+margin-left: 0%;
+margin-right: 0%;
+text-align: center;
+}
+.center1 {
+font-family: "LexendTera", sans-serif;
+font-size: 0.9em;
+font-weight: bold;
+margin-top: 0em;
+margin-bottom: 0em;
+text-align: center;
+}
+.f1 {
+font-family: "LexendTera", sans-serif;
+font-weight: bold;
+font-size: 0.9em;
+}
+blockquote.blockquotec {
+margin-top: 1em;
+margin-bottom: 1em;
+margin-left: 1.2em;
+margin-right: 1.2em;
+text-indent: 0em;
+}
+blockquote.blockquote {
+margin-top: 1em;
+margin-bottom: 1em;
+margin-left: 1.2em;
+margin-right: 1.2em;
+text-indent: 0em;
+}
+.blockno {
+font-family: "Spectral", serif;
+font-size: 0.95em;
+margin-top: 0em;
+margin-bottom: 0em;
+text-indent: 0em;
+}
+.imagech {
+margin-top: 14%;
+margin-bottom: 3em;
+text-align: center;
+}
+span.smallcaps {
+text-transform: uppercase;
+font-size: 0.75em;
+}
+.h1bmx {
+font-family: "Spectral", serif;
+font-size: 1.8em;
+font-weight: normal;
+margin-top: 10%;
+margin-bottom: 1em;
+page-break-after: avoid;
+text-align: center;
+}
+.gterm {
+font-family: "EBGaramond", serif;
+margin-top: 0em;
+margin-bottom: 0em;
+text-indent: 0em;
+text-align: left;
+}
+.gdata {
+font-family: "EBGaramond", serif;
+margin-top: 0em;
+margin-bottom: 0em;
+text-indent: 0em;
+text-align: left;
+}
+.f2 {
+font-family: "Spectral", serif;
+font-size: 0.9em;
+}
+.stickup {
+font-family: "Spectral-Light", serif;
+font-size: 2em;
+line-height: 0em;
+color: #6A6B6D;
+}
+@media amzn-kf8 {
+  .stickup {
+    font-size: 1.4em;
+  }
+}
+@media amzn-mobi {
+  .stickup {
+    font-size: 1.4em;
+  }
+}

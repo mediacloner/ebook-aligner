@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bilingual Ebook Aligner</title>
+    <style>
+      :root {
+        --primary: #4f46e5;
+        --primary-hover: #4338ca;
+        --bg: #f3f4f6;
+        --card-bg: #ffffff;
+        --text-main: #1f2937;
+        --text-sub: #6b7280;
+        --border: #e5e7eb;
+        --success: #10b981;
+      }
+      body {
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: var(--bg);
+        color: var(--text-main);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        margin: 0;
+      }
+      .container {
+        background: var(--card-bg);
+        padding: 2.5rem;
+        border-radius: 1rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        width: 100%;
+        max-width: 500px;
+        text-align: center;
+      }
+      h1 {
+        font-size: 1.5rem;
+        font-weight: 700;
+        margin-bottom: 2rem;
+        color: var(--text-main);
+      }
+      .upload-area {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      .file-input-wrapper {
+        position: relative;
+        border: 2px dashed var(--border);
+        border-radius: 0.75rem;
+        padding: 2rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+      }
+      .file-input-wrapper:hover {
+        border-color: var(--primary);
+        background-color: #f5f3ff;
+      }
+      .file-input-wrapper input[type="file"] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+      }
+      .icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+        display: block;
+      }
+      .label-text {
+        font-weight: 500;
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      .file-name {
+        font-size: 0.875rem;
+        color: var(--text-sub);
+        display: block;
+        min-height: 1.25em;
+      }
+      button.submit-btn {
+        background-color: var(--primary);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        width: 100%;
+        margin-top: 1rem;
+      }
+      button.submit-btn:hover {
+        background-color: var(--primary-hover);
+      }
+      button.submit-btn:disabled {
+        background-color: var(--text-sub);
+        cursor: not-allowed;
+      }
+
+      /* Progress Bar Styles */
+      .progress-container {
+        display: none;
+        margin-top: 2rem;
+        width: 100%;
+        background-color: var(--border);
+        border-radius: 9999px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 0.75rem;
+        background-color: var(--primary);
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+      .status-text {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        color: var(--text-sub);
+        min-height: 1.5em;
+      }
+      .error-message {
+        color: #ef4444;
+        margin-top: 1rem;
+        font-size: 0.875rem;
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Bilingual Ebook Aligner</h1>
+
+      <form id="uploadForm">
+        <div class="upload-area">
+          <div class="file-input-wrapper" id="drop-zone-en">
+            <span class="icon">🇬🇧</span>
+            <span class="label-text">Original (English) EPUB</span>
+            <span class="file-name" id="filename-en">Drag & drop or Click</span>
+            <input
+              type="file"
+              name="en_file"
+              id="en_file"
+              accept=".epub"
+              required
+              onchange="updateFilename(this, 'filename-en')"
+            />
+          </div>
+
+          <div class="file-input-wrapper" id="drop-zone-es">
+            <span class="icon">🇪🇸</span>
+            <span class="label-text">Translation (Spanish) EPUB</span>
+            <span class="file-name" id="filename-es">Drag & drop or Click</span>
+            <input
+              type="file"
+              name="es_file"
+              id="es_file"
+              accept=".epub"
+              required
+              onchange="updateFilename(this, 'filename-es')"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="submit-btn" id="generateBtn">
+          Generate Bilingual Book
+        </button>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div
+          class="progress-wrapper"
+          id="progressWrapper"
+          style="display: none"
+        >
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+          <div class="status-text" id="statusText">Starting...</div>
+        </div>
+      </form>
+    </div>
+
+    <script>
+      function updateFilename(input, targetId) {
+        const fileName = input.files[0]
+          ? input.files[0].name
+          : "Drag & drop or Click";
+        document.getElementById(targetId).innerText = fileName;
+      }
+
+      document
+        .getElementById("uploadForm")
+        .addEventListener("submit", async function (e) {
+          e.preventDefault();
+
+          const btn = document.getElementById("generateBtn");
+          const progressWrapper = document.getElementById("progressWrapper");
+          const progressBar = document.getElementById("progressBar");
+          const statusText = document.getElementById("statusText");
+          const errorMessage = document.getElementById("errorMessage");
+
+          // Reset UI
+          errorMessage.style.display = "none";
+          btn.disabled = true;
+          progressWrapper.style.display = "block";
+          progressBar.style.width = "0%";
+          statusText.innerText = "Uploading...";
+
+          const formData = new FormData(this);
+
+          try {
+            // 1. Upload
+            const response = await fetch("/upload", {
+              method: "POST",
+              body: formData,
+            });
+
+            if (!response.ok) {
+              throw new Error("Upload failed");
+            }
+
+            const data = await response.json();
+            const jobId = data.job_id;
+
+            // 2. Poll for Status
+            pollStatus(jobId);
+          } catch (err) {
+            showError("Error: " + err.message);
+            btn.disabled = false;
+          }
+        });
+
+      async function pollStatus(jobId) {
+        const progressBar = document.getElementById("progressBar");
+        const statusText = document.getElementById("statusText");
+        const btn = document.getElementById("generateBtn");
+
+        const interval = setInterval(async () => {
+          try {
+            const res = await fetch(`/progress/${jobId}`);
+            const job = await res.json();
+
+            if (job.status === "processing" || job.status === "queued") {
+              progressBar.style.width = job.progress + "%";
+              statusText.innerText = job.message;
+            } else if (job.status === "completed") {
+              clearInterval(interval);
+              progressBar.style.width = "100%";
+              statusText.innerText = "Done! Downloading...";
+              window.location.href = `/download/${jobId}`;
+              btn.disabled = false;
+            } else if (job.status === "error") {
+              clearInterval(interval);
+              showError("Processing Failed: " + job.message);
+              btn.disabled = false;
+            }
+          } catch (err) {
+            clearInterval(interval);
+            showError("Network Error polling status");
+            btn.disabled = false;
+          }
+        }, 1000);
+      }
+
+      function showError(msg) {
+        const el = document.getElementById("errorMessage");
+        el.innerText = msg;
+        el.style.display = "block";
+      }
+    </script>
+  </body>
+</html>

@@ -596,19 +596,37 @@ def align_chunks(en_chunks, es_chunks):
         """Generates a fingerprint for alignment matching."""
         txt = c['text']
         
-        # Anchors: Numbers ONLY
-        # Proper nouns keying caused index crossing due to translation word order changes.
+        # Anchors: Numbers
         nums = re.findall(r'\d+', txt)
-        
         anchors_list = sorted(list(set(nums)))
         
-        if anchors_list:
-             anchors = "|".join(anchors_list)
-             return f"{c['type']}:ANCHOR:{anchors}"
-             
+        # Dialogue Anchor: Check for start chars
+        # EN: " or “
+        # ES: - or — or –
+        is_dialog = False
+        s = txt.strip()
+        if s:
+             # Common dialog starters in EN/ES
+             if s.startswith('“') or s.startswith('"'): is_dialog = True
+             elif s.startswith('—') or s.startswith('-') or s.startswith('–'): is_dialog = True
+        
+        anchor_sig = ""
+        if anchors_list: anchor_sig = "ANCHOR:" + "|".join(anchors_list)
+        
+        # Structural signal
+        dialog_sig = "DIALOG" if is_dialog else "NARRATION"
+        
         # Fallback to Loose Length Binning (30 chars)
         bl = len(txt) // 30
-        return f"{c['type']}:{bl}:"
+        
+        # Combined Fingerprint
+        # e.g. "std:DIALOG:ANCHOR:1273" (No bin for dialog ensures sequential alignment despite length diffs)
+        # e.g. "std:NARRATION::bin4"
+        suffix = ""
+        if not is_dialog:
+            suffix = f":bin{bl}"
+            
+        return f"{c['type']}:{dialog_sig}:{anchor_sig}{suffix}"
 
     def align_section(en_sec, es_sec, depth=0):
         if not en_sec and not es_sec: return []

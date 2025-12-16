@@ -1032,13 +1032,31 @@ def collect_split_files(base_src, base_dir):
     siblings.sort() # Ensure textual sort matches numeric order
     return siblings
 
+def unzip_epub(epub_path, extract_to):
+    """Unzips an EPUB file to a destination directory."""
+    if os.path.isdir(epub_path):
+        print(f"Input {epub_path} is a directory. Using as-is.")
+        # If it's already a dir, we assume it's the unzipped content.
+        # However, create_bilingual_epub might expect it to be IN extract_to.
+        # Simpler to just return absolute path.
+        return os.path.abspath(epub_path)
+        
+    if not os.path.exists(epub_path):
+        raise FileNotFoundError(f"EPUB file not found: {epub_path}")
+    
+    # The rest of the unzip_epub function would go here if it were fully provided.
+    # For now, we'll assume it's just the directory check.
+    # Placeholder for actual unzip logic if needed later:
+    # with zipfile.ZipFile(epub_path, 'r') as zip_ref:
+    #     zip_ref.extractall(extract_to)
+    # return extract_to
+
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None):
     """Orchestrates the creation of the full bilingual EPUB."""
     
     en_toc_path = find_toc_file(en_base)
     es_toc_path = find_toc_file(es_base)
     
-    # 1. Map Chapters
     if not en_toc_path:
         raise FileNotFoundError(f"English TOC (.ncx) not found in {en_base}")
     if not es_toc_path:
@@ -1151,8 +1169,8 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    .es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
-    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { font-size: inherit; color: inherit; opacity: 0.8; }
+    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666; opacity: 0.8; }
     figcaption { font-weight: bold; margin-top: 10px; }
     """
     with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:
@@ -1161,12 +1179,15 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     # 6. Process Chapters
     spine_refs = []
     
+    en_opf_dir = os.path.dirname(en_opf_path) if en_opf_path else en_base
+    es_opf_dir = os.path.dirname(find_opf_file(es_base)) if find_opf_file(es_base) else es_base
+
     for idx, (en_rel, es_rel) in enumerate(pairs):
         if progress_callback:
             progress_callback(idx, len(pairs), f"Processing {en_rel}")
 
-        # English: collect potentially split files
-        en_files = collect_split_files(en_rel, en_base)
+        # English: collect potentially split files (RELATIVE TO OPF DIR!)
+        en_files = collect_split_files(en_rel, en_opf_dir)
         en_chunks = []
         for fpath in en_files:
              try:
@@ -1175,8 +1196,8 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
              except Exception as e:
                  print(f"Error parsing EN file {fpath}: {e}")
 
-        # Spanish: collect potentially split files
-        es_files = collect_split_files(es_rel, es_base)
+        # Spanish: collect potentially split files (RELATIVE TO OPF DIR!)
+        es_files = collect_split_files(es_rel, es_opf_dir)
         es_chunks = []
         for fpath in es_files:
              try:

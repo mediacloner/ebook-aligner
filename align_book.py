@@ -256,7 +256,18 @@ def split_sentences(text):
     parts = re.split(r'(?<=[.!?])\s+(?=[A-Z¿¡"\'\-])', text)
     return [p.strip() for p in parts if p.strip()]
 
-    return [p.strip() for p in parts if p.strip()]
+def split_sentences_aggressive(text):
+    """Splits text more aggressively for alignment mismatches (e.g. compound sentences)."""
+    # Standard split first
+    base_parts = split_sentences(text)
+    final_parts = []
+    for p in base_parts:
+        # Split on semicolons or ", y " (common Spanish compound connector)
+        # Regex: Lookbehind for ; or , space, Lookahead for y space or start of sentence or pero/sin embargo
+        # Simplified: Split on '; ' and ', y '
+        sub = re.split(r'(?:;|(?<=,)\s+(?=[yY]\s))', p)
+        final_parts.extend([s.strip() for s in sub if s.strip()])
+    return final_parts
 
 def find_opf_file(base_dir):
     """Recursively searches for the first .opf file in the directory."""
@@ -720,11 +731,16 @@ def align_chunks(en_chunks, es_chunks):
         # Structural signal
         dialog_sig = "DIALOG" if is_dialog else "NARRATION"
         
-        # Length Binning REMOVED.
-        # Translation variability is too high. 
-        # We rely on Structure (Dialog vs Narration) and Anchors (Numbers/Shared Names).
+        # Granularity signal: Sentence Count
+        # This prevents aligning a single sentence paragraph with a 5-sentence paragraph
+        # pushing them into a 'replace' block for finer alignment.
+        sent_count = len(split_sentences(txt))
+        # Bucketing to allow some flexibility
+        if sent_count <= 1: sc_sig = "SC1"
+        elif sent_count <= 3: sc_sig = "SC2-3"
+        else: sc_sig = "SC4+"
         
-        return f"{c['type']}:{dialog_sig}:{anchor_sig}"
+        return f"{c['type']}:{dialog_sig}:{anchor_sig}:{sc_sig}"
 
     def align_section(en_sec, es_sec, depth=0):
         if not en_sec and not es_sec: return []
@@ -806,6 +822,20 @@ def align_chunks(en_chunks, es_chunks):
                         for s in sents: v_es_chunks.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s})
                     else:
                         v_es_chunks.append(c)
+                
+                # RECOVERY: If granularity mismatch (One side has significantly more sentences), try aggressive splitting on the OTHER side.
+                if len(v_en_chunks) > len(v_es_chunks): 
+                     v_es_chunks_agg = []
+                     for c in sub_es:
+                        if c['type'] == 'std' and c['text']:
+                            sents = split_sentences_aggressive(c['text'])
+                            for s in sents: v_es_chunks_agg.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s})
+                        else:
+                            v_es_chunks_agg.append(c)
+                     
+                     # Only use aggressive if it actually created more chunks
+                     if len(v_es_chunks_agg) > len(v_es_chunks):
+                        v_es_chunks = v_es_chunks_agg
                 
                 # Recursive align with increased depth
                 sub_aligned = align_section(v_en_chunks, v_es_chunks, depth + 1)

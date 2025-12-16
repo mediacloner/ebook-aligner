@@ -604,6 +604,13 @@ def smart_pair_split(en_text, es_text):
             
         split_point = dot_idx + 1
         
+        # Check for closing punctuation (quotes, brackets) immediately following the dot
+        # Example: manipulation." -> split after "
+        trailing = en_text[split_point:]
+        match = re.match(r'^[”"’\'\)\]»]+', trailing)
+        if match:
+             split_point += len(match.group(0))
+        
         # If split point is the very end, break loop to handle as last chunk
         if split_point >= len(en_text):
             break

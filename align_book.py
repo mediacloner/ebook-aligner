@@ -256,6 +256,76 @@ def split_sentences(text):
     parts = re.split(r'(?<=[.!?])\s+(?=[A-Z¿¡"\'\-])', text)
     return [p.strip() for p in parts if p.strip()]
 
+def find_opf_file(base_dir):
+    """Recursively searches for the first .opf file in the directory."""
+    for root, dirs, files in os.walk(base_dir):
+        for f in files:
+            if f.endswith('.opf'):
+                return os.path.join(root, f)
+    return None
+
+def read_opf_metadata(opf_path):
+    """
+    Extracts basic metadata (title, language, creator, identifier) from an OPF file.
+    Returns:
+        title (str)
+        language (str)
+        creator (str)
+        identifier (str) - Content of the identifier element
+        uid_scheme (str) - The id of the identifier element (e.g. 'BookId') to match unique-identifier
+    """
+    if not opf_path or not os.path.exists(opf_path):
+        return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
+
+    try:
+        tree = ET.parse(opf_path)
+        root = tree.getroot()
+        
+        # Namespaces
+        ns = {
+            'opf': 'http://www.idpf.org/2007/opf',
+            'dc': 'http://purl.org/dc/elements/1.1/'
+        }
+        
+        metadata = root.find('opf:metadata', ns)
+        if metadata is None:
+             return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
+             
+        # Helper to get text
+        def get_text(tag):
+            node = metadata.find(tag, ns)
+            return node.text if node is not None else None
+            
+        title = get_text('dc:title') or "Bilingual Edition"
+        language = get_text('dc:language') or "en"
+        creator = get_text('dc:creator') or "Unknown"
+        
+        # Identifier is trickier because we want the one referenced by unique-identifier
+        package_uid_ref = root.get('unique-identifier')
+        identifier = "urn:uuid:12345"
+        uid_scheme = "BookId"
+        
+        if package_uid_ref:
+            # Find the dc:identifier with id == package_uid_ref
+            for ident in metadata.findall('dc:identifier', ns):
+                if ident.get('id') == package_uid_ref:
+                    identifier = ident.text
+                    uid_scheme = package_uid_ref
+                    break
+        else:
+            # Fallback to first identifier
+            first_ident = metadata.find('dc:identifier', ns)
+            if first_ident is not None:
+                identifier = first_ident.text
+                uid_scheme = first_ident.get('id', 'BookId')
+
+        return title, language, creator, identifier, uid_scheme
+        
+    except Exception as e:
+        print(f"Error reading OPF metadata: {e}")
+        return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
+
+
 class BaseParser(HTMLParser):
     def __init__(self, config):
         super().__init__()
@@ -864,6 +934,24 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     if not pairs:
         raise ValueError("No aligned chapters found. The structures of the two books may be too different.")
 
+    # 1a. Extract Metadata from English Source
+    en_opf_path = find_opf_file(en_base)
+    # If en_base is OEBPS, the opf might be there or parent.
+    # The find_opf_file searches recursively from en_base.
+    # If en_base is deep, we might want to check parent if not found? 
+    # Usually en_base IS the OEBPS folder. Opf is usually inside or in META-INF relative to root (but here we are looking at extracted OEBPS).
+    
+    # Heuristic: If we can't find it in en_base, try one level up.
+    if not en_opf_path:
+        parent = os.path.dirname(en_base.rstrip('/'))
+        en_opf_path = find_opf_file(parent)
+        
+    m_title, m_lang, m_creator, m_ident, m_uid_scheme = read_opf_metadata(en_opf_path)
+    
+    # Modify Title
+    final_title = f"{m_title} (bilingual)"
+    print(f"Metadata extracted: Title='{final_title}', Language='{m_lang}'")
+
     # 1b. Auto-Detect Profile if not provided
     if config is None:
         # Check first content file
@@ -892,12 +980,11 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     with open(os.path.join(staging_dir, 'META-INF', 'container.xml'), 'w', encoding='utf-8') as f:
         f.write(container_xml)
 
-    # 5. Create CSS
     css_content = """
     body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
-    p { margin-bottom: 1em; }
+    p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    .es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 2em; }
+    .es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
     figcaption { font-weight: bold; margin-top: 10px; }
     """
     with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:
@@ -961,11 +1048,12 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
         spine_items += f'<itemref idref="{item_id}"/>\n'
         
     opf_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="BookId" version="3.0">
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="{m_uid_scheme}" version="3.0">
     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
-        <dc:title>Bilingual Edition</dc:title>
-        <dc:language>en</dc:language>
-        <dc:identifier id="BookId">urn:uuid:12345</dc:identifier>
+        <dc:title>{final_title}</dc:title>
+        <dc:language>{m_lang}</dc:language>
+        <dc:creator>{m_creator}</dc:creator>
+        <dc:identifier id="{m_uid_scheme}">{m_ident}</dc:identifier>
     </metadata>
     <manifest>
         <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
@@ -995,7 +1083,7 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     <meta name="dtb:totalPageCount" content="0"/>
     <meta name="dtb:maxPageNumber" content="0"/>
   </head>
-  <docTitle><text>Bilingual Edition</text></docTitle>
+  <docTitle><text>{final_title}</text></docTitle>
   <navMap>
     {nav_points}
   </navMap>

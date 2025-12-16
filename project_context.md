@@ -53,6 +53,14 @@ The main script that:
 - **Output**: `bilingual_book.epub`
 - **Fonts**: Uses the system default serif font (no custom font embedding) to match the original English style.
 
+### 3. Metadata & Styling
+
+- **Metadata Preservation**: The script now extracts metadata (`dc:title`, `dc:creator`, `dc:identifier`, `dc:language`) from the English source OPF and preserves it in the output `content.opf`.
+- **Title Modification**: Appends " (bilingual)" to the book title to distinguish the edition.
+- **CSS Spacing**:
+  - `p { margin: 0; }`: Removes vertical margins from all paragraphs to visually group the English text with its immediate Spanish translation below.
+  - `.es-trans { margin-bottom: 1em; }`: Adds a specific bottom margin to Spanish paragraphs to separate unrelated bilingual pairs.
+
 ## Future Iterations / Todo
 
 - **Images**: Currently text-only. Image tags are stripped or ignored to maintain strict text alignment. Future work could re-integrate images.

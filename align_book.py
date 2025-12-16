@@ -713,12 +713,16 @@ def align_chunks(en_chunks, es_chunks):
     
     # We assume headers map 1-to-1. If not, this heuristic fails, but it's better than nothing.
     
-    def fingerprint(c, lang='en', shared_anchors=None):
+    def fingerprint(c, lang='en', shared_anchors=None, shared_nums=None):
         """Generates a fingerprint for alignment matching."""
         txt = c['text']
         
-        # Anchors: Numbers (Always valid)
+        # Anchors: Numbers (Only if Shared)
+        # We previously used all numbers, but "2010s" vs "DECADA" causes mismatches.
         nums = re.findall(r'\d+', txt)
+        if shared_nums is not None:
+             nums = [n for n in nums if n in shared_nums]
+        
         anchors_list = sorted(list(set(nums)))
         
         # Anchors: Capitalized Tokens (Only if Shared in current scope)
@@ -726,7 +730,7 @@ def align_chunks(en_chunks, es_chunks):
              tokens = re.findall(r'\b[A-Z][a-z]{3,}\b', txt)
              allowed_tokens = [t for t in tokens if t in shared_anchors]
              anchors_list.extend(allowed_tokens)
-             anchors_list = sorted(list(set(anchors_list))) # Re-sort with tokens
+             anchors_list = sorted(list(set(anchors_list))) # Re-sort with tokens       
         
         # Dialogue Anchor: Check for start chars
         is_dialog = False
@@ -770,15 +774,25 @@ def align_chunks(en_chunks, es_chunks):
              return local_res
 
         # Compute Shared Anchors (Intersection Strategy)
+        # Compute Shared Anchors (Intersection Strategy)
         # Only use proper nouns that appear in BOTH texts to avoid translation artifacts (Gods vs Dios)
         en_tokens = set()
-        for c in en_sec: en_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+        en_nums = set()
+        for c in en_sec: 
+            en_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+            en_nums.update(re.findall(r'\d+', c['text']))
+            
         es_tokens = set()
-        for c in es_sec: es_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+        es_nums = set()
+        for c in es_sec: 
+            es_tokens.update(re.findall(r'\b[A-Z][a-z]{3,}\b', c['text']))
+            es_nums.update(re.findall(r'\d+', c['text']))
+            
         shared = en_tokens & es_tokens
+        shared_nums = en_nums & es_nums
         
-        fp_en = [fingerprint(c, 'en', shared) for c in en_sec]
-        fp_es = [fingerprint(c, 'es', shared) for c in es_sec]
+        fp_en = [fingerprint(c, 'en', shared, shared_nums) for c in en_sec]
+        fp_es = [fingerprint(c, 'es', shared, shared_nums) for c in es_sec]
         
         # Use SequenceMatcher to find the optimal global alignment based on type+length profile
         # autojunk=False is CRITICAL for preventing anchors from being discarded if they appear commonly (which they might in repetitive text)

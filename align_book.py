@@ -257,9 +257,8 @@ def split_sentences(text):
     """Splits text into sentences using simple heuristics to avoid granularity mismatch."""
     # Robust Strategy: Split on sentence terminators but Keep them using capturing parentheses.
     # Pattern: Captures the delimiter (Punctuation + optional closing quotes + whitespace)
-    # This avoids zero-width assertion issues.
-    # Added em-dash/en-dash to lookahead for Spanish dialogue transitions (Issue 13)
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-\—\–]))'
+    # Updated to \s* to handle cases like "!¿" (Issue 10/14 lump)
+    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s*(?=[A-Z¿¡"\'\-—–]))'
     # Wait, keeping lookahead in split ensures we only split valid ones, but lookahead is NOT captured.
     # If we use capturing group around the delimiter, re.split returns [sent1, delim1, sent2, delim2...]
     
@@ -729,7 +728,6 @@ def align_chunks(en_chunks, es_chunks):
     4. Greedy Split: Fixes N-to-1 merges (Spanish paragraphs merged into one English).
     """
     print(f"Aligning: EN {len(en_chunks)} chunks (Headers: {len(get_header_indices(en_chunks))}) vs ES {len(es_chunks)} chunks (Headers: {len(get_header_indices(es_chunks))})")
-
     # Pre-processing: Fix Abbreviation Splits (Issue 11)
     # Sometimes inputs are split at "Mrs.", "Mr.", etc.
     # We must merge them before any alignment.
@@ -1482,12 +1480,12 @@ def align_chunks(en_chunks, es_chunks):
         len_nxt_es = len(nxt['es'])
         ratio_nxt = len_nxt_es / len_nxt_en if len_nxt_en > 0 else 0
         
-        print(f"DEBUG Phase 3f Check: i={i} IsOrphan={is_orphan} RatioNxt={ratio_nxt:.2f}")
-
         if not is_orphan:
              # If it has text, print it for debugging
-             if i == 2:
-                  print(f"DEBUG Item 2 Content: '{curr['es'][:50]}'")
+                if i == 3:
+                     # Note: 'parts' is defined later in this loop, so it would be undefined here.
+                     # Assuming the user intended to replace the previous debug print entirely.
+                     print(f"DEBUG Phase 4 Item 3 Parts: {curr['es'][:50]}") # Print current ES for context
              # continue # Don't continue, let it flow through phase 4 checks?
              # No, Phase 3f is separate from Phase 4
              # Phase 3f logic block
@@ -1497,13 +1495,12 @@ def align_chunks(en_chunks, es_chunks):
         if not nxt['es'].strip():
              continue
              
-        # Check if next is Fat
-        if ratio_nxt > 1.8:
+        # Check if next is Fat (Lowered threshold from 1.8 to 1.15 for Issue 14 Scrambled/Left-Merge)
+        # If Next ES contains Orphan + Next EN, Ratio will be (1 + Orphan/Next).
+        # Eg. Orphan=20, Next=50 -> Ratio 1.4. 1.8 is too high.
+        if ratio_nxt > 1.15:
              # Try to split Next
              parts = split_sentences(nxt['es'])
-             
-             # Debug parts
-             print(f"DEBUG Phase 3f Parts Check: i={i} NxtES='{nxt['es'][:20]}...' NumParts={len(parts)}")
              
              best_cut_idx = -1
 
@@ -1519,9 +1516,6 @@ def align_chunks(en_chunks, es_chunks):
                   sim_tail = SequenceMatcher(None, nxt['en'], tail).ratio()
                   sim_head_vs_next = SequenceMatcher(None, nxt['en'], head).ratio()
                   
-                  # Debug
-                  print(f"DEBUG Phase 3f Scan: k={k} Steal={sim_steal:.3f} Tail={sim_tail:.3f}")
-
                   # Length Heuristics
                   len_en_curr = len(curr['en'])
                   len_en_nxt = len(nxt['en'])
@@ -1536,7 +1530,10 @@ def align_chunks(en_chunks, es_chunks):
                        is_candidate = True
                   
                   # 2. Strong Length Signal (if Sim is weak but non-zeroish)
-                  if not is_candidate and sim_tail > 0.05:
+                  # Issue 14: sim_tail is high (0.8+). Issue 10: sim_tail is 0.0 (When vs Cuándo).
+                  # We must ensure Tail matches Next EN reasonably well before stealing Head.
+                  # Also ensure Head doesn't match Next EN better (which would mean we are stealing Next's text).
+                  if not is_candidate and sim_tail > 0.2 and sim_head_vs_next < 0.35:
                        # We only verify that the HEAD looks correct for the Orphan.
                        # The Tail is likely huge (Fat), so ratio_keep will be bad.
                        if 0.5 < ratio_steal < 2.5:
@@ -1556,7 +1553,6 @@ def align_chunks(en_chunks, es_chunks):
                             best_tail = tail
                             
              if best_cut_idx != -1:
-                  print(f"DEBUG Phase 3f Steal: i={i} Score={best_score:.2f} Head='{best_head[:20]}'")
                   curr['es'] = best_head
                   nxt['es'] = best_tail
 
@@ -1656,11 +1652,8 @@ def align_chunks(en_chunks, es_chunks):
                 # For now, let's assume if we started a ripple, we persist it unless explicitly blocked?
                 # Actually, if sim_carry is bad, maybe we should insert carry as a separate item?
                 # But we are 1-to-1 aligning.
-                # Let's simple swap for now as per algorithm.
                 item['es'] = carry_es
                 carry_es = cur_es
-        
-        # 2. Check for Greedy Split (Initiate Ripple)
         # Only if we aren't currently carrying (or even if we are? No, if we just swapped, we look at NEW es)
         # But if we swapped, item['es'] is the Carry (the proper match). It shouldn't be split.
         # So only check if NOT ripple?
@@ -1673,7 +1666,6 @@ def align_chunks(en_chunks, es_chunks):
             if nxt_en and cur_es:
                 # Heuristic: Check if Tail of Cur_ES matches Nxt_EN
                 parts = split_sentences(cur_es)
-                
                 
                 best_cut_idx = -1
                 best_tail = ""
@@ -1698,7 +1690,12 @@ def align_chunks(en_chunks, es_chunks):
                     sim_give = get_token_sim(nxt_en, tail)
                     
                     # Calculate RAW text similarity as fallback
-                    text_sim_give = SequenceMatcher(None, nxt_en, tail if tail else "").ratio()
+                    # Issue 10: Massive N-to-1 Merge. Tail might be huge (containing matches for Next + NextNext...).
+                    # We must check if START of tail matches Next EN.
+                    # Limit tail check to reasonable length relative to EN (e.g. 2.5x)
+                    check_len = int(len(nxt_en) * 2.5) + 20
+                    text_sim_give = SequenceMatcher(None, nxt_en, tail[:check_len] if tail else "").ratio()
+                    
                     text_sim_keep = SequenceMatcher(None, item['en'], head if head else "").ratio()
                     
                     word_sim_give = get_word_overlap_sim(nxt_en, tail)

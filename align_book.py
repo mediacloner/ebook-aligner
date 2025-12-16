@@ -258,7 +258,8 @@ def split_sentences(text):
     # Robust Strategy: Split on sentence terminators but Keep them using capturing parentheses.
     # Pattern: Captures the delimiter (Punctuation + optional closing quotes + whitespace)
     # This avoids zero-width assertion issues.
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
+    # Added em-dash/en-dash to lookahead for Spanish dialogue transitions (Issue 13)
+    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-\—\–]))'
     # Wait, keeping lookahead in split ensures we only split valid ones, but lookahead is NOT captured.
     # If we use capturing group around the delimiter, re.split returns [sent1, delim1, sent2, delim2...]
     
@@ -1671,8 +1672,8 @@ def align_chunks(en_chunks, es_chunks):
             
             if nxt_en and cur_es:
                 # Heuristic: Check if Tail of Cur_ES matches Nxt_EN
-                # Split cur_es into sentences. Try ALL cuts.
                 parts = split_sentences(cur_es)
+                
                 
                 best_cut_idx = -1
                 best_tail = ""
@@ -1710,16 +1711,41 @@ def align_chunks(en_chunks, es_chunks):
                     # Safety: If we give NOTHING (0.0 similarity), don't split.
                     # This prevents splitting off "noisy" tails just to improve Head purity.
                     # EXCEPTION: If text_sim_give is high OR word_sim_give is decent (Issue 12)
-                    if sim_give < 0.01 and text_sim_give < 0.55 and word_sim_give < 0.25:
-                         continue
-                         
                     score = sim_keep + sim_give
                     
+                    is_dialog_rescue = False
+                    
+                    # Tie-Breaker: Length Ratio
+                    # ... (actually let's put boost logic here) ...
+                    
                     if sim_give < 0.01:
+                         # Boosts for low-signal matches
+                         
                          if text_sim_give > 0.55:
                               score += text_sim_give 
+                              
                          elif word_sim_give >= 0.25:
                               score += word_sim_give * 0.5
+                              
+                         else:
+                              # Dialogue Heuristic Signal (Issue 13)
+                              is_dialog_en = nxt_en.strip().startswith(('“', '"', '—'))
+                              # Check Spanish tail for dialogue markers
+                              is_dialog_es = tail.strip().startswith(('—', '-', '–', '“', '"'))
+                              
+                              if is_dialog_en and is_dialog_es:
+                                   len_ratio = len(tail) / len(nxt_en) if nxt_en else 0
+                                   # Issue 11 Regression Fix: Ensure Head covers Current EN reasonably well.
+                                   # If Head is too short vs EN, the split is likely INTERNAL to EN, not a new item.
+                                   head_ratio = len(head) / len(item['en']) if item['en'] else 0
+                                   
+                                   if 0.5 < len_ratio < 2.5 and head_ratio > 0.6:
+                                        score += 0.3
+                                        is_dialog_rescue = True
+                    
+                    # Ensure we don't discard if rescued
+                    if sim_give < 0.01 and text_sim_give < 0.55 and word_sim_give < 0.25 and not is_dialog_rescue:
+                         continue
                     
                     # Tie-Breaker: Length Ratio
                     # If scores are similar, prefer the cut that aligns lengths roughly 1.4 (ES/EN)

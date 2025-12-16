@@ -10,13 +10,26 @@ import zipfile
 import shutil
 import uuid
 from datetime import datetime
+from dictionary_loader import DictionaryLoader, calculate_semantic_overlap
+
+# Global Dictionary Loader
+DICT_LOADER = None
 
 
 # ----------------------------------------------------------------------------- 
 # Configuration
 # -----------------------------------------------------------------------------
-SPLIT_TRIGGER_CHARS = 240  # Characters
-SPLIT_TOLERANCE = 0.20     # 20% +/- deviation allowed
+# Default Configuration
+DEFAULT_CONFIG = {
+    'SPLIT_TRIGGER_CHARS': 240,
+    'SPLIT_TOLERANCE': 0.20,
+    'SIM_THRESHOLD_TEXT': 0.55,  # Phase 4 default (tuned to 0.45 later, but let's expose it)
+    'SIM_THRESHOLD_ORPHAN': 0.20 # Phase 3f threshold
+}
+
+SPLIT_TRIGGER_CHARS = DEFAULT_CONFIG['SPLIT_TRIGGER_CHARS'] # Backwards compatibility for now
+SPLIT_TOLERANCE = DEFAULT_CONFIG['SPLIT_TOLERANCE']
+
 
 # Default configuration for "Artificial Intelligence" book
 # Configuration Profiles
@@ -257,8 +270,10 @@ def split_sentences(text):
     """Splits text into sentences using simple heuristics to avoid granularity mismatch."""
     # Robust Strategy: Split on sentence terminators but Keep them using capturing parentheses.
     # Pattern: Captures the delimiter (Punctuation + optional closing quotes + whitespace)
-    # Updated to \s* to handle cases like "!¿" (Issue 10/14 lump)
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s*(?=[A-Z¿¡"\'\-—–]))'
+    # Updated to handle Spanish dialogue tags (e.g. —pregunté) starting with lowercase
+    # Lookahead: Matches [A-Z...] OR [—] followed by Uppercase/Punctuation
+    # Negative Lookahead: Excludes [—] followed by lowercase (tags)
+    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s*(?=[A-Z¿¡"\'\-—–])(?![—–-]\s*[a-z]))'
     # Wait, keeping lookahead in split ensures we only split valid ones, but lookahead is NOT captured.
     # If we use capturing group around the delimiter, re.split returns [sent1, delim1, sent2, delim2...]
     
@@ -612,14 +627,14 @@ def find_nearest_sentence_end(text, target_idx):
     closest = min(candidates, key=lambda x: abs(x - target_idx))
     return closest + 1
 
-def smart_pair_split(en_text, es_text):
+def smart_pair_split(en_text, es_text, trigger_chars=240):
     en_split_indices = []
     current_idx = 0
     # Loop to find split points. 
     # Conditions:
     # 1. Remaining text > trigger
-    while len(en_text) - current_idx > SPLIT_TRIGGER_CHARS:
-        search_start = current_idx + SPLIT_TRIGGER_CHARS
+    while len(en_text) - current_idx > trigger_chars:
+        search_start = current_idx + trigger_chars
         dot_idx = en_text.find('.', search_start)
         
         # If no dot found, stop splitting (keep remainder as one chunk)
@@ -719,7 +734,7 @@ def parse_file(path, parser_cls, config):
 def get_header_indices(chunks):
     return [i for i, c in enumerate(chunks) if c['type'] == 'header']
 
-def align_chunks(en_chunks, es_chunks):
+def align_chunks(en_chunks, es_chunks, config=None):
     """
     Main alignment function using a multi-phase approach:
     1. Initial Pass: Difflib based on structural fingerprints (anchors, length, type).
@@ -727,6 +742,11 @@ def align_chunks(en_chunks, es_chunks):
     3. Gap Closer: Fixes small holes using orphaned items.
     4. Greedy Split: Fixes N-to-1 merges (Spanish paragraphs merged into one English).
     """
+    # Merge config with defaults
+    cfg = DEFAULT_CONFIG.copy()
+    if config:
+        cfg.update(config)
+
     print(f"Aligning: EN {len(en_chunks)} chunks (Headers: {len(get_header_indices(en_chunks))}) vs ES {len(es_chunks)} chunks (Headers: {len(get_header_indices(es_chunks))})")
     # Pre-processing: Fix Abbreviation Splits (Issue 11)
     # Sometimes inputs are split at "Mrs.", "Mr.", etc.
@@ -798,15 +818,14 @@ def align_chunks(en_chunks, es_chunks):
         dialog_sig = "DIALOG" if is_dialog else "NARRATION"
         
         # Granularity signal: Sentence Count
-        # This prevents aligning a single sentence paragraph with a 5-sentence paragraph
-        # pushing them into a 'replace' block for finer alignment.
-        sent_count = len(split_sentences(txt))
-        # Bucketing to allow some flexibility
-        if sent_count <= 1: sc_sig = "SC1"
-        elif sent_count <= 3: sc_sig = "SC2-3"
-        else: sc_sig = "SC4+"
+        # REMOVED: SC signal caused mismatches in valid N-to-1 merges.
+        # We now rely on Dictionary and Phase 4 to handle splits.
+        # sent_count = len(split_sentences(txt))
+        # if sent_count <= 1: sc_sig = "SC1"
+        # elif sent_count <= 3: sc_sig = "SC2-3"
+        # else: sc_sig = "SC4+"
         
-        fp = f"{c['type']}:{dialog_sig}:{anchor_sig}:{sc_sig}"
+        fp = f"{c['type']}:{dialog_sig}:{anchor_sig}" # :{sc_sig}"
         return fp
 
 
@@ -850,13 +869,26 @@ def align_chunks(en_chunks, es_chunks):
         
         fp_en = [fingerprint(c, 'en', shared, shared_nums) for c in en_sec]
         fp_es = [fingerprint(c, 'es', shared, shared_nums) for c in es_sec]
+        # Debug Fingerprints at depth 0
+        # if depth == 0:
+        #     print("DEBUG Fingerprints (EN):")
+        #     for i, fp in enumerate(fp_en):
+        #         print(f"  {i}: {fp} Text: {en_sec[i]['text'][:30]}")
+        #     print("DEBUG Fingerprints (ES):")
+        #     for i, fp in enumerate(fp_es):
+        #         print(f"  {i}: {fp} Text: {es_sec[i]['text'][:30]}")
         
         # Use SequenceMatcher to find the optimal global alignment based on type+length profile
         # autojunk=False is CRITICAL for preventing anchors from being discarded if they appear commonly (which they might in repetitive text)
         sm = difflib.SequenceMatcher(None, fp_en, fp_es, autojunk=False)
         local_res = []
         
-        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        opcodes = sm.get_opcodes()
+        # print(f"DEBUG Align Opcodes (Depth {depth}):")
+        # for tag, i1, i2, j1, j2 in opcodes:
+        #      print(f"  {tag} EN[{i1}:{i2}] ES[{j1}:{j2}]")
+        
+        for tag, i1, i2, j1, j2 in opcodes:
             if tag == 'equal':
                 for k in range(i2 - i1):
                     en_item = en_sec[i1+k]
@@ -865,31 +897,87 @@ def align_chunks(en_chunks, es_chunks):
                     es_text = es_item['text']
                     
                     # Restore Split Feature for Long Paragraphs
-                    if len(en_text) > SPLIT_TRIGGER_CHARS:
-                         en_subs, es_subs = smart_pair_split(en_text, es_text)
-                         # Ensure pairing
-                         max_subs = max(len(en_subs), len(es_subs))
-                         for x in range(max_subs):
-                             sub_en = en_subs[x] if x < len(en_subs) else ""
-                             sub_es = es_subs[x] if x < len(es_subs) else ""
-                             local_res.append({
-                                 'tag': en_item['tag'],
-                                 'classes': en_item.get('classes', []),
-                                 'en': sub_en,
-                                 'es': sub_es
-                             })
+                    # ALSO: Safety Check for Length Mismatch (Superset)
+                    # If ES is > 2.0x EN, and EN is short (<300 chars), likely ES contains extra paragraphs.
+                    # We should treat this as a BLOCK MISMATCH to allow drilling down.
+                    ratio = len(es_text) / len(en_text) if len(en_text) > 0 else 0
+                    if 0.5 < ratio < 2.0:
+                        if len(en_text) > cfg['SPLIT_TRIGGER_CHARS']:
+                             en_subs, es_subs = smart_pair_split(en_text, es_text, cfg['SPLIT_TRIGGER_CHARS'])
+                             # Ensure pairing
+                             max_subs = max(len(en_subs), len(es_subs))
+                             for x in range(max_subs):
+                                 sub_en = en_subs[x] if x < len(en_subs) else ""
+                                 sub_es = es_subs[x] if x < len(es_subs) else ""
+                                 local_res.append({
+                                     'tag': en_item['tag'],
+                                     'classes': en_item.get('classes', []),
+                                     'en': sub_en,
+                                     'es': sub_es
+                                 })
+                        else:
+                            local_res.append({
+                                'tag': en_item['tag'],
+                                'classes': en_item.get('classes', []),
+                                'en': en_text,
+                                'es': es_text
+                            })
                     else:
-                        local_res.append({
-                            'tag': en_item['tag'],
-                            'classes': en_item.get('classes', []),
-                            'en': en_text,
-                            'es': es_text
-                        })
+                        # Length mismatch is too high for an 'equal' block. Treat as 'replace' by drilling down.
+                        # print(f"DEBUG Force Split due to length ratio {ratio:.2f}: EN='{en_text[:20]}' ES='{es_text[:20]}'")
+                        # We reconstruct a mini-section to recurse
+                        sub_en = [en_item]
+                        sub_es = [es_item]
+                        # Copied logic from 'replace' block for recursion
+                        v_en_chunks = []
+                        for c in sub_en:
+                            if c['type'] == 'std' and c['text']:
+                                sents = split_sentences(c['text'])
+                                for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
+                            else: v_en_chunks.append(c)
+
+                        v_es_chunks = []
+                        for c in sub_es:
+                            if c['type'] == 'std' and c['text']:
+                                sents = split_sentences(c['text'])
+                                for s in sents: v_es_chunks.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
+                            else: v_es_chunks.append(c)
+                            
+                        sub_aligned = align_section(v_en_chunks, v_es_chunks, depth + 1)
+                        local_res.extend(sub_aligned)
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
                 sub_en = en_sec[i1:i2]
                 sub_es = es_sec[j1:j2]
                 
+                # DICTIONARY CHECK: If 1-to-1 match in a replace block, check semantic overlap
+                # If high overlap, override the "replace" decision and force a match.
+                matched_with_dict = False
+                if len(sub_en) == 1 and len(sub_es) == 1 and DICT_LOADER:
+                    en_txt = sub_en[0]['text']
+                    es_txt = sub_es[0]['text']
+                    # Only check if reasonable length (avoiding very short titles/numbers which might false positive)
+                    if len(en_txt) > 20 and len(es_txt) > 20: 
+                        # LENGTH CHECK: Prevent merging if lengths are vastly different 
+                        # (e.g. EN 150 chars vs ES 450 chars usually means ES contains extra paragraphs)
+                        len_ratio = len(es_txt) / len(en_txt)
+                        # Accepted expansion for Spanish is usually 1.0 to 1.4.
+                        # If ratio is > 1.6 or < 0.6, it's suspicious.
+                        if 0.6 <= len_ratio <= 1.6:
+                            score = calculate_semantic_overlap(en_txt, es_txt, DICT_LOADER)
+                            # Threshold 0.3 means 30% of English content words have a translation in Spanish text.
+                            if score > 0.3:
+                                local_res.append({
+                                    'tag': sub_en[0]['tag'],
+                                    'classes': sub_en[0].get('classes', []),
+                                    'en': en_txt,
+                                    'es': es_txt
+                                })
+                                matched_with_dict = True
+                
+                if matched_with_dict:
+                    continue
+
                 # Expand paragraphs into sentence chunks
                 v_en_chunks = []
                 for c in sub_en:
@@ -962,6 +1050,10 @@ def align_chunks(en_chunks, es_chunks):
         aligned_sec = align_section(section_en, section_es)
         aligned.extend(aligned_sec)
 
+    # print(f"DEBUG After Phase 1:")
+    # for idx, item in enumerate(aligned):
+    #      print(f"  {idx}: EN='{item['en'][:50]}' ES='{item['es'][:50]}'")
+
 
     # Post-processing: Merge Orphaned Attributions
     # Detects split English attributions (e.g. "Quote" + "I said") that map to a single Spanish block
@@ -1021,6 +1113,7 @@ def align_chunks(en_chunks, es_chunks):
     #   Current alignment seems wrong or ES[i+1] is a "delete" (orphaned Spanish? No, here it's aligned to next English).
     #   We actually typically see:
     #     EN[i] <-> ES[i] (partial match)
+    #     EN[i+1] <-> ES[i+1] (MISMATCH, ES[i+1] actually belongs to EN[i])
     #     EN[i+1] <-> ES[i+1] (MISMATCH, ES[i+1] actually belongs to EN[i])
     # -------------------------------------------------------------------------
     
@@ -1097,7 +1190,27 @@ def align_chunks(en_chunks, es_chunks):
             
             if ratio_curr < thresh_curr and ratio_combined <= 1.8:
                  should_merge = True
+
+            # Semantic Guard: If merging results in a significant size increase, verify the ORPHAN itself matches.
+            # If the orphan (es2) has NO relationship to the English, don't merge it.
+            if ratio_combined > 1.2 and DICT_LOADER and len(es2) > 30:
+                 # Check if the orphan alone matches the English text
+                 sim_orphan = calculate_semantic_overlap(en1, es2, DICT_LOADER)
                  
+                 # If orphan has very low overlap (e.g. < 10% of EN words found in it),
+                 # And the current ES1 is ALREADY a decent match...
+                 # But calculate_semantic_overlap measures "Recall" (Found/Total_EN).
+                 # If orphan is just a fragment (e.g. "He said."), recall might be low.
+                 # So we only reject if it's suspiciously different or zero.
+                 
+                 if sim_orphan < 0.10:
+                      # If orphan has ZERO or TINY overlap, likely unrelated.
+                      # Exception: Very short English might yield 0 overlap if words absent in dictionary.
+                      # We trust the dictionary only if EN has enough content.
+                      if len(en1) > 50:
+                           # print(f"DEBUG Phase 2 Rejected Orphan: Sim={sim_orphan:.3f} OrphanLen={len(es2)}")
+                           should_merge = False
+                           
             if should_merge:
                 curr['es'] = combined_es
                 
@@ -1136,14 +1249,8 @@ def align_chunks(en_chunks, es_chunks):
              
         i += 1
         
-    # Filter out completely empty items to prevent gaps from blocking Phase 3
-
-
-        
-    # Filter out completely empty items to prevent gaps from blocking Phase 3
-    pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip()]
-        
     # Phase 3: Fix the gaps created by Phase 2 (The Ripple Effect)
+
 
     # Now we might have:
     # [i]   {en: EN1, es: ES1+ES2}
@@ -1157,7 +1264,12 @@ def align_chunks(en_chunks, es_chunks):
     # Check if ES_K+1 belongs to EN_K.
     
     # Filter out completely empty items to prevent gaps from blocking Phase 3
+    # Filter out completely empty items to prevent gaps from blocking Phase 3
     pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip()]
+    
+    # print(f"DEBUG After Phase 2:")
+    # for idx, item in enumerate(pass_2_aligned):
+    #      print(f"  {idx}: EN='{item['en'][:50]}' ES='{item['es'][:50]}'")
     
     final_pass = []
 
@@ -1403,15 +1515,30 @@ def align_chunks(en_chunks, es_chunks):
                    # But Phase 1 anchored the Next Paragraph (Match B).
                    # So Orphans strictly strictly BETWEEN A and B should belong to A (or B).
                    
-                   # We assume A.
-                   anchor = final_pass[last_match_idx]
-                   # Append
-                   anchor['es'] += " " + curr['es']
-                   curr['es'] = ""
-                   # Continue
+                    # We assume A.
+                    should_fill = True
+                    
+                    # Semantic Guard: Don't fill if unrelated
+                    if DICT_LOADER and len(curr['es']) > 30:
+                         anchor_en = final_pass[last_match_idx]['en']
+                         sim_fill = calculate_semantic_overlap(anchor_en, curr['es'], DICT_LOADER)
+                         
+                         if sim_fill < 0.10:
+                              if len(anchor_en) > 50:
+                                   should_fill = False
+                                   
+                    if should_fill:
+                        anchor = final_pass[last_match_idx]
+                        anchor['es'] += " " + curr['es']
+                        curr['es'] = ""
+                    # Continue
 
     # Filter empty
     final_pass = [x for x in final_pass if x['en'].strip() or x['es'].strip()]
+    
+    # print(f"DEBUG After Phase 3e:")
+    # for idx, item in enumerate(final_pass):
+    #      print(f"  {idx}: EN='{item['en'][:20]}' ES='{item['es'][:20]}'")
 
 
 
@@ -1473,7 +1600,8 @@ def align_chunks(en_chunks, es_chunks):
         sim_curr = 0
         if curr['es'].strip() and curr['en'].strip():
              sim_curr = SequenceMatcher(None, curr['en'], curr['es']).ratio()
-             if sim_curr < 0.35: # Treat bad match as orphan for stealing purposes
+             # Lower threshold: only treat as orphan if match is truly BAD (< 0.20)
+             if sim_curr < cfg['SIM_THRESHOLD_ORPHAN']:
                   is_orphan = True
                   
         len_nxt_en = len(nxt['en'])
@@ -1481,16 +1609,11 @@ def align_chunks(en_chunks, es_chunks):
         ratio_nxt = len_nxt_es / len_nxt_en if len_nxt_en > 0 else 0
         
         if not is_orphan:
-             # If it has text, print it for debugging
-                if i == 3:
-                     # Note: 'parts' is defined later in this loop, so it would be undefined here.
-                     # Assuming the user intended to replace the previous debug print entirely.
-                     print(f"DEBUG Phase 4 Item 3 Parts: {curr['es'][:50]}") # Print current ES for context
-             # continue # Don't continue, let it flow through phase 4 checks?
-             # No, Phase 3f is separate from Phase 4
-             # Phase 3f logic block
-        
-        pass # End of trace block logic
+             # Even if not orphan, still continue UNLESS sim_curr is good (> 0.25)
+             # AND we haven't verified that stealing would improve it
+             if sim_curr > 0.25:
+                  # Good match. Skip Phase 3f for this item.
+                  continue 
         
         if not nxt['es'].strip():
              continue
@@ -1553,17 +1676,29 @@ def align_chunks(en_chunks, es_chunks):
                             best_tail = tail
                             
              if best_cut_idx != -1:
+                  # Rescue Logic (Phase 3f)
+                  # print(f"DEBUG Phase3f: i={i} Splitting nxt['es']. Old curr['es']='{curr['es'][:30]}...'")
+                  old_es = curr['es']
+                  if old_es.strip() and i > 0:
+                       # Append to previous
+                       # print(f"  Rescuing old_es to prev: '{old_es[:30]}...'")
+                       final_pass[i-1]['es'] += " " + old_es
+
                   curr['es'] = best_head
                   nxt['es'] = best_tail
+                  # print(f"  New curr['es']='{curr['es'][:30]}...'")
+                  # print(f"  New nxt['es']='{nxt['es'][:30]}...'")
 
                   # Continue to next (which is nxt, but nxt is now modified)
 
 
     # -------------------------------------------------------------------------
-    # Phase 4: Greedy Spanish Split & Ripple Shift
+    # Phase 3: Fix the gaps created by Phase 2 (The Ripple Effect)
     # -------------------------------------------------------------------------
-
-    # Helper for token-based similarity (Proper Nouns & Numbers)
+    # Filter out completely empty items to prevent gaps from blocking Phase 3 & Numbers)
+    final_pass = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip()]
+        
+    # Issue 7: Empty items in final_pass causing index errors or bad shifts & Numbers)
     def get_token_sim(t1, t2):
         if not t1 or not t2: return 0.0
         
@@ -1623,6 +1758,10 @@ def align_chunks(en_chunks, es_chunks):
 
     # Handles cases where S[i] consumed content for E[i+1], causing a mismatched chain shift.
     
+    # print("DEBUG Final Pass (Pre-Phase 4):")
+    # for idx, item in enumerate(final_pass):
+    #     print(f"  {idx}: EN='{item['en'][:20]}' ES='{item['es'][:20]}'")
+
     phase_4_aligned = []
     carry_es = None
     
@@ -1667,6 +1806,8 @@ def align_chunks(en_chunks, es_chunks):
                 # Heuristic: Check if Tail of Cur_ES matches Nxt_EN
                 parts = split_sentences(cur_es)
                 
+                # print(f"DEBUG Phase4 i={i}: cur_es has {len(parts)} sentences, nxt_en exists")
+                
                 best_cut_idx = -1
                 best_tail = ""
                 best_head = ""
@@ -1700,6 +1841,29 @@ def align_chunks(en_chunks, es_chunks):
                     
                     word_sim_give = get_word_overlap_sim(nxt_en, tail)
 
+                    # OWNERSHIP CHECK: Does the head belong to Next EN rather than Current EN?
+                    # If Head matches Next better than Current, we're stealing from the wrong place.
+                    text_sim_head_to_next = SequenceMatcher(None, nxt_en, head if head else "").ratio()
+                    # if i == 2:
+                    #     print(f"  k={k}: head='{head[:30]}' tail='{tail[:30]}'")
+                    #     print(f"    text_sim_keep={text_sim_keep:.3f} text_sim_head_to_next={text_sim_head_to_next:.3f}")
+                    if text_sim_head_to_next > text_sim_keep * 1.05:
+                         # Head belongs to Next, not Current. Abort this split.
+                         # if i == 2:
+                         #     print(f"    -> REJECT: Head belongs to Next")
+                         continue
+                    
+                    # DEGRADATION CHECK: Is Current already well-matched?
+                    # If Current has a good existing match, don't degrade it significantly.
+                    text_sim_current = SequenceMatcher(None, item['en'], item['es']).ratio()
+                    # if i == 2:
+                    #     print(f"    text_sim_current={text_sim_current:.3f} threshold={text_sim_current * 0.9:.3f}")
+                    if text_sim_current > 0.25 and text_sim_keep < text_sim_current * 0.9:
+                         # Split would degrade a good match. Reject.
+                         # if i == 2:
+                         #     print(f"    -> REJECT: Would degrade good match")
+                         continue
+
                     # Bad Match Override Check
                     # If Give is WORSE than Existing (and existing is real), don't do it.
                     if sim_existing > 0.4 and sim_give < sim_existing + 0.1:
@@ -1711,19 +1875,30 @@ def align_chunks(en_chunks, es_chunks):
                     score = sim_keep + sim_give
                     
                     is_dialog_rescue = False
+                    is_sem_rescue = False
                     
                     # Tie-Breaker: Length Ratio
                     # ... (actually let's put boost logic here) ...
                     
                     if sim_give < 0.01:
                          # Boosts for low-signal matches
-                         
-                         if text_sim_give > 0.55:
+                         if text_sim_give > cfg['SIM_THRESHOLD_TEXT']:  # Lowered from 0.55
                               score += text_sim_give 
                               
                          elif word_sim_give >= 0.25:
                               score += word_sim_give * 0.5
-                              
+                               
+                         elif DICT_LOADER:
+                              # Semantic Dictionary Boost
+                              sem_give = calculate_semantic_overlap(nxt_en, tail, DICT_LOADER)
+                              if sem_give > 0.3:
+                                  # Check Head too to ensure we aren't stealing valid content
+                                  sem_keep = calculate_semantic_overlap(item['en'], head, DICT_LOADER)
+                                  # We want High Give and Reasonable Keep
+                                  if sem_keep > 0.2:
+                                       score += sem_give * 0.8
+                                       is_sem_rescue = True
+
                          else:
                               # Dialogue Heuristic Signal (Issue 13)
                               is_dialog_en = nxt_en.strip().startswith(('“', '"', '—'))
@@ -1741,7 +1916,12 @@ def align_chunks(en_chunks, es_chunks):
                                         is_dialog_rescue = True
                     
                     # Ensure we don't discard if rescued
-                    if sim_give < 0.01 and text_sim_give < 0.55 and word_sim_give < 0.25 and not is_dialog_rescue:
+                    # if i == 2:
+                    #     print(f"    sim_give={sim_give:.3f} text_sim_give={text_sim_give:.3f} word_sim_give={word_sim_give:.3f}")
+                    # Lower threshold: 0.45 instead of 0.55 to allow more legitimate splits
+                    if sim_give < 0.01 and text_sim_give < cfg['SIM_THRESHOLD_TEXT'] and word_sim_give < 0.25 and not is_dialog_rescue and not is_sem_rescue:
+                         # if i == 2:
+                         #     print(f"    -> REJECT: sim_give too low")
                          continue
                     
                     # Tie-Breaker: Length Ratio
@@ -1753,6 +1933,8 @@ def align_chunks(en_chunks, es_chunks):
                          dist_penalty = abs(ratio_steal - 1.4) * 0.1
                          score -= dist_penalty
                     
+                    # if i == 2:
+                    #     print(f"    score={score:.3f} best_score={best_score:.3f}")
                     if score > best_score:
                          best_score = score
                          best_cut_idx = k
@@ -1763,7 +1945,22 @@ def align_chunks(en_chunks, es_chunks):
                 if best_cut_idx != -1:
                      # Thresholds
                      # If score is reasonable?
+                     # print(f"DEBUG Phase4 i={i}: SPLIT ACCEPTED at cut={best_cut_idx}, score={best_score:.3f}")
                      # print(f"DEBUG Phase 4 Split Found: i={i} Score={best_score:.2f} HeadLen={len(best_head)} TailLen={len(best_tail)}")
+                     
+                     # RESCUE LOGIC: If we are overwriting existing content, where does it go?
+                     # It likely belongs to PREVIOUS item (orphaned tail of previous) 
+                     # OR it is just bad content we want to discard?
+                     # In Issue 14, "—¡Spensa!" belongs to Previous Item (Item 2).
+                     old_es = item['es']
+                     if old_es.strip() and phase_4_aligned:
+                          # print(f"DEBUG Rescue: Appending '{old_es}' to Item {len(phase_4_aligned)-1}")
+                          phase_4_aligned[-1]['es'] += " " + old_es
+                     # else:
+                          # if not phase_4_aligned: print("DEBUG Rescue Failed: No prev item")
+                          # else: print(f"DEBUG Rescue Failed: Old ES empty? '{old_es}'")
+                     
+                     item['es'] = best_head
                      
                      item['es'] = best_head
                      if carry_es:
@@ -2254,5 +2451,9 @@ if __name__ == "__main__":
     # In a real generalized version, one might load config from a JSON file here.
     # config = load_config(args.config) 
     config = BOOK_CONFIG
+    
+    # Initialize Dictionary
+    print("Initializing Dictionary...")
+    DICT_LOADER = DictionaryLoader(check_download=True)
     
     create_bilingual_epub(args.en, args.es, args.output, config)

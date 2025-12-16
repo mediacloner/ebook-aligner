@@ -7,11 +7,18 @@ import time
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename # Added this import
 from align_book import create_bilingual_epub
+import align_book
+from dictionary_loader import DictionaryLoader
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Initialize dictionary loader for semantic alignment guards
+print("Initializing dictionary for alignment...")
+align_book.DICT_LOADER = DictionaryLoader(check_download=True)
+print("Dictionary initialized.")
 
 def clean_old_uploads(max_age_seconds=7200): # 2 hours
     print("Cleaning old uploads...")

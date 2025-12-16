@@ -4,9 +4,17 @@ venv/
 env/
 .env
 .DS_Store
+
+# Upload and temp directories
 uploads/
 bilingual_epub_staging/
+temp_*/
+books/output/
+
+# Build artifacts
 *.epub
 *.zip
+
+# IDE
 .idea/
 .vscode/

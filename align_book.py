@@ -882,7 +882,7 @@ def align_chunks(en_chunks, es_chunks):
         if k > 0:
             h_en = en_chunks[en_anchors[k]]
             h_es = es_chunks[es_anchors[k]]
-            aligned.append({'tag': h_en['tag'], 'en': h_en['text'], 'es': h_es['text']})
+            aligned.append({'tag': h_en['tag'], 'classes': h_en.get('classes', []), 'en': h_en['text'], 'es': h_es['text']})
             
         # 2. Process content chunks in this section using Length Profiling
         section_en = en_chunks[en_start:en_end]

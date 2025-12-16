@@ -1419,7 +1419,43 @@ def align_chunks(en_chunks, es_chunks):
 
 
     
-    # Phase 3f: Orphan Steal (Issue 9 Shift Fix)
+    def get_token_sim(t1, t2):
+        # ... existing ...
+        # (re-pasting existing code for context matching or assuming it exists)
+        # Actually I need to find where to insert it.
+        # I'll insert it before Phase 3f loop.
+        pass
+
+    def get_word_overlap_sim(t1, t2):
+        """
+        Calculates similarity based on shared meaningful words (>4 chars).
+        Matches using 'in' operator (substring) to catch cognates like 'person' in 'persona'.
+        """
+        def clean_words(t):
+             # Remove punctuation
+             t = "".join([c if c.isalnum() else " " for c in t])
+             return [w.lower() for w in t.split() if len(w) > 4]
+        
+        w1 = clean_words(t1)
+        w2 = clean_words(t2)
+        
+        if not w1 or not w2: return 0.0
+        
+        matches = 0
+        for w in w1:
+             # Check if w is in any word of w2 (substring)
+             # Or if any word of w2 is in w
+             match_found = False
+             for target in w2:
+                  if w in target or target in w:
+                       match_found = True
+                       break
+             if match_found: matches += 1
+             
+        return matches / len(w1)
+
+    # -------------------------------------------------------------------------
+    # Phase 3f: Orphan Steal
     # If Orphan[i] is followed by Fat[i+1], and Fat[i+1] starts with Orphan[i]'s text.
     # We steal the Head.
     
@@ -1525,8 +1561,68 @@ def align_chunks(en_chunks, es_chunks):
 
                   # Continue to next (which is nxt, but nxt is now modified)
 
+
     # -------------------------------------------------------------------------
     # Phase 4: Greedy Spanish Split & Ripple Shift
+    # -------------------------------------------------------------------------
+
+    # Helper for token-based similarity (Proper Nouns & Numbers)
+    def get_token_sim(t1, t2):
+        if not t1 or not t2: return 0.0
+        
+        # Extract features
+        # 1. Numbers
+        nums1 = set(re.findall(r'\d+', t1))
+        nums2 = set(re.findall(r'\d+', t2))
+        
+        # 2. Proper Nouns (Capitalized words > 3 chars)
+        props1 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t1))
+        props2 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t2))
+        
+        set1 = nums1 | props1
+        set2 = nums2 | props2
+        
+        if not set1 or not set2:
+             return 0.0 # No anchors to compare
+             
+        intersection = set1 & set2
+        union = set1 | set2
+        
+        return len(intersection) / len(union)
+
+    # Helper for word overlap (Fallback for text sim)
+    def get_word_overlap_sim(t1, t2):
+        """
+        Calculates similarity based on shared meaningful words (>4 chars).
+        Matches using 'in' operator (substring) to catch cognates like 'person' in 'persona'.
+        """
+        def clean_words(t):
+             # Remove punctuation
+             t = "".join([c if c.isalnum() else " " for c in t])
+             return [w.lower() for w in t.split() if len(w) > 4]
+        
+        w1 = clean_words(t1)
+        w2 = clean_words(t2)
+        
+        if not w1 or not w2: return 0.0
+        
+        matches = 0
+        used_indices = set()
+        
+        for w in w1:
+             match_found = False
+             # Try simple existence first
+             for i, target in enumerate(w2):
+                  if i in used_indices: continue
+                  
+                  if w == target or (w in target and len(target) < len(w) + 3) or (target in w and len(w) < len(target) + 3):
+                       match_found = True
+                       used_indices.add(i)
+                       break
+             
+             if match_found: matches += 1
+             
+        return matches / len(w1)
 
     # Handles cases where S[i] consumed content for E[i+1], causing a mismatched chain shift.
     
@@ -1582,34 +1678,6 @@ def align_chunks(en_chunks, es_chunks):
                 best_tail = ""
                 best_head = ""
                 
-                # Helper for token-based similarity (Proper Nouns & Numbers)
-                def get_token_sim(t1, t2):
-                    if not t1 or not t2: return 0.0
-                    
-                    # Extract features
-                    # 1. Numbers
-                    nums1 = set(re.findall(r'\d+', t1))
-                    nums2 = set(re.findall(r'\d+', t2))
-                    
-                    # 2. Proper Nouns (Capitalized words > 3 chars)
-                    # Exclude start of sentence? Hard to detect in fragments.
-                    # Just verify if it appears in both.
-                    props1 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t1))
-                    props2 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t2))
-                    
-                    set1 = nums1 | props1
-                    set2 = nums2 | props2
-                    
-                    if not set1 or not set2:
-                         return 0.0 # No anchors to compare
-                         
-                    isect = set1 & set2
-                    if not isect:
-                         return 0.0
-                    
-                    # Dice Coefficient / Ratio
-                    return 2.0 * len(isect) / (len(set1) + len(set2))
-
                 # Baseline: Don't split.
                 current_score = get_token_sim(item['en'], item['es'])
                 best_score = current_score + 0.05 
@@ -1628,6 +1696,12 @@ def align_chunks(en_chunks, es_chunks):
                     sim_keep = get_token_sim(item['en'], head)
                     sim_give = get_token_sim(nxt_en, tail)
                     
+                    # Calculate RAW text similarity as fallback
+                    text_sim_give = SequenceMatcher(None, nxt_en, tail if tail else "").ratio()
+                    text_sim_keep = SequenceMatcher(None, item['en'], head if head else "").ratio()
+                    
+                    word_sim_give = get_word_overlap_sim(nxt_en, tail)
+
                     # Bad Match Override Check
                     # If Give is WORSE than Existing (and existing is real), don't do it.
                     if sim_existing > 0.4 and sim_give < sim_existing + 0.1:
@@ -1635,10 +1709,27 @@ def align_chunks(en_chunks, es_chunks):
                          
                     # Safety: If we give NOTHING (0.0 similarity), don't split.
                     # This prevents splitting off "noisy" tails just to improve Head purity.
-                    if sim_give < 0.01:
+                    # EXCEPTION: If text_sim_give is high OR word_sim_give is decent (Issue 12)
+                    if sim_give < 0.01 and text_sim_give < 0.55 and word_sim_give < 0.25:
                          continue
                          
                     score = sim_keep + sim_give
+                    
+                    if sim_give < 0.01:
+                         if text_sim_give > 0.55:
+                              score += text_sim_give 
+                         elif word_sim_give >= 0.25:
+                              score += word_sim_give * 0.5
+                    
+                    # Tie-Breaker: Length Ratio
+                    # If scores are similar, prefer the cut that aligns lengths roughly 1.4 (ES/EN)
+                    len_en = len(item['en'])
+                    if len_en > 0:
+                         ratio_steal = len(head) / len_en
+                         # Penalty is distance from ideal 1.4
+                         dist_penalty = abs(ratio_steal - 1.4) * 0.1
+                         score -= dist_penalty
+                    
                     if score > best_score:
                          best_score = score
                          best_cut_idx = k

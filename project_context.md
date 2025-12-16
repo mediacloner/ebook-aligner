@@ -60,8 +60,11 @@ The main script that:
 - **CSS Spacing**:
   - `p { margin: 0; }`: Removes vertical margins from all paragraphs to visually group the English text with its immediate Spanish translation below.
   - `.es-trans { margin-bottom: 1em; }`: Adds a specific bottom margin to Spanish paragraphs to separate unrelated bilingual pairs.
+- **Cover & Metadata**:
+  - Full metadata extraction (including extended fields and `meta` tags) from source OPF.
+  - Automatic detection and preservation of the cover image.
 
 ## Future Iterations / Todo
 
-- **Images**: Currently text-only. Image tags are stripped or ignored to maintain strict text alignment. Future work could re-integrate images.
+- **Images**: Content images are currently stripped. Only the cover is preserved. Future work could re-integrate chapter images.
 - **Footnotes**: Footnote references are present but links/content may need further refinement for full interactivity.

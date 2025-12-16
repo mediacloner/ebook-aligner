@@ -256,6 +256,8 @@ def split_sentences(text):
     parts = re.split(r'(?<=[.!?])\s+(?=[A-Z¿¡"\'\-])', text)
     return [p.strip() for p in parts if p.strip()]
 
+    return [p.strip() for p in parts if p.strip()]
+
 def find_opf_file(base_dir):
     """Recursively searches for the first .opf file in the directory."""
     for root, dirs, files in os.walk(base_dir):
@@ -264,18 +266,28 @@ def find_opf_file(base_dir):
                 return os.path.join(root, f)
     return None
 
-def read_opf_metadata(opf_path):
+def read_opf_data(opf_path):
     """
-    Extracts basic metadata (title, language, creator, identifier) from an OPF file.
-    Returns:
-        title (str)
-        language (str)
-        creator (str)
-        identifier (str) - Content of the identifier element
-        uid_scheme (str) - The id of the identifier element (e.g. 'BookId') to match unique-identifier
+    Extracts comprehensive data from an OPF file:
+    - Metadata elements (list of dicts with tag, text, attribs)
+    - Manifest mapping (id -> href)
+    - Cover ID (if found in meta name="cover")
+    - Textual metadata (Title, Language, Creator) for convenience
+    - UUID data
     """
+    data = {
+        'title': "Bilingual Edition",
+        'language': "en",
+        'creator': "Unknown",
+        'uid': "urn:uuid:12345",
+        'uid_scheme': "BookId",
+        'cover_id': None,
+        'metadata_items': [], # List of objects to reconstruct strings
+        'manifest': {}
+    }
+
     if not opf_path or not os.path.exists(opf_path):
-        return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
+        return data
 
     try:
         tree = ET.parse(opf_path)
@@ -287,43 +299,61 @@ def read_opf_metadata(opf_path):
             'dc': 'http://purl.org/dc/elements/1.1/'
         }
         
-        metadata = root.find('opf:metadata', ns)
-        if metadata is None:
-             return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
-             
-        # Helper to get text
-        def get_text(tag):
-            node = metadata.find(tag, ns)
-            return node.text if node is not None else None
-            
-        title = get_text('dc:title') or "Bilingual Edition"
-        language = get_text('dc:language') or "en"
-        creator = get_text('dc:creator') or "Unknown"
-        
-        # Identifier is trickier because we want the one referenced by unique-identifier
-        package_uid_ref = root.get('unique-identifier')
-        identifier = "urn:uuid:12345"
-        uid_scheme = "BookId"
-        
-        if package_uid_ref:
-            # Find the dc:identifier with id == package_uid_ref
-            for ident in metadata.findall('dc:identifier', ns):
-                if ident.get('id') == package_uid_ref:
-                    identifier = ident.text
-                    uid_scheme = package_uid_ref
-                    break
-        else:
-            # Fallback to first identifier
-            first_ident = metadata.find('dc:identifier', ns)
-            if first_ident is not None:
-                identifier = first_ident.text
-                uid_scheme = first_ident.get('id', 'BookId')
+        # 1. Metadata
+        metadata_node = root.find('opf:metadata', ns)
+        if metadata_node is not None:
+            # Capture all dc:* children
+            for child in metadata_node:
+                # Naive namespace check
+                tag = child.tag
+                # Remove namespace uri from tag for cleaner handling if needed, or keep it
+                # We will store the full tag and attributes to reconstruct
+                
+                # Check for specific fields for convenience
+                clean_tag = tag.split('}')[-1] if '}' in tag else tag
+                text = child.text
+                
+                if 'title' in clean_tag: data['title'] = text
+                elif 'language' in clean_tag: data['language'] = text
+                elif 'creator' in clean_tag: data['creator'] = text
+                
+                # Check for cover meta
+                if 'meta' in clean_tag and child.get('name') == 'cover':
+                    data['cover_id'] = child.get('content')
 
-        return title, language, creator, identifier, uid_scheme
-        
+                # Store for reproduction (excluding unique-identifier which we handle separately)
+                # We save the raw element info
+                full_tag = tag # keeps {uri}tag
+                
+                # We want to output standard tags without expanding namespaces manually if possible, 
+                # but ET expands them. We will reconstruct them carefully.
+                # Simplified: Store tag and attributes.
+                item = {'tag': tag, 'text': text, 'attrib': child.attrib}
+                data['metadata_items'].append(item)
+
+            # Resolve Identifier
+            package_uid_ref = root.get('unique-identifier')
+            if package_uid_ref:
+                data['uid_scheme'] = package_uid_ref
+                for ident in metadata_node.findall('dc:identifier', ns):
+                    if ident.get('id') == package_uid_ref:
+                        data['uid'] = ident.text
+                        break
+
+        # 2. Manifest
+        manifest_node = root.find('opf:manifest', ns)
+        if manifest_node is not None:
+            for item in manifest_node.findall('opf:item', ns):
+                i_id = item.get('id')
+                i_href = item.get('href')
+                i_media = item.get('media-type')
+                if i_id and i_href:
+                    data['manifest'][i_id] = {'href': i_href, 'media-type': i_media}
+
     except Exception as e:
-        print(f"Error reading OPF metadata: {e}")
-        return "Bilingual Edition", "en", "Unknown", "urn:uuid:12345", "BookId"
+        print(f"Error reading OPF data: {e}")
+        
+    return data
 
 
 class BaseParser(HTMLParser):
@@ -936,21 +966,50 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
 
     # 1a. Extract Metadata from English Source
     en_opf_path = find_opf_file(en_base)
-    # If en_base is OEBPS, the opf might be there or parent.
-    # The find_opf_file searches recursively from en_base.
-    # If en_base is deep, we might want to check parent if not found? 
-    # Usually en_base IS the OEBPS folder. Opf is usually inside or in META-INF relative to root (but here we are looking at extracted OEBPS).
-    
-    # Heuristic: If we can't find it in en_base, try one level up.
     if not en_opf_path:
         parent = os.path.dirname(en_base.rstrip('/'))
         en_opf_path = find_opf_file(parent)
         
-    m_title, m_lang, m_creator, m_ident, m_uid_scheme = read_opf_metadata(en_opf_path)
+    # Read comprehensive data
+    opf_data = read_opf_data(en_opf_path)
+    
+    # Metadata variables for convenience
+    m_title = opf_data['title']
+    m_lang = opf_data['language']
+    m_creator = opf_data['creator']
+    m_ident = opf_data['uid']
+    m_uid_scheme = opf_data['uid_scheme']
     
     # Modify Title
     final_title = f"{m_title} (bilingual)"
     print(f"Metadata extracted: Title='{final_title}', Language='{m_lang}'")
+    
+    # Cover Handling
+    cover_item_to_copy = None # (src_abs_path, filename_in_dest)
+    cover_id_in_manifest = opf_data['cover_id']
+    
+    if cover_id_in_manifest and cover_id_in_manifest in opf_data['manifest']:
+        c_item = opf_data['manifest'][cover_id_in_manifest]
+        c_href = c_item['href']
+        
+        # Resolve path
+        # opf_path directory is the base for relative hrefs
+        if en_opf_path:
+            opf_dir = os.path.dirname(en_opf_path)
+            # URL unquote might be needed if href has %20, but usually simple file paths
+            # Handle potential URL encoding just in case
+            import urllib.parse
+            c_path_dec = urllib.parse.unquote(c_href)
+            src_full = os.path.join(opf_dir, c_path_dec)
+            
+            if os.path.exists(src_full):
+                # We will copy this file
+                fname = os.path.basename(c_path_dec)
+                cover_item_to_copy = (src_full, fname, c_item['media-type'])
+                print(f"Found cover image: {src_full}")
+            else:
+                print(f"Warning: Cover extracted from OPF ({c_href}) not found at {src_full}")
+
 
     # 1b. Auto-Detect Profile if not provided
     if config is None:
@@ -979,6 +1038,13 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
 </container>"""
     with open(os.path.join(staging_dir, 'META-INF', 'container.xml'), 'w', encoding='utf-8') as f:
         f.write(container_xml)
+        
+    # 5a. Copy Cover Image if found
+    if cover_item_to_copy:
+        src, dest_name, c_media = cover_item_to_copy
+        # We'll put it in OEBPS root for simplicity (or images/ if we wanted)
+        shutil.copy2(src, os.path.join(staging_dir, 'OEBPS', dest_name))
+
 
     css_content = """
     body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
@@ -1026,10 +1092,10 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
             # Generate HTML
             out_filename = f"chapter_{idx:02d}.xhtml"
             # Use English parser results or similar for title if needed, here just generic
-            html = generate_chapter_html(aligned, title=f"Chapter {idx}")
+            chapter_content = generate_chapter_html(aligned, title=f"Chapter {idx}")
             
             with open(os.path.join(staging_dir, 'OEBPS', out_filename), 'w', encoding='utf-8') as f:
-                f.write(html)
+                f.write(chapter_content)
                 
             spine_refs.append(out_filename)
         except Exception as e:
@@ -1040,20 +1106,80 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     manifest_items = ""
     spine_items = ""
     
+    # CSS
     manifest_items += f'<item id="css" href="styles.css" media-type="text/css"/>\n'
     
+    # Cover
+    if cover_item_to_copy:
+        _, dest_name, c_media = cover_item_to_copy
+        # Re-use original cover ID if possible, or 'cover-image'
+        cover_id = opf_data['cover_id'] or 'cover-image'
+        manifest_items += f'<item id="{cover_id}" href="{dest_name}" media-type="{c_media}"/>\n'
+    
+    # Chapters
     for idx, filename in enumerate(spine_refs):
         item_id = f"item_{idx}"
         manifest_items += f'<item id="{item_id}" href="{filename}" media-type="application/xhtml+xml"/>\n'
         spine_items += f'<itemref idref="{item_id}"/>\n'
         
+    # Reconstruct Metadata Block
+    # We want to preserve everything but override title and identifier if needed so they match the package attributes
+    # Actually we just dump what we found, checking for existing title/ident to update.
+    
+    metadata_lines = []
+    
+    # We use a set to avoid duplicates if we re-inject mapped items (though extraction was linear)
+    # Strategy: Filter out the ID that matches unique-identifier (we write it manually)
+    # Filter out title (we write manual title)
+    # Write others as is.
+    
+    for item in opf_data['metadata_items']:
+        tag = item['tag']
+        text = item['text']
+        attribs = item['attrib']
+        
+        # Skip if it is the unique identifier (we handled it in package attrib + manual entry)
+        if tag.endswith('identifier') and attribs.get('id') == m_uid_scheme:
+             continue
+             
+        # Skip title (we use final_title)
+        if tag.endswith('title'):
+             continue
+
+        # Reconstruct XML string
+        # Handle Namespace: tag is likely {http://purl.org/dc/elements/1.1/}title
+        # We simply replace known namespaces with prefixes for clean output
+        clean_tag = tag.replace('{http://purl.org/dc/elements/1.1/}', 'dc:') \
+                       .replace('{http://www.idpf.org/2007/opf}', 'opf:')
+                       
+        # Fallback if unknown namespace
+        if clean_tag.startswith('{'): 
+            # Strip it
+            clean_tag = clean_tag.split('}')[-1]
+            
+        attr_list = []
+        for k, v in attribs.items():
+            # Clean attribute key namespaces
+            # Commonly opf:role, opf:file-as, opf:scheme
+            ck = k.replace('{http://www.idpf.org/2007/opf}', 'opf:')
+            if ck.startswith('{'): ck = ck.split('}')[-1] # Fallback
+            attr_list.append(f'{ck}="{v}"')
+            
+        attr_str = " " + " ".join(attr_list) if attr_list else ""
+        
+        if text:
+             metadata_lines.append(f'        <{clean_tag}{attr_str}>{html.escape(text)}</{clean_tag}>')
+        else:
+             metadata_lines.append(f'        <{clean_tag}{attr_str}/>')
+
+    joined_metadata = "\n".join(metadata_lines)
+
     opf_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="{m_uid_scheme}" version="3.0">
-    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
         <dc:title>{final_title}</dc:title>
-        <dc:language>{m_lang}</dc:language>
-        <dc:creator>{m_creator}</dc:creator>
         <dc:identifier id="{m_uid_scheme}">{m_ident}</dc:identifier>
+{joined_metadata}
     </metadata>
     <manifest>
         <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>

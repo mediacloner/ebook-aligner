@@ -761,11 +761,30 @@ def align_chunks(en_chunks, es_chunks):
         for tag, i1, i2, j1, j2 in sm.get_opcodes():
             if tag == 'equal':
                 for k in range(i2 - i1):
-                    local_res.append({
-                        'tag': en_sec[i1+k]['tag'],
-                        'en': en_sec[i1+k]['text'],
-                        'es': es_sec[j1+k]['text']
-                    })
+                    en_item = en_sec[i1+k]
+                    es_item = es_sec[j1+k]
+                    en_text = en_item['text']
+                    es_text = es_item['text']
+                    
+                    # Restore Split Feature for Long Paragraphs
+                    if len(en_text) > SPLIT_TRIGGER_CHARS:
+                         en_subs, es_subs = smart_pair_split(en_text, es_text)
+                         # Ensure pairing
+                         max_subs = max(len(en_subs), len(es_subs))
+                         for x in range(max_subs):
+                             sub_en = en_subs[x] if x < len(en_subs) else ""
+                             sub_es = es_subs[x] if x < len(es_subs) else ""
+                             local_res.append({
+                                 'tag': en_item['tag'],
+                                 'en': sub_en,
+                                 'es': sub_es
+                             })
+                    else:
+                        local_res.append({
+                            'tag': en_item['tag'],
+                            'en': en_text,
+                            'es': es_text
+                        })
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
                 sub_en = en_sec[i1:i2]

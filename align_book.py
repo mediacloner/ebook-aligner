@@ -11,6 +11,7 @@ import shutil
 import uuid
 from datetime import datetime
 
+
 # ----------------------------------------------------------------------------- 
 # Configuration
 # -----------------------------------------------------------------------------
@@ -696,8 +697,6 @@ def smart_pair_split(en_text, es_text):
             chunk = chunk + " [...]"
             es_chunks.append(chunk)
             start = end
-            
-        # Last ES chunk
         last_es = es_text[start:]
         if len(es_chunks) < len(en_chunks):
             # REMOVED: if start != 0 and last_es.strip(): last_es = "[...] " + last_es
@@ -721,9 +720,40 @@ def get_header_indices(chunks):
     return [i for i, c in enumerate(chunks) if c['type'] == 'header']
 
 def align_chunks(en_chunks, es_chunks):
-    aligned = []
+    """
+    Main alignment function using a multi-phase approach:
+    1. Initial Pass: Difflib based on structural fingerprints (anchors, length, type).
+    2. Rolling Merge: Fixes 1-to-N splits (Spanish split into multiple paragraphs).
+    3. Gap Closer: Fixes small holes using orphaned items.
+    4. Greedy Split: Fixes N-to-1 merges (Spanish paragraphs merged into one English).
+    """
     print(f"Aligning: EN {len(en_chunks)} chunks (Headers: {len(get_header_indices(en_chunks))}) vs ES {len(es_chunks)} chunks (Headers: {len(get_header_indices(es_chunks))})")
+
+    # Pre-processing: Fix Abbreviation Splits (Issue 11)
+    # Sometimes inputs are split at "Mrs.", "Mr.", etc.
+    # We must merge them before any alignment.
+    abbr_fix_count = 0
+    i = 0
+    while i < len(en_chunks) - 1:
+        curr_txt = en_chunks[i]['text'].strip()
+        if curr_txt in ['Mrs.', 'Mr.', 'Dr.', 'Ms.', 'St.', 'Prof.', 'Gen.', 'Rep.', 'Sen.']:
+             # Merge with next
+             en_chunks[i]['text'] += " " + en_chunks[i+1]['text']
+             # If chunk has 'text' field, update it too (for fingerprinting)
+             # This part of the original instruction was slightly off, 'en' key doesn't exist yet.
+             # The 'text' key is the one used for fingerprinting.
+             
+             # Remove next
+             del en_chunks[i+1]
+             abbr_fix_count += 1
+             # Do not increment i, re-check (in case of multiple)
+        else:
+             i += 1
+             
+    if abbr_fix_count > 0:
+         print(f"Fixed {abbr_fix_count} abbreviation splits in English chunks.")
     
+    aligned = []
     en_headers = get_header_indices(en_chunks)
     es_headers = get_header_indices(es_chunks)
     
@@ -1003,10 +1033,6 @@ def align_chunks(en_chunks, es_chunks):
     i = 0
     from difflib import SequenceMatcher
     
-    # print("DEBUG Phase 1 Dump:")
-    # for idx, x in enumerate(final_aligned):
-    #      print(f"  {idx}: EN='{x['en'][:20]}...' ES='{x['es'][:20]}...'")
-    
     while i < len(final_aligned):
         curr = final_aligned[i]
         orphans_to_append = []
@@ -1034,22 +1060,43 @@ def align_chunks(en_chunks, es_chunks):
                  # If EN is empty, we can't judge ratio.
                  # If BOTH ES are empty, nothing to merge.
                  # But if ES1 is empty and ES2 is not, we MIGHT merge (Pull Up).
-                 if not en1: break
-                 if not es1 and not es2: break
-                 # Continue
-                
+                 # Wait, if en1 is empty, we act as orphan?
+                 break
+                 
+            # Issue 23 Fix: Allow merging even if nxt['en'] exists, 
+            # BUT:
+            # 1. Only if nxt pair is NOT a strong match itself (sim check).
+            # 2. AND Current item really NEEDS it (Ratio check strictness).
+            
+            strict_ratio_mode = False
+            if nxt['en'].strip():
+                 # Neighbor has English. Stealing is aggressive.
+                 # Check if Neighbor is definitely good
+                 sim_nxt = SequenceMatcher(None, nxt['en'], nxt['es'] if nxt['es'] else "").ratio()
+                 if sim_nxt > 0.4: 
+                      break
+                 
+                 # Even if Neighbor is weak sim, we only steal if WE are desperate.
+                 strict_ratio_mode = True
+            
+            # Combine
             len_en = len(en1)
             len_es1 = len(es1)
             len_es2 = len(es2)
             len_combined = len_es1 + len_es2
-            combined_es = es1 + " " + es2 
             
+            combined_es = es1 + " " + es2 if es1 else es2
             ratio_curr = len_es1 / len_en if len_en > 0 else 0
             ratio_combined = len_combined / len_en if len_en > 0 else 0
             
             should_merge = False
             
-            if ratio_curr < 1.05 and ratio_combined <= 1.8:
+            # Thresholds
+            thresh_curr = 1.05
+            if strict_ratio_mode:
+                 thresh_curr = 0.1 # Only merge if we are basically empty
+            
+            if ratio_curr < thresh_curr and ratio_combined <= 1.8:
                  should_merge = True
                  
             if should_merge:
@@ -1581,12 +1628,14 @@ def align_chunks(en_chunks, es_chunks):
                     sim_keep = get_token_sim(item['en'], head)
                     sim_give = get_token_sim(nxt_en, tail)
                     
-                    # Debug loop
-                    # print(f"DEBUG Cut k={k}: Keep={sim_keep:.3f} Give={sim_give:.3f} Existing={sim_existing:.3f}")
-
                     # Bad Match Override Check
                     # If Give is WORSE than Existing (and existing is real), don't do it.
                     if sim_existing > 0.4 and sim_give < sim_existing + 0.1:
+                         continue
+                         
+                    # Safety: If we give NOTHING (0.0 similarity), don't split.
+                    # This prevents splitting off "noisy" tails just to improve Head purity.
+                    if sim_give < 0.01:
                          continue
                          
                     score = sim_keep + sim_give

@@ -254,9 +254,9 @@ def clean_text(text):
 
 def split_sentences(text):
     """Splits text into sentences using simple heuristics to avoid granularity mismatch."""
-    # Lookbehind for punctuation [.!?], spaces, lookahead for Capital letter or Inverted Punctuation.
-    # Also include quotes/dashes as potential sentence starters.
-    parts = re.split(r'(?<=[.!?])\s+(?=[A-Z¿¡"\'\-])', text)
+    # Lookbehind for punctuation [.!?], optional closing quotes/parens, spaces, lookahead for Capital letter or Inverted Punctuation.
+    # Matches: "." + " " + "A"  OR  "." + "”" + " " + "A"
+    parts = re.split(r'(?<=[.!?])(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-])', text)
     return [p.strip() for p in parts if p.strip()]
 
 def split_sentences_aggressive(text):
@@ -1138,6 +1138,7 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
     .es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { font-size: inherit; color: inherit; opacity: 0.8; }
     figcaption { font-weight: bold; margin-top: 10px; }
     """
     with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:

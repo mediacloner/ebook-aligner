@@ -765,7 +765,8 @@ def align_chunks(en_chunks, es_chunks):
                     t_en = itm_en['text'] if itm_en else ""
                     t_es = itm_es['text'] if itm_es else ""
                     use_tag = itm_en['tag'] if itm_en else 'p'
-                    local_res.append({'tag': use_tag, 'en': t_en, 'es': t_es})
+                    use_classes = itm_en.get('classes', []) if itm_en else []
+                    local_res.append({'tag': use_tag, 'classes': use_classes, 'en': t_en, 'es': t_es})
              return local_res
 
         # Compute Shared Anchors (Intersection Strategy)
@@ -802,12 +803,14 @@ def align_chunks(en_chunks, es_chunks):
                              sub_es = es_subs[x] if x < len(es_subs) else ""
                              local_res.append({
                                  'tag': en_item['tag'],
+                                 'classes': en_item.get('classes', []),
                                  'en': sub_en,
                                  'es': sub_es
                              })
                     else:
                         local_res.append({
                             'tag': en_item['tag'],
+                            'classes': en_item.get('classes', []),
                             'en': en_text,
                             'es': es_text
                         })
@@ -821,7 +824,7 @@ def align_chunks(en_chunks, es_chunks):
                 for c in sub_en:
                     if c['type'] == 'std' and c['text']:
                         sents = split_sentences(c['text'])
-                        for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s})
+                        for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
                     else:
                         v_en_chunks.append(c)
 
@@ -829,7 +832,7 @@ def align_chunks(en_chunks, es_chunks):
                 for c in sub_es:
                     if c['type'] == 'std' and c['text']:
                         sents = split_sentences(c['text'])
-                        for s in sents: v_es_chunks.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s})
+                        for s in sents: v_es_chunks.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
                     else:
                         v_es_chunks.append(c)
                 
@@ -839,7 +842,7 @@ def align_chunks(en_chunks, es_chunks):
                      for c in sub_es:
                         if c['type'] == 'std' and c['text']:
                             sents = split_sentences_aggressive(c['text'])
-                            for s in sents: v_es_chunks_agg.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s})
+                            for s in sents: v_es_chunks_agg.append({'tag': c.get('tag','p'), 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
                         else:
                             v_es_chunks_agg.append(c)
                      
@@ -854,11 +857,13 @@ def align_chunks(en_chunks, es_chunks):
             elif tag == 'delete':
                 # EN Content, No ES
                 for k in range(i1, i2):
-                    local_res.append({'tag': en_sec[k]['tag'], 'en': en_sec[k]['text'], 'es': ""})
+                    local_res.append({'tag': en_sec[k]['tag'], 'classes': en_sec[k].get('classes', []), 'en': en_sec[k]['text'], 'es': ""})
             elif tag == 'insert':
                 # ES Content, No EN
                 for k in range(j1, j2):
-                    local_res.append({'tag': 'p', 'en': "", 'es': es_sec[k]['text']})
+                    # Use ES classes if available? Or default?
+                    # Probably default or grab from ES if we want to preserve ES styling
+                    local_res.append({'tag': 'p', 'classes': es_sec[k].get('classes', []), 'en': "", 'es': es_sec[k]['text']})
                     
         return local_res    # Add implicit start (0) and end (len) sentinels
     en_anchors = [-1] + en_headers + [len(en_chunks)]
@@ -938,18 +943,28 @@ def generate_chapter_html(aligned_pairs, title=""):
         
         if not en_text and not es_text: continue
 
+        # Format attributes
+        tag_classes = item.get('classes', [])
+        cls_str = " ".join(tag_classes)
+        en_attrs = f' class="{cls_str}"' if cls_str else ""
+        
+        # For Spanish, we append 'es-trans' to inherited classes
+        es_cls_list = tag_classes + ['es-trans']
+        es_cls_str = " ".join(es_cls_list)
+        es_attrs = f' class="{es_cls_str}"'
+        
         # En
         if tag.startswith('h') or tag == 'figcaption':
-            html_content += f"<{tag}>{en_text}</{tag}>\n"
+            html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
         else:
-            html_content += f"<p>{en_text}</p>\n"
+            html_content += f"<p{en_attrs}>{en_text}</p>\n"
         
         # Es
         if es_text:
             if tag.startswith('h') or tag == 'figcaption':
-                 html_content += f"<{tag} class='es-trans'>{es_text}</{tag}>\n"
+                 html_content += f"<{tag}{es_attrs}>{es_text}</{tag}>\n"
             else:
-                 html_content += f"<p class='es-trans'>{es_text}</p>\n"
+                 html_content += f"<p{es_attrs}>{es_text}</p>\n"
             
     html_content += "</body></html>"
     return html_content

@@ -40,8 +40,11 @@ PROFILES = {
             ],
             'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado'],
             'ignore_tags': ['h1'], # Ignore original H1s as typically book title in header
-            'ignore_classes': ['_idFootnotes', 'centradoespacioantes'],
-            'merge_headers': True # Merge logic for split titles
+            'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo'],
+
+            'merge_headers': True, # Merge logic for split titles
+            'header_merge_trigger': 'Capitulos_Capitulo_1_Linea',
+            'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo']
         }
     },
     'generic': {
@@ -1062,11 +1065,24 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
 
     # 1b. Auto-Detect Profile if not provided
     if config is None:
-        # Check first content file
-        first_content = os.path.join(en_base, pairs[0][0])
-        profile_name = detect_profile(first_content)
-        print(f"selected profile: {profile_name}")
-        config = PROFILES.get(profile_name, PROFILES['generic'])
+        detected_profile = 'generic'
+        # Check first content file (English)
+        if pairs:
+            first_content = os.path.join(en_base, pairs[0][0])
+            if os.path.exists(first_content):
+                 detected_profile = detect_profile(first_content)
+        
+        # If still generic, check Spanish files (often have distinctive classes)
+        if detected_profile == 'generic' and pairs:
+             for _, sp in pairs: # Check first available Spanish file
+                 full_es = os.path.join(es_base, sp)
+                 if os.path.exists(full_es):
+                     detected_profile = detect_profile(full_es)
+                     if detected_profile != 'generic':
+                         break
+                         
+        print(f"selected profile: {detected_profile}")
+        config = PROFILES.get(detected_profile, PROFILES['generic'])
 
     # 2. Setup Staging Directory
     staging_dir = 'bilingual_epub_staging'

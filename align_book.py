@@ -1001,11 +1001,15 @@ def align_chunks(en_chunks, es_chunks):
     
     pass_2_aligned = []
     i = 0
-    # We need difflib here for similarity check
     from difflib import SequenceMatcher
+    
+    # print("DEBUG Phase 1 Dump:")
+    # for idx, x in enumerate(final_aligned):
+    #      print(f"  {idx}: EN='{x['en'][:20]}...' ES='{x['es'][:20]}...'")
     
     while i < len(final_aligned):
         curr = final_aligned[i]
+        orphans_to_append = []
         
         # Inner loop: keep merging next item if it qualifies
         while i + 1 < len(final_aligned):
@@ -1018,11 +1022,21 @@ def align_chunks(en_chunks, es_chunks):
             
             # Conditions:
             # 1. Next has NO English (pure orphan) - Essential for N-to-1 merge
-            if nxt['en'].strip():
-                break # Stop merging
+            # REVISION: We MUST allow merging even if Next has English, if the Spanish chunks belong together.
+            # This creates an Orphaned EN at i+1, which Phase 3 will fix.
+            # if nxt['en'].strip():
+            #    break # Stop merging
                 
-            if not en1 or not es1 or not es2:
-                break
+            # if nxt['en'].strip():
+            #    break # Stop merging
+                
+            if not en1 or (not es1 and not es2):
+                 # If EN is empty, we can't judge ratio.
+                 # If BOTH ES are empty, nothing to merge.
+                 # But if ES1 is empty and ES2 is not, we MIGHT merge (Pull Up).
+                 if not en1: break
+                 if not es1 and not es2: break
+                 # Continue
                 
             len_en = len(en1)
             len_es1 = len(es1)
@@ -1034,22 +1048,49 @@ def align_chunks(en_chunks, es_chunks):
             ratio_combined = len_combined / len_en if len_en > 0 else 0
             
             should_merge = False
-
-
-
             
             if ratio_curr < 1.05 and ratio_combined <= 1.8:
                  should_merge = True
                  
             if should_merge:
                 curr['es'] = combined_es
+                
+                # Check if we are consuming an English chunk (making it a true orphan)
+                if nxt['en'].strip():
+                     # We must preserve this English chunk as an orphan!
+                     # We can't insert it into 'final_aligned' because we are iterating it.
+                     # We should add it to a temporary buffer to append AFTER the current merged item?
+                     # But we might merge multiple items.
+                     # Let's attach it to 'curr' as 'orphans_created' list? No, structure change.
+                     # Better: Add it to 'pass_2_aligned' immediately? 
+                     # No, 'curr' is still being built.
+                     
+                     # Solution: We need a side-list of orphans for THIS 'curr'.
+                     # But wait, if we merge ES[i+1] into ES[i], EN[i+1] becomes standalone with ES="".
+                     # We should append {en: EN[i+1], es: ""} to the Output List, 
+                     # BUT it must come AFTER 'curr'.
+                     # Since 'curr' is not yet appended (looping), we can keep a list of orphans to append after curr.
+                     orphans_to_append.append({
+                         'tag': nxt['tag'], 
+                         'classes': nxt.get('classes', []), 
+                         'type': nxt.get('type', 'p'),
+                         'en': nxt['en'], 
+                         'es': '',
+                         'text': nxt.get('text', '')
+                     })
+                
                 # Consume i+1
                 i += 1
             else:
                 break
         
         pass_2_aligned.append(curr)
+        if orphans_to_append:
+             pass_2_aligned.extend(orphans_to_append)
+             
         i += 1
+        
+    # Filter out completely empty items to prevent gaps from blocking Phase 3
 
 
         
@@ -1119,7 +1160,7 @@ def align_chunks(en_chunks, es_chunks):
                  es = curr['es']
                  
                  sim = SequenceMatcher(None, en, es).ratio()
-                 # print(f"DEBUG Phase 3 Pull Down: '{en[:20]}' vs '{es[:20]}' Sim={sim:.3f}")
+                 print(f"DEBUG Phase 3 Pull Down: '{en[:20]}' vs '{es[:20]}' Sim={sim:.3f}")
                  
                  if sim > 0.1:
 
@@ -1209,13 +1250,14 @@ def align_chunks(en_chunks, es_chunks):
         # Find next valid Match (look ahead)
         nxt = None
         for k in range(i + 1, len(final_pass)):
-            if final_pass[k]['en'].strip():
+             if final_pass[k]['en'].strip():
                 nxt = final_pass[k]
                 break
         
         if not nxt:
-            continue
-            
+             continue
+        
+        # Phase 3c: Reverse Orphan Prepend (Merged into loop)
         # Check if Current is Orphan (No EN, Yes ES)
         # And Next is Match (Yes EN, Yes ES)
         if not curr['en'].strip() and curr['es'].strip() and \
@@ -1227,9 +1269,6 @@ def align_chunks(en_chunks, es_chunks):
              
              # Similarity Check
              # Check if prepending orphan makes sense.
-             # Note: sim might drop because orphan text is distinct.
-             # We rely on Length Ratio and modest Sim check.
-             
              sim_curr = SequenceMatcher(None, en, es_match).ratio()
              combined_es = es_orphan + " " + es_match
              sim_combined = SequenceMatcher(None, en, combined_es).ratio()
@@ -1241,14 +1280,10 @@ def align_chunks(en_chunks, es_chunks):
              ratio_curr = len_es_curr / len_en if len_en > 0 else 0
              ratio_comb = len_es_comb / len_en if len_en > 0 else 0
              
-             # Heuristic:
-             # 1. Current ratio is low (< 1.1) OR
-             # 2. Combined ratio is reasonable (<= 1.8)
-             # 3. Sim doesn't drop catastrophically OR improves.
-             
              should_prepend = False
              
-             if ratio_comb <= 1.9: # Allow slightly fatter if we are collecting orphans
+             # Standard Prepend Heuristic (Phase 3c)
+             if ratio_comb <= 1.9:
                   if sim_combined >= sim_curr - 0.15: # Allow 15% drop
                        should_prepend = True
                   elif len_es_curr < len_en * 0.5: # If current match is TINY, we definitely need the orphan
@@ -1256,18 +1291,196 @@ def align_chunks(en_chunks, es_chunks):
              
              if should_prepend:
                   nxt['es'] = combined_es
-                  curr['es'] = "" # Mark empty
+                  curr['es'] = "" 
+                  continue
+             
+             # Phase 3d: Orphan Swap (Issue 8 Fix)
+             # If Prepend didn't trigger, check if the Orphan ITSELF is a better match than the Current Match.
+             # This handles case where "Rodge" anchored to the WRONG "Rodge".
+             
+             sim_orphan = SequenceMatcher(None, en, es_orphan).ratio()
+             ratio_orphan = len(es_orphan) / len_en if len_en > 0 else 0
+             
+             # Criteria for Swap:
+             # 1. Orphan is decent match (sim > 0.2)
 
+             # 2. Orphan is BETTER than Current Match (sim_orphan > sim_curr)?
+             # 3. Or Length Ratio is SIGNIFICANTLY better.
+             
+             should_swap = False
+             if sim_orphan > 0.2 and sim_orphan > sim_curr - 0.1:
+                  # If Length Ratio of Match is BAD (> 2.0) and Orphan is GOOD (< 1.8)
+                  if ratio_curr > 2.0 and ratio_orphan < 1.8 and ratio_orphan > 0.5:
+                        should_swap = True
                   
+                  # Special Case: "Rodge" vs "Rodge"
+                  # If text is short (< 50 chars), sim is volatile.
+                  if len_en < 50:
+                       # If Orphan ratio is near 1.0 (e.g. 1.2) and Match is 2.8
+                       if abs(ratio_orphan - 1.2) < abs(ratio_curr - 1.2) - 0.5:
+                            should_swap = True
+                            
+                  # Similarity Win (Issue 8 Fix for Short Text)
+                  # If Orphan is SIGNIFICANTLY better match (> 0.15 better), Swap regardless of Ratio (if Ratio is sane)
+                  if sim_orphan > sim_curr + 0.15 and ratio_orphan < 2.5:
+                       should_swap = True
+
+             if should_swap:
+                   # Swap!
+                   # Current Orphan takes the English key.
+                   curr['en'] = en
+                   # Next Item (Old Match) loses English key -> Becomes Orphan
+                   nxt['en'] = ""
+                   # Note: We don't move Spanish texts. We move the English KEY "up".
+                   continue
+        
+    # Phase 3e: Linear Gap Fill (Massive 1-to-N)
+    # If we have [Match A] ... [Orphans] ... [Match B]
+    # And English for Match A is MISSING the dialogue corresponding to Orphans.
+    # We must attach Orphans to A (Forward Fill) or B (Backward Fill).
+    # Dialogue usually flows A -> A' -> A''. So attach to A.
+    
+    # We iterate Forward.
+    last_match_idx = -1
+    for i in range(len(final_pass)):
+         curr = final_pass[i]
+         if curr['en'].strip():
+              last_match_idx = i
+         elif curr['es'].strip():
+              # Orphan.
+              # If we have a preceding match, try to merge?
+              if last_match_idx != -1:
+                   # Only if ratio permits? Or Aggressive?
+                   # Issue 8: Ratio is 13.0. We MUST merge regardless of ratio if we assume 1-to-N.
+                   # But we need a boundary check.
+                   # If we merge everything, we might eat the next paragraph's start?
+                   # But Phase 1 anchored the Next Paragraph (Match B).
+                   # So Orphans strictly strictly BETWEEN A and B should belong to A (or B).
+                   
+                   # We assume A.
+                   anchor = final_pass[last_match_idx]
+                   # Append
+                   anchor['es'] += " " + curr['es']
+                   curr['es'] = ""
+                   # Continue
+
     # Filter empty
     final_pass = [x for x in final_pass if x['en'].strip() or x['es'].strip()]
 
 
 
 
+
     
+    # Phase 3f: Orphan Steal (Issue 9 Shift Fix)
+    # If Orphan[i] is followed by Fat[i+1], and Fat[i+1] starts with Orphan[i]'s text.
+    # We steal the Head.
+    
+    for i in range(len(final_pass) - 1):
+        curr = final_pass[i]
+        nxt = final_pass[i+1]
+        
+        # Condition: Current is Orphan (or emptyish)
+        # Next is Fat
+        
+        # Check if current is orphan-like OR Bad Match
+        is_orphan = False
+        if not curr['es'].strip() and curr['en'].strip():
+             is_orphan = True
+        
+        sim_curr = 0
+        if curr['es'].strip() and curr['en'].strip():
+             sim_curr = SequenceMatcher(None, curr['en'], curr['es']).ratio()
+             if sim_curr < 0.35: # Treat bad match as orphan for stealing purposes
+                  is_orphan = True
+                  
+        len_nxt_en = len(nxt['en'])
+        len_nxt_es = len(nxt['es'])
+        ratio_nxt = len_nxt_es / len_nxt_en if len_nxt_en > 0 else 0
+        
+        print(f"DEBUG Phase 3f Check: i={i} IsOrphan={is_orphan} RatioNxt={ratio_nxt:.2f}")
+
+        if not is_orphan:
+             # If it has text, print it for debugging
+             if i == 2:
+                  print(f"DEBUG Item 2 Content: '{curr['es'][:50]}'")
+             # continue # Don't continue, let it flow through phase 4 checks?
+             # No, Phase 3f is separate from Phase 4
+             # Phase 3f logic block
+        
+        pass # End of trace block logic
+        
+        if not nxt['es'].strip():
+             continue
+             
+        # Check if next is Fat
+        if ratio_nxt > 1.8:
+             # Try to split Next
+             parts = split_sentences(nxt['es'])
+             
+             # Debug parts
+             print(f"DEBUG Phase 3f Parts Check: i={i} NxtES='{nxt['es'][:20]}...' NumParts={len(parts)}")
+             
+             best_cut_idx = -1
+
+             best_score = -1
+             best_head = ""
+             best_tail = ""
+             for k in range(1, len(parts)):
+                  head = " ".join(parts[:k])
+                  tail = " ".join(parts[k:])
+                  
+                  # Check sim of Head vs Orphan(Curr)
+                  sim_steal = SequenceMatcher(None, curr['en'], head).ratio()
+                  sim_tail = SequenceMatcher(None, nxt['en'], tail).ratio()
+                  sim_head_vs_next = SequenceMatcher(None, nxt['en'], head).ratio()
+                  
+                  # Debug
+                  print(f"DEBUG Phase 3f Scan: k={k} Steal={sim_steal:.3f} Tail={sim_tail:.3f}")
+
+                  # Length Heuristics
+                  len_en_curr = len(curr['en'])
+                  len_en_nxt = len(nxt['en'])
+                  
+                  ratio_steal = len(head) / len_en_curr if len_en_curr > 0 else 0
+                  ratio_keep = len(tail) / len_en_nxt if len_en_nxt > 0 else 0
+                  
+                  is_candidate = False
+                  
+                  # 1. Strong Similarity Signal
+                  if sim_tail > 0.3 and sim_tail > sim_head_vs_next:
+                       is_candidate = True
+                  
+                  # 2. Strong Length Signal (if Sim is weak but non-zeroish)
+                  if not is_candidate and sim_tail > 0.05:
+                       # We only verify that the HEAD looks correct for the Orphan.
+                       # The Tail is likely huge (Fat), so ratio_keep will be bad.
+                       if 0.5 < ratio_steal < 2.5:
+                            is_candidate = True
+                  
+                  if is_candidate:
+                       # Score: Sim + Ratio Match?
+                       dist_steal = abs(ratio_steal - 1.5)
+                       # ratio_penalty = dist_steal + dist_keep
+                       
+                       score = sim_tail - (dist_steal * 0.1) 
+                       
+                       if score > best_score:
+                            best_score = score
+                            best_cut_idx = k
+                            best_head = head
+                            best_tail = tail
+                            
+             if best_cut_idx != -1:
+                  print(f"DEBUG Phase 3f Steal: i={i} Score={best_score:.2f} Head='{best_head[:20]}'")
+                  curr['es'] = best_head
+                  nxt['es'] = best_tail
+
+                  # Continue to next (which is nxt, but nxt is now modified)
+
     # -------------------------------------------------------------------------
     # Phase 4: Greedy Spanish Split & Ripple Shift
+
     # Handles cases where S[i] consumed content for E[i+1], causing a mismatched chain shift.
     
     phase_4_aligned = []
@@ -1315,31 +1528,96 @@ def align_chunks(en_chunks, es_chunks):
             
             if nxt_en and cur_es:
                 # Heuristic: Check if Tail of Cur_ES matches Nxt_EN
-                # Split cur_es into sentences
+                # Split cur_es into sentences. Try ALL cuts.
                 parts = split_sentences(cur_es)
-                if len(parts) > 1:
-                    last_part = parts[-1]
-                    remainder = " ".join(parts[:-1])
+                
+                best_cut_idx = -1
+                best_tail = ""
+                best_head = ""
+                
+                # Helper for token-based similarity (Proper Nouns & Numbers)
+                def get_token_sim(t1, t2):
+                    if not t1 or not t2: return 0.0
                     
-                    sim_tail = SequenceMatcher(None, nxt_en, last_part).ratio()
+                    # Extract features
+                    # 1. Numbers
+                    nums1 = set(re.findall(r'\d+', t1))
+                    nums2 = set(re.findall(r'\d+', t2))
                     
-                    # We need to verify that Nxt_EN *doesn't* match Nxt_ES better?
-                    nxt_es = final_pass[i+1]['es']
-                    sim_existing = SequenceMatcher(None, nxt_en, nxt_es).ratio() if nxt_es else 0
+                    # 2. Proper Nouns (Capitalized words > 3 chars)
+                    # Exclude start of sentence? Hard to detect in fragments.
+                    # Just verify if it appears in both.
+                    props1 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t1))
+                    props2 = set(re.findall(r'\b[A-Z][a-z]{3,}\b', t2))
                     
-                    if sim_tail > 0.3 and sim_tail > sim_existing + 0.1:
-                         # Strong signal: The tail belongs to next!
-                         item['es'] = remainder
-                         if carry_es:
-                             # We have a displaced chunk (Old S[i]) AND a split tail from C.
-                             # Tail belongs to i+1. Old S[i] belongs to i+1 (or later).
-                             # Tail comes before Old S[i].
-                             carry_es = last_part + " " + carry_es
-                         else:
-                             carry_es = last_part
+                    set1 = nums1 | props1
+                    set2 = nums2 | props2
+                    
+                    if not set1 or not set2:
+                         return 0.0 # No anchors to compare
+                         
+                    isect = set1 & set2
+                    if not isect:
+                         return 0.0
+                    
+                    # Dice Coefficient / Ratio
+                    return 2.0 * len(isect) / (len(set1) + len(set2))
 
-                             
+                # Baseline: Don't split.
+                current_score = get_token_sim(item['en'], item['es'])
+                best_score = current_score + 0.05 
+                
+                sim_existing = 0
+                if i + 1 < len(final_pass):
+                     nxt_es_check = final_pass[i+1]['es']
+                     sim_existing = get_token_sim(nxt_en, nxt_es_check)
+                
+                # We iterate cuts.
+                # k is number of sentences to KEEP.
+                for k in range(1, len(parts)):
+                    head = " ".join(parts[:k])
+                    tail = " ".join(parts[k:])
+                    
+                    sim_keep = get_token_sim(item['en'], head)
+                    sim_give = get_token_sim(nxt_en, tail)
+                    
+                    # Debug loop
+                    # print(f"DEBUG Cut k={k}: Keep={sim_keep:.3f} Give={sim_give:.3f} Existing={sim_existing:.3f}")
+
+                    # Bad Match Override Check
+                    # If Give is WORSE than Existing (and existing is real), don't do it.
+                    if sim_existing > 0.4 and sim_give < sim_existing + 0.1:
+                         continue
+                         
+                    score = sim_keep + sim_give
+                    if score > best_score:
+                         best_score = score
+                         best_cut_idx = k
+
+                         best_tail = tail
+                         best_head = head
+                         
+                if best_cut_idx != -1:
+                     # Thresholds
+                     # If score is reasonable?
+                     # print(f"DEBUG Phase 4 Split Found: i={i} Score={best_score:.2f} HeadLen={len(best_head)} TailLen={len(best_tail)}")
+                     
+                     item['es'] = best_head
+                     if carry_es:
+                         carry_es = best_tail + " " + carry_es
+                     else:
+                         carry_es = best_tail
+                         
+                     # Also update nxt['es'] immediately for the next iteration?
+                     # No, we use 'carry_es' to pass it.
+                     # Wait. The original code updated nxt['es']?
+                     # My previous edit (Step 949) removed 'nxt['es'] = best_tail'.
+                     # Instead it used 'carry_es'.
+                     # Correct. 'carry_es' flows to 'i+1' in next loop iteration.
+                     pass
+
         phase_4_aligned.append(item)
+
         
     # Handle leftover carry
     if carry_es:
@@ -1347,99 +1625,9 @@ def align_chunks(en_chunks, es_chunks):
          
     # -------------------------------------------------------------------------
 
-    # Post-processing 3: Translation Boundary Shift Correction (Sentence Stealing)
-    # Detects: EN[i] is long, ES[i] is short. ES[i+1] starts with the missing sentence.
-    # Action: Move first sentence of ES[i+1] to end of ES[i].
-    # -------------------------------------------------------------------------
-    
-    phase_3_aligned = []
-    
-    # We iterate and modify 'final_pass' directly or build new?
-    # Modifying in place is tricky if we split sentences.
-    # Let's iterate 'final_pass' but modify elements in place if needed.
-    # Actually, if we "steal" from i+1, we modify i+1.
-    
-    for i in range(len(final_pass)):
-        curr = final_pass[i]
-        
-        # Look ahead
-        if i + 1 < len(final_pass):
-            nxt = final_pass[i+1]
-            
-            en1 = curr['en'].strip()
-            es1 = curr['es'].strip()
-            es2_full = nxt['es'].strip()
-            
-            if en1 and es1 and es2_full:
-                 len_en = len(en1)
-                 len_es1 = len(es1)
-                 
-                 # Condition 1: Current Spanish is shorter than expected
-                 # Expected: ~1.1x English.
-                 if len_es1 < len_en * 0.95: # e.g. 100 en char -> < 95 es char (missing ~10-20 chars at least)
-                 
-                     # Condition 2: Next Spanish has candidate sentence
-                     # Use split_sentences helper
-                     sentences = split_sentences(es2_full)
-                     if len(sentences) > 0:
-                         candidate = sentences[0]
-                         remainder_sentences = sentences[1:]
-                         
-                         # Sub-sentence splitting logic
-                         # If candidate is too long, try splitting on colon or semicolon
-                         sub_candidates = []
-                         if ':' in candidate:
-                             parts = candidate.split(':', 1)
-                             sub_candidates.append((parts[0] + ':', parts[1]))
-                         
-                         candidates_to_try = [(candidate, " ".join(remainder_sentences) if remainder_sentences else "")]
-                         
-                         for sub, sub_rem in sub_candidates:
-                             # Reconstruct total remainder
-                             full_rem = sub_rem + (" " + candidates_to_try[0][1] if candidates_to_try[0][1] else "")
-                             candidates_to_try.append((sub, full_rem))
-                             
-                         best_cand = None
-                         best_rem = None
-                         best_score = 100
-                         
-                         for cand, rem in candidates_to_try:
-                             new_es1 = es1 + " " + cand
-                             
-                             # Ratio Check
-                             ratio_new_check = len(new_es1) / len_en
-                             
-                             # We target 1.2
-                             dist = abs(1.2 - ratio_new_check)
-                             
-                             # Only consider if plausible range
-                             if 1.0 < ratio_new_check < 1.4:
-                                 if dist < best_score:
-                                     best_score = dist
-                                     best_cand = cand
-                                     best_rem = rem
-                         
-                         # Did we find a good one?
-                         ratio_old = len_es1 / len_en
-                         dist_old = abs(1.2 - ratio_old)
-                         
-                         improved = False
-                         if best_cand:
-                             # Check if it is actually better than old
-                             if best_score < dist_old - 0.1: # Significant improvement
-                                 improved = True
-                             elif ratio_old < 1.0 and best_score < 0.15: # Old was short, new is close to ideal
-                                 improved = True
-                                 
-                         if improved and best_cand:
-                             # EXECUTE STEAL
-                             curr['es'] = es1 + " " + best_cand
-                             nxt['es'] = best_rem
-                             # We modified 'nxt', which will be 'curr' in next iteration.
-                             # This is fine. (We might process the remainder again? Unlikely to match prev again)
+    # Remove Legacy Phase 3 Post-processing block
+    return phase_4_aligned
 
-    
-    return final_pass
 
 def generate_html(aligned_pairs):
     html = """<html><head><style>

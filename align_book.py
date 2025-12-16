@@ -1171,6 +1171,10 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
     p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
     h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666; opacity: 0.8; }
+    /* Remove spacing between English header and Spanish header */
+    h1 + h1.es-trans, h2 + h2.es-trans, h3 + h3.es-trans, h4 + h4.es-trans { margin-top: 0; padding-top: 0; }
+    /* Optional: tighten bottom of English header too if needed */
+    h1:has(+ h1.es-trans), h2:has(+ h2.es-trans), h3:has(+ h3.es-trans), h4:has(+ h4.es-trans) { margin-bottom: 0.1em; } 
     figcaption { font-weight: bold; margin-top: 10px; }
     """
     with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:

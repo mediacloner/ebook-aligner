@@ -83,6 +83,13 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
         if active_jobs[job_id]['status'] == 'cancelled':
              active_jobs[job_id]['message'] = 'Job cancelled by user.'
              active_jobs[job_id]['progress'] = 0
+             # Clean up job directory
+             if os.path.exists(job_dir):
+                 try:
+                     shutil.rmtree(job_dir)
+                     print(f"Cleaned up cancelled job dir: {job_dir}")
+                 except Exception as exc:
+                     print(f"Error cleaning up job dir: {exc}")
              return
         
         # Format filename based on metadata

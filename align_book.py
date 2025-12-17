@@ -5,6 +5,7 @@ import re
 import html
 import difflib
 import concurrent.futures
+import multiprocessing
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
 import zipfile
@@ -1881,7 +1882,11 @@ def process_chapter_pair(args):
         return (idx, None, str(e))
 
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
-    staging_dir = 'bilingual_epub_staging'
+    # Use a staging directory relative to the output path (job-specific)
+    # staging dir = output_dir / bilingual_epub_staging
+    out_dir = os.path.dirname(os.path.abspath(output_epub_path))
+    staging_dir = os.path.join(out_dir, 'bilingual_epub_staging')
+    
     try:
         return _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback, cancel_check)
     except Exception as e:
@@ -2070,29 +2075,30 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # If using neural alignment (heavy memory usage per process), limit workers
     max_workers = 1 if config.get('use_neural') else None
     
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Submit all tasks
-        future_to_idx = {executor.submit(process_chapter_pair, args): args[0] for args in args_list}
-        
+    # Use multiprocessing.Pool for robust cancellation (terminate)
+    # This allows us to forcibly kill processes if the user cancels
+    pool = multiprocessing.Pool(processes=max_workers)
+    
+    try:
         count_done = 0
         total = len(args_list)
         
-        for future in concurrent.futures.as_completed(future_to_idx):
+        # imap_unordered returns results as they complete
+        # We process them to updating progress and handling errors
+        for res_idx, res_filename, res_name in pool.imap_unordered(process_chapter_pair, args_list):
+            
+            # Check Cancellation
             if cancel_check and cancel_check():
-                 print("Cancellation signal received. Shutting down executor...")
-                 executor.shutdown(wait=False, cancel_futures=True)
+                 print("Cancellation signal received. Terminating pool immediately...")
+                 pool.terminate()
+                 pool.join()
                  raise InterruptedError("Process cancelled by user")
-
-            f_idx = future_to_idx[future]
-            try:
-                res_idx, res_filename, res_name = future.result()
-                if res_filename:
-                    results_map[res_idx] = res_filename
-                else:
-                    print(f"Task {f_idx} returned no filename (Error: {res_name})")
-            except Exception as exc:
-                print(f"Task {f_idx} generated an exception: {exc}")
-                
+            
+            if res_filename:
+                results_map[res_idx] = res_filename
+            else:
+                print(f"Task {res_idx} returned no filename (Error: {res_name})")
+            
             count_done += 1
             if progress_callback:
                 progress_callback(count_done, total, f"Processed {count_done}/{total} chapters")
@@ -2100,6 +2106,17 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                  # Print progress every 10%
                  if total > 10 and count_done % (total // 10) == 0:
                       print(f"Progress: {count_done}/{total}...")
+                      
+        pool.close()
+        pool.join()
+        
+    except InterruptedError:
+        raise
+    except Exception as e:
+        print(f"Pool exception: {e}")
+        pool.terminate()
+        pool.join()
+        raise e
 
     # Reconstruct spine_refs in correct order
     for idx in range(len(pairs)):

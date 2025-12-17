@@ -18,6 +18,8 @@ try:
 except ImportError:
     NeuralAligner = None
 
+from splitter import Splitter
+
 CACHED_ALIGNER = None
 
 
@@ -1560,6 +1562,14 @@ def align_chunks(en_chunks, es_chunks):
     # -------------------------------------------------------------------------
 
     # Remove Legacy Phase 3 Post-processing block
+    
+    # -------------------------------------------------------------------------
+    # Phase 5: Splitter Service (Post-Alignment Refinement)
+    # -------------------------------------------------------------------------
+    if Splitter:
+        splitter = Splitter(aligner=CACHED_ALIGNER)
+        phase_4_aligned = splitter.process_all(phase_4_aligned)
+
     return phase_4_aligned
 
 
@@ -1820,6 +1830,16 @@ def process_chapter_pair(args):
         else:
             aligned = align_chunks(en_chunks, es_chunks)
         
+        # -------------------------------------------------------------------------
+        # Phase 5: Splitter Service (Post-Alignment Refinement)
+        # -------------------------------------------------------------------------
+        if Splitter and aligned:
+             # Ensure we have an aligner if possible (might be None for heuristic path, that's fine)
+             aligner_instance = CACHED_ALIGNER if config.get('use_neural') else None
+             t_len = config.get('split_length', 280)
+             splitter_svc = Splitter(aligner=aligner_instance, trigger_length=t_len)
+             aligned = splitter_svc.process_all(aligned)
+
         # Generate HTML
         out_filename = f"chapter_{idx:02d}.xhtml"
         chapter_content = generate_chapter_html(aligned, title=f"Chapter {idx}")
@@ -2188,15 +2208,17 @@ if __name__ == "__main__":
     parser.add_argument("--output", required=False, default='bilingual_book.epub', help="Output EPUB filename")
     parser.add_argument("--local-ai", action='store_true', help="Use local neural alignment (LaBSE)")
     
-    args = parser.parse_args()
+    parser.add_argument('--split-length', type=int, default=280, help='Character threshold to trigger paragraph splitting (default: 280)')
     
-    # In a real generalized version, one might load config from a JSON file here.
-    # config = load_config(args.config) 
-    # Use generic as base (detect_profile will override usually, but we need a starting dict)
-    config = {} 
+    args = parser.parse_args()
+
+    # Pass config
+    config = {
+        'use_neural': args.local_ai,
+        'split_length': args.split_length
+    }
     
     if args.local_ai:
-        config['use_neural'] = True
         print("Using Local Neural Alignment (LaBSE)...")
     
     create_bilingual_epub(args.en, args.es, args.output, config)

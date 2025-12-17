@@ -27,7 +27,7 @@ class NeuralAligner:
         Returns a numpy array of embeddings.
         """
         texts = [c['text'] for c in chunks]
-        return self.model.encode(texts, show_progress_bar=True)
+        return self.model.encode(texts, show_progress_bar=False)
 
     def compute_similarity_matrix(self, embs1, embs2):
         """

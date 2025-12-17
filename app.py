@@ -7,6 +7,11 @@ import time
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename # Added this import
 from align_book import create_bilingual_epub
+import logging
+
+# Suppress Werkzeug logs (access logs) to avoid spamming /progress
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.WARNING)
 
 app = Flask(__name__)
 app.secret_key = 'supersecretkey'

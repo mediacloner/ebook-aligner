@@ -189,15 +189,15 @@ class Splitter:
                     if accum_len >= target_len:
                         break
                 
-                final_splits.append({'en': " ".join(chunk_sents), 'es': " ".join(chunk_sents)})
+                final_splits.append({'en': en_chunk, 'es': " ".join(chunk_sents)})
 
-        # Post-Processing: Add [...] signs
+        # Post-Processing: Add asterism signs
         for i in range(len(final_splits)):
             if i < len(final_splits) - 1:
-                final_splits[i]['en'] += " [...]"
+                final_splits[i]['en'] += " ⁂"
                 if final_splits[i]['es']:
                      # Check if it ends with punctuation?
-                     final_splits[i]['es'] += " [...]"
+                     final_splits[i]['es'] += " ⁂"
         
         return final_splits
 

@@ -200,8 +200,13 @@ def roman_to_int(s):
 def normalize_label(label):
     label = label.lower().strip()
     
-    if 'prologue' in label or 'pólogo' in label or 'prologo' in label: return 'prologue'
+    if 'prologue' in label or 'prólogo' in label or 'prologo' in label: return 'prologue'
     if 'epilogue' in label or 'epílogo' in label or 'epilogo' in label: return 'epilogue'
+    if 'index' in label or 'índice' in label or 'indice' in label: return 'index'
+    if 'intro' in label: return 'introduction'
+    if 'preface' in label or 'prefacio' in label: return 'preface'
+    if 'bibliograph' in label or 'bibliograf' in label: return 'bibliography'
+    if 'note' in label or 'nota' in label: return 'notes'
     
     part_match = re.search(r'(?:part|parte)\s*(\d+|[ivxlcdm]+)', label)
     if part_match:
@@ -226,93 +231,99 @@ def normalize_label(label):
     return label 
 
 def align_tocs(en_toc, es_toc):
-    """Aligns chapters based on normalized labels (Structure Matching)."""
-    pairs = []
+    """
+    Aligns chapters using a hybrid 'Anchor and Fill' strategy.
+    1. Identify high-confidence matches (Anchors) using Structure/String matching.
+    2. Fill gaps between anchors using positional alignment (linear zip).
+    This ensures 'all book' is processed even if names don't match (e.g. Prologue vs Prólogo if typo/mismatch).
+    """
+    en_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(en_toc)]
+    es_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(es_toc)]
     
-    # Pre-process lists
-    en_list = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(en_toc)]
-    es_list = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(es_toc)]
+    anchors = []
+    en_matched = set()
+    es_matched = set()
     
-    es_used = set()
-    
-    for en_row in en_list:
-        match_found = None
-        
-        # 1. Structural Match
-        if isinstance(en_row['norm'], tuple):
-            for es_row in es_list:
-                if es_row['idx'] in es_used: continue
-                if es_row['norm'] == en_row['norm']:
-                    match_found = es_row
+    # 1. Find Anchors (Greedy Best Match)
+    for en in en_items:
+        match = None
+        # Structural Match
+        if isinstance(en['norm'], tuple):
+            for es in es_items:
+                if es['idx'] in es_matched: continue
+                if es['norm'] == en['norm']:
+                    match = es
+                    break
+        # String Match
+        if not match and isinstance(en['norm'], str):
+             for es in es_items:
+                if es['idx'] in es_matched: continue
+                if es['norm'] == en['norm']: 
+                    match = es
                     break
                     
-        # 2. String Match 
-        if not match_found and isinstance(en_row['norm'], str):
-             for es_row in es_list:
-                if es_row['idx'] in es_used: continue
-                if es_row['norm'] == en_row['norm']: 
-                    match_found = es_row
-                    break
-
-        if match_found:
-            pairs.append((en_row['item']['src'], match_found['item']['src']))
-            es_used.add(match_found['idx'])
+        if match:
+            anchors.append((en, match))
+            en_matched.add(en['idx'])
+            es_matched.add(match['idx'])
             
-    return pairs
+    # Sort anchors by English index to establish a skeleton
+    anchors.sort(key=lambda x: x[0]['idx'])
+    
+    final_pairs = []
+    
+    # 2. Fill Gaps
+    # We iterate through the anchors and fill the space before/between/after.
+    
+    last_en_idx = -1
+    last_es_idx = -1
+    
+    # Add a sentinel anchor at the end to handle trailing items
+    sentinel_en = {'idx': len(en_items)}
+    sentinel_es = {'idx': len(es_items)}
+    anchors.append((sentinel_en, sentinel_es))
+    
+    for anchor_en, anchor_es in anchors:
+        current_en_idx = anchor_en['idx']
+        current_es_idx = anchor_es['idx']
+        
+        # Identification of Gap Items
+        # Items strictly BETWEEN last_en_idx and current_en_idx
+        gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_matched]
+        gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_matched]
+        
+        # Linear Alignment of Gap (Zip)
+        # We pair 1st unmatched EN with 1st unmatched ES in this region.
+        # Any excess on either side is unfortunately dropped (or could be appended as unmatched, but we need pairs)
+        # "Translate all book" -> We prioritize pairing over precision here.
+        limit = min(len(gap_en), len(gap_es))
+        for k in range(limit):
+            final_pairs.append((gap_en[k]['item']['src'], gap_es[k]['item']['src']))
+            
+        # Add the Anchor itself (if not sentinel)
+        if current_en_idx < len(en_items) and current_es_idx < len(es_items):
+             final_pairs.append((anchor_en['item']['src'], anchor_es['item']['src']))
+             
+        last_en_idx = current_en_idx
+        last_es_idx = current_es_idx
+        
+    return final_pairs
 
 def clean_text(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 def split_sentences(text):
     """
-    Splits text into sentences using a regex that handles common punctuation, 
-    quotes, and now footnotes (e.g. "end.1 Start" or "end.[2] Start").
+    Deprecated: No longer splits sentences. Returns text as single item.
     """
     if not text:
         return []
-    
-    # Pattern explanation:
-    # 1. [.!?]+                 : End punctuation
-    # 2. (?:[”"’\'\)\]»]*)      : Optional closing quotes/brackets
-    # 3. (?:\[?\d+\]?)?         : Optional footnote (e.g. 1, [1]) - REFINED
-    # 4. \s+                    : Whitespace
-    # 5. (?=[A-Z¿¡"\'\-])       : Lookahead for uppercase or start char
-    
-    # We need to be careful with the footnote part. 
-    # It handles: "word.1 Word" or "word.[1] Word"
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)(?:\[?\d+\]?)?\s+(?=[A-Z¿¡"\'\-]))'
-    
-    parts = re.split(pattern, text)
-    sentences = []
-    current_sent = ""
-    
-    for i, part in enumerate(parts):
-        # Even indices are text, Odd indices are the split delimiters (captured group)
-        if i % 2 == 0:
-            current_sent += part
-        else:
-            current_sent += part
-            sentences.append(current_sent.strip())
-            current_sent = ""
-            
-    if current_sent and current_sent.strip():
-        sentences.append(current_sent.strip())
-        
-    return sentences
+    return [text.strip()]
 
 
 def split_sentences_aggressive(text):
-    """Splits text more aggressively for alignment mismatches (e.g. compound sentences)."""
-    # Standard split first
-    base_parts = split_sentences(text)
-    final_parts = []
-    for p in base_parts:
-        # Split on semicolons or ", y " (common Spanish compound connector)
-        # Regex: Lookbehind for ; or , space, Lookahead for y space or start of sentence or pero/sin embargo
-        # Simplified: Split on '; ' and ', y '
-        sub = re.split(r'(?:;|(?<=,)\s+(?=[yY]\s))', p)
-        final_parts.extend([s.strip() for s in sub if s.strip()])
-    return final_parts
+    """Deprecated: No longer splits."""
+    return split_sentences(text)
 
 def find_opf_file(base_dir):
     """Recursively searches for the first .opf file in the directory."""
@@ -631,98 +642,8 @@ def find_nearest_sentence_end(text, target_idx):
     return closest + 1
 
 def smart_pair_split(en_text, es_text):
-    en_split_indices = []
-    current_idx = 0
-    # Loop to find split points. 
-    # Conditions:
-    # 1. Remaining text > trigger
-    while len(en_text) - current_idx > SPLIT_TRIGGER_CHARS:
-        search_start = current_idx + SPLIT_TRIGGER_CHARS
-        dot_idx = en_text.find('.', search_start)
-        
-        # If no dot found, stop splitting (keep remainder as one chunk)
-        if dot_idx == -1: 
-            break
-            
-        split_point = dot_idx + 1
-        
-        # Check for closing punctuation (quotes, brackets) immediately following the dot
-        # Example: manipulation." -> split after "
-        trailing = en_text[split_point:]
-        match = re.match(r'^[”"’\'\)\]»]+', trailing)
-        if match:
-             split_point += len(match.group(0))
-        
-        # If split point is the very end, break loop to handle as last chunk
-        if split_point >= len(en_text):
-            break
-            
-        en_split_indices.append(split_point)
-        current_idx = split_point
-        
-    if not en_split_indices:
-        return [en_text], [es_text]
-
-    es_split_indices = []
-    if es_text:
-        total_en_len = len(en_text)
-        total_es_len = len(es_text)
-        for en_idx in en_split_indices:
-            ratio = en_idx / total_en_len
-            target_es_idx = int(ratio * total_es_len)
-            best_es_idx = find_nearest_sentence_end(es_text, target_es_idx)
-            
-            # Avoid splitting at 0 or end if close
-            if best_es_idx <= 0: best_es_idx = target_es_idx
-            if best_es_idx >= len(es_text): best_es_idx = len(es_text) # Will be handled by loop
-            
-            # Safety: don't add duplicate split point if it matches previous or is end
-            if not es_split_indices or best_es_idx > es_split_indices[-1]:
-                 if best_es_idx < len(es_text): # Only add if it's NOT the end
-                    es_split_indices.append(best_es_idx)
-
-    # Correction: effectively we want to align the splits.
-    # If ES has fewer splits, we might run out.
-    while len(es_split_indices) < len(en_split_indices):
-        es_split_indices.append(len(es_text))
-
-    en_chunks = []
-    start = 0
-    for end in en_split_indices:
-        chunk = en_text[start:end]
-        # REMOVED: if start != 0: chunk = "[...] " + chunk
-        chunk = chunk + " [...]"
-        en_chunks.append(chunk)
-        start = end
-    
-    # Last EN chunk
-    last_en = en_text[start:]
-    if last_en.strip(): # Only add if real content
-        # REMOVED: if start != 0: last_en = "[...] " + last_en
-        en_chunks.append(last_en)
-    
-    es_chunks = []
-    if not es_text:
-        es_chunks = [""] * len(en_chunks)
-    else:
-        start = 0
-        for i in range(len(en_split_indices)): 
-            # Use corresponding ES index if available, else End
-            end = es_split_indices[i] if i < len(es_split_indices) else len(es_text)
-            
-            chunk = es_text[start:end]
-            # REMOVED: if start != 0: chunk = "[...] " + chunk
-            chunk = chunk + " [...]"
-            es_chunks.append(chunk)
-            start = end
-            
-        # Last ES chunk
-        last_es = es_text[start:]
-        if len(es_chunks) < len(en_chunks):
-            # REMOVED: if start != 0 and last_es.strip(): last_es = "[...] " + last_es
-            es_chunks.append(last_es)
-            
-    return en_chunks, es_chunks
+    """Deprecated: Returns original text paired."""
+    return [en_text], [es_text]
 
 # -----------------------------------------------------------------------------
 # Main Logic
@@ -851,27 +772,12 @@ def align_chunks(en_chunks, es_chunks):
                     en_text = en_item['text']
                     es_text = es_item['text']
                     
-                    # Restore Split Feature for Long Paragraphs
-                    if len(en_text) > SPLIT_TRIGGER_CHARS:
-                         en_subs, es_subs = smart_pair_split(en_text, es_text)
-                         # Ensure pairing
-                         max_subs = max(len(en_subs), len(es_subs))
-                         for x in range(max_subs):
-                             sub_en = en_subs[x] if x < len(en_subs) else ""
-                             sub_es = es_subs[x] if x < len(es_subs) else ""
-                             local_res.append({
-                                 'tag': en_item['tag'],
-                                 'classes': en_item.get('classes', []),
-                                 'en': sub_en,
-                                 'es': sub_es
-                             })
-                    else:
-                        local_res.append({
-                            'tag': en_item['tag'],
-                            'classes': en_item.get('classes', []),
-                            'en': en_text,
-                            'es': es_text
-                        })
+                    local_res.append({
+                        'tag': en_item['tag'],
+                        'classes': en_item.get('classes', []),
+                        'en': en_text,
+                        'es': es_text
+                    })
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
                 sub_en = en_sec[i1:i2]
@@ -1721,10 +1627,8 @@ def generate_chapter_html(aligned_pairs, title=""):
         if tag.startswith('h') or tag == 'figcaption':
             html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
         else:
-            # Use CSS line-clamping for English text
-            # Append a special class for clamping
-            en_attrs = en_attrs.rstrip('"') + " clamp-text" + '"' if 'class="' in en_attrs else f' class="clamp-text"'
-            html_content += f"<p{en_attrs} title=\"{html.escape(en_text)}\">{en_text}</p>\n"
+            # Removed CSS line-clamping
+            html_content += f"<p{en_attrs}>{en_text}</p>\n"
         
         # Es
         if es_text:
@@ -1931,6 +1835,18 @@ def process_chapter_pair(args):
         return (idx, None, str(e))
 
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None):
+    staging_dir = 'bilingual_epub_staging'
+    try:
+        _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback)
+    except Exception as e:
+        print(f"Error during EPUB generation: {e}")
+        raise
+    finally:
+        if os.path.exists(staging_dir):
+            print(f"Cleaning up staging directory: {staging_dir}")
+            shutil.rmtree(staging_dir)
+
+def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config=None, progress_callback=None):
     """Orchestrates the creation of the full bilingual EPUB."""
     
     en_toc_path = find_toc_file(en_base)
@@ -2029,7 +1945,7 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
 
 
     # 2. Setup Staging Directory
-    staging_dir = 'bilingual_epub_staging'
+    # staging_dir passed as argument
     if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
     os.makedirs(os.path.join(staging_dir, 'META-INF'))
     os.makedirs(os.path.join(staging_dir, 'OEBPS'))

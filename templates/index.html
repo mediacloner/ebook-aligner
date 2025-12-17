@@ -4,20 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bilingual Ebook Aligner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
-        --primary: #4f46e5;
-        --primary-hover: #4338ca;
-        --bg: #f3f4f6;
-        --card-bg: #ffffff;
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --bg-gradient: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+        --card-bg: rgba(255, 255, 255, 0.95);
         --text-main: #1f2937;
         --text-sub: #6b7280;
         --border: #e5e7eb;
         --success: #10b981;
       }
       body {
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
-        background-color: var(--bg);
+        font-family: "Outfit", sans-serif;
+        background: var(--bg-gradient);
         color: var(--text-main);
         display: flex;
         justify-content: center;
@@ -27,19 +33,30 @@
       }
       .container {
         background: var(--card-bg);
-        padding: 2.5rem;
-        border-radius: 1rem;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1),
-          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        padding: 3rem;
+        border-radius: 1.5rem;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
         width: 100%;
-        max-width: 500px;
+        max-width: 550px;
         text-align: center;
+        backdrop-filter: blur(10px);
+        transform: translateY(0);
+        transition: transform 0.3s ease;
+      }
+      .container:hover {
+        transform: translateY(-5px);
       }
       h1 {
-        font-size: 1.5rem;
+        font-size: 2rem;
         font-weight: 700;
-        margin-bottom: 2rem;
-        color: var(--text-main);
+        margin-bottom: 0.5rem;
+        background: linear-gradient(to right, #4f46e5, #ec4899);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      p.subtitle {
+        color: var(--text-sub);
+        margin-bottom: 2.5rem;
       }
       .upload-area {
         display: flex;
@@ -49,14 +66,16 @@
       .file-input-wrapper {
         position: relative;
         border: 2px dashed var(--border);
-        border-radius: 0.75rem;
+        border-radius: 1rem;
         padding: 2rem;
-        transition: all 0.2s ease;
+        transition: all 0.3s ease;
         cursor: pointer;
+        background: #f9fafb;
       }
       .file-input-wrapper:hover {
         border-color: var(--primary);
-        background-color: #f5f3ff;
+        background-color: #eef2ff;
+        transform: scale(1.02);
       }
       .file-input-wrapper input[type="file"] {
         position: absolute;
@@ -68,81 +87,97 @@
         cursor: pointer;
       }
       .icon {
-        font-size: 2rem;
+        font-size: 2.5rem;
         margin-bottom: 0.5rem;
         display: block;
       }
       .label-text {
-        font-weight: 500;
+        font-weight: 600;
         display: block;
         margin-bottom: 0.25rem;
+        color: #374151;
       }
       .file-name {
         font-size: 0.875rem;
-        color: var(--text-sub);
+        color: var(--primary);
         display: block;
         min-height: 1.25em;
+        font-weight: 500;
       }
       button.submit-btn {
-        background-color: var(--primary);
+        background: linear-gradient(to right, var(--primary), #818cf8);
         color: white;
         border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 0.5rem;
+        padding: 1rem 2rem;
+        border-radius: 0.75rem;
         font-weight: 600;
-        font-size: 1rem;
+        font-size: 1.1rem;
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.3s;
         width: 100%;
-        margin-top: 1rem;
+        margin-top: 2rem;
+        box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
       }
       button.submit-btn:hover {
-        background-color: var(--primary-hover);
+        filter: brightness(1.1);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
       }
       button.submit-btn:disabled {
-        background-color: var(--text-sub);
+        background: var(--text-sub);
         cursor: not-allowed;
+        transform: none;
       }
 
       /* Progress Bar Styles */
-      .progress-container {
-        display: none;
+      .progress-wrapper {
         margin-top: 2rem;
+      }
+      .progress-container {
         width: 100%;
-        background-color: var(--border);
+        background-color: #e5e7eb;
         border-radius: 9999px;
         overflow: hidden;
+        height: 0.75rem;
       }
       .progress-bar {
-        height: 0.75rem;
-        background-color: var(--primary);
+        height: 100%;
+        background: linear-gradient(90deg, var(--primary), #ec4899);
         width: 0%;
         transition: width 0.3s ease;
+        border-radius: 9999px;
       }
       .status-text {
-        margin-top: 0.5rem;
-        font-size: 0.875rem;
+        margin-top: 0.75rem;
+        font-size: 0.95rem;
         color: var(--text-sub);
+        font-weight: 500;
         min-height: 1.5em;
       }
       .error-message {
         color: #ef4444;
         margin-top: 1rem;
-        font-size: 0.875rem;
+        font-size: 0.9rem;
+        font-weight: 500;
         display: none;
+        padding: 0.75rem;
+        background: #fef2f2;
+        border-radius: 0.5rem;
+        border: 1px solid #fee2e2;
       }
     </style>
   </head>
   <body>
     <div class="container">
       <h1>Bilingual Ebook Aligner</h1>
+      <p class="subtitle">Create perfectly aligned bilingual books with AI</p>
 
       <form id="uploadForm">
         <div class="upload-area">
           <div class="file-input-wrapper" id="drop-zone-en">
             <span class="icon">🇬🇧</span>
             <span class="label-text">Original (English) EPUB</span>
-            <span class="file-name" id="filename-en">Drag & drop or Click</span>
+            <span class="file-name" id="filename-en">Click to upload</span>
             <input
               type="file"
               name="en_file"
@@ -156,7 +191,7 @@
           <div class="file-input-wrapper" id="drop-zone-es">
             <span class="icon">🇪🇸</span>
             <span class="label-text">Translation (Spanish) EPUB</span>
-            <span class="file-name" id="filename-es">Drag & drop or Click</span>
+            <span class="file-name" id="filename-es">Click to upload</span>
             <input
               type="file"
               name="es_file"
@@ -191,7 +226,7 @@
       function updateFilename(input, targetId) {
         const fileName = input.files[0]
           ? input.files[0].name
-          : "Drag & drop or Click";
+          : "Click to upload";
         document.getElementById(targetId).innerText = fileName;
       }
 
@@ -211,7 +246,7 @@
           btn.disabled = true;
           progressWrapper.style.display = "block";
           progressBar.style.width = "0%";
-          statusText.innerText = "Uploading...";
+          statusText.innerText = "Uploading files...";
 
           const formData = new FormData(this);
 
@@ -245,6 +280,8 @@
         const interval = setInterval(async () => {
           try {
             const res = await fetch(`/progress/${jobId}`);
+            if (!res.ok) throw new Error("Status check failed");
+
             const job = await res.json();
 
             if (job.status === "processing" || job.status === "queued") {
@@ -254,17 +291,24 @@
               clearInterval(interval);
               progressBar.style.width = "100%";
               statusText.innerText = "Done! Downloading...";
-              window.location.href = `/download/${jobId}`;
-              btn.disabled = false;
+
+              // Slight delay for UX
+              setTimeout(() => {
+                window.location.href = `/download/${jobId}`;
+                btn.disabled = false;
+                statusText.innerText = "Generation Complete!";
+              }, 500);
             } else if (job.status === "error") {
               clearInterval(interval);
               showError("Processing Failed: " + job.message);
               btn.disabled = false;
             }
           } catch (err) {
-            clearInterval(interval);
-            showError("Network Error polling status");
-            btn.disabled = false;
+            // Don't stop polling immediately on one network blip, but here we keep it simple
+            console.error(err);
+            // clearInterval(interval);
+            // showError("Network Error polling status");
+            // btn.disabled = false;
           }
         }, 1000);
       }

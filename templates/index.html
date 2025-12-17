@@ -265,6 +265,8 @@
           errorMessage.style.display = "none";
           btn.disabled = true;
           stopBtn.style.display = "block";
+          stopBtn.disabled = false;
+          stopBtn.innerText = "Stop Generation";
           progressWrapper.style.display = "block";
           progressBar.style.width = "0%";
           statusText.innerText = "Uploading files...";

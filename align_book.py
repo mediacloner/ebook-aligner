@@ -2026,7 +2026,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 0.5em; margin-top: 0; }
     h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666; opacity: 0.8; }
     /* Remove spacing between English header and Spanish header */
     h1 + h1.es-trans, h2 + h2.es-trans, h3 + h3.es-trans, h4 + h4.es-trans { margin-top: 0; padding-top: 0; }

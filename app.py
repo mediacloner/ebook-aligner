@@ -75,12 +75,46 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
         if use_local_ai:
             config['use_neural'] = True
             
-        create_bilingual_epub(en_oebps, es_oebps, output_path, config=config, progress_callback=update_progress)
+        result = create_bilingual_epub(en_oebps, es_oebps, output_path, config=config, progress_callback=update_progress)
         
+        # Format filename based on metadata
+        # "title - author (bilingual).epub"
+        # eliminate - if dont exist title or author
+        
+        if isinstance(result, dict):
+             title = result.get('title')
+             author = result.get('author')
+             
+             clean_title = (title or "").strip()
+             clean_author = (author or "").strip()
+             
+             if clean_title and clean_author:
+                 # Check for hyphens to avoid double hyphens? No, usually valid.
+                 base_name = f"{clean_title} - {clean_author}"
+             elif clean_title:
+                 base_name = clean_title
+             elif clean_author:
+                 base_name = clean_author
+             else:
+                 base_name = "bilingual_book"
+                 
+             # sanitize slightly but keep unicode (e.g. accents)
+             # secure_filename might be too aggressive removing spaces/accents.
+             # User implies "appear" so maybe readable name.
+             # Let's keep it readable but safe for browsers.
+             # Actually Flask send_file handles unicode names usually if UTF-8.
+             # We just need to ensure no paths.
+             base_name = base_name.replace('/', '-').replace('\\', '-')
+             
+             final_name = f"{base_name}.epub"
+        else:
+             final_name = 'bilingual_aligned.epub'
+
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
         active_jobs[job_id]['message'] = 'Complete!'
         active_jobs[job_id]['file'] = output_path
+        active_jobs[job_id]['download_name'] = final_name
         
     except Exception as e:
         active_jobs[job_id]['status'] = 'error'
@@ -139,7 +173,8 @@ def download_file(job_id):
     if not job or job['status'] != 'completed':
         return "File not ready or job not found", 404
     
-    return send_file(job['file'], as_attachment=True, download_name='bilingual_aligned.epub')
+    download_name = job.get('download_name', 'bilingual_aligned.epub')
+    return send_file(job['file'], as_attachment=True, download_name=download_name)
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

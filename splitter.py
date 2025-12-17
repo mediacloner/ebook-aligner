@@ -97,85 +97,69 @@ class Splitter:
              en_embs = self.aligner.embed_chunks([{'text': t} for t in en_chunks_text])
              es_embs = self.aligner.embed_chunks([{'text': t} for t in es_sents])
              
-             # Greedy accumulation
-             es_idx = 0
+             import numpy as np
              from scipy.spatial.distance import cosine
+             
+             es_idx = 0
              
              for i, en_chunk in enumerate(en_chunks_text):
                  if es_idx >= len(es_sents):
-                     # Ran out of Spanish? append empty
                      final_splits.append({'en': en_chunk, 'es': ""})
                      continue
                      
-                 # If this is the last EN chunk, take all remaining ES
                  if i == len(en_chunks_text) - 1:
                      remainder = " ".join(es_sents[es_idx:])
                      final_splits.append({'en': en_chunk, 'es': remainder})
                      break
                  
-                 # Otherwise, try to find best cut
+                 # Greedy search using vector math
                  best_cut = es_idx + 1
-                 best_score = -1.0
+                 best_score = float('inf') # using distance (lower is better)
                  
-                 # Look ahead up to N sentences
-                 # We simply want the block [es_idx : k] that is closest to en_chunk embedding?
-                 # Actually, we want the block [es_idx : k] to match en_chunk 
-                 # AND the remaining block to match remaining en_chunks? That's global optim.
-                 
-                 # Local greedy: maximize sim(block, en_chunk)
-                 # But length matters.
-                 
-                 valid_scores = []
-                 
-                 # Look ahead window? 
-                 window = len(es_sents) - es_idx
-                 
-                 # Optimization: Calculate similarity of the *cumulative vector*?
-                 # Or just join text and embed? Re-embedding is expensive.
-                 # Let's use the pre-computed embeddings. 
-                 # Mean of sentence embeddings is a rough proxy for paragraph embedding.
-                 
-                 # Actually, with self.aligner we can call compute_similarity_matrix?
-                 # No, that's N x M.
-                 
-                 # Let's brute force text concatenation embedding for high accuracy? 
-                 # If performance is issues, we optimize. It's offline generation.
-                 
-                 # We will scan cuts.
-                 candidates = []
-                 # Heuristic: Ratio check to limit scan
+                 en_vec = en_embs[i]
                  en_len = len(en_chunk)
                  
                  current_es_str = ""
-                 for k in range(es_idx, min(len(es_sents), es_idx + 15)):
-                     current_es_str += (" " + es_sents[k]) if current_es_str else es_sents[k]
-                     
-                     # Ratio check
-                     ratio = len(current_es_str) / en_len
-                     if ratio < 0.5: continue 
-                     if ratio > 2.0: break # Too long
-                     
-                     candidates.append((k + 1, current_es_str))
                  
-                 if not candidates:
-                     # Fallback to just taking next one or ratio?
-                     best_cut = es_idx + 1
-                     current_es_str = es_sents[es_idx]
-                 else:
-                     # Score candidates
-                     # Re-embed candidates?
-                     cand_texts = [c[1] for c in candidates]
-                     cand_embs = self.aligner.model.encode(cand_texts, show_progress_bar=False)
+                 # Limit search window
+                 max_lookahead = min(len(es_sents) - es_idx, 20)
+                 
+                 for k in range(max_lookahead):
+                     idx = es_idx + k
+                     sent = es_sents[idx]
+                     current_es_str += (" " + sent) if current_es_str else sent
                      
-                     # Compare with en_chunk embedding (en_embs[i])
-                     from scipy.spatial.distance import cdist
-                     dists = cdist([en_embs[i]], cand_embs, metric='cosine')[0]
+                     # Ratio Check
+                     # Fast fail based on length
+                     ratio = len(current_es_str) / en_len
+                     if ratio < 0.4: continue 
+                     if ratio > 2.2: break 
                      
-                     best_local_idx = dists.argmin()
-                     best_cut = candidates[best_local_idx][0]
-                     current_es_str = candidates[best_local_idx][1]
+                     # Vector Aggregation (Mean Pooling)
+                     # es_embs[es_idx : idx+1]
+                     # We want the mean of these vectors to compare with en_vec
+                     # Check shapes
+                     relevant_vecs = es_embs[es_idx : idx+1]
+                     # If using standard list of arrays from embed_chunks?
+                     # Ideally embed_chunks returns a numpy matrix. 
+                     # If it returns list of arrays, we stack.
                      
-                 final_splits.append({'en': en_chunk, 'es': current_es_str})
+                     if not isinstance(relevant_vecs, np.ndarray):
+                         relevant_vecs = np.vstack(relevant_vecs)
+                         
+                     # Mean vector
+                     cand_vec = np.mean(relevant_vecs, axis=0)
+                     
+                     dist = cosine(en_vec, cand_vec)
+                     
+                     if dist < best_score:
+                         best_score = dist
+                         best_cut = idx + 1
+                         
+                 # Construct best match text
+                 # Note: we need to reconstruct the string for the best cut
+                 best_es_text = " ".join(es_sents[es_idx:best_cut])
+                 final_splits.append({'en': en_chunk, 'es': best_es_text})
                  es_idx = best_cut
 
         else:

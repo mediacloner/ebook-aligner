@@ -343,6 +343,7 @@ def read_opf_data(opf_path):
     - Cover ID (if found in meta name="cover")
     - Textual metadata (Title, Language, Creator) for convenience
     - UUID data
+    - Namespaces defined in the package
     """
     data = {
         'title': "Bilingual Edition",
@@ -352,72 +353,97 @@ def read_opf_data(opf_path):
         'uid_scheme': "BookId",
         'cover_id': None,
         'metadata_items': [], # List of objects to reconstruct strings
-        'manifest': {}
+        'manifest': {},
+        'namespaces': {}
     }
 
     if not opf_path or not os.path.exists(opf_path):
         return data
 
     try:
+        # 0. Extract Namespaces using iterparse
+        # We need to re-open the file for iterparse to catch start-ns events at the top
+        for event, (prefix, uri) in ET.iterparse(opf_path, events=['start-ns']):
+            if prefix: # Skip default namespace if empty, or handle it
+                data['namespaces'][prefix] = uri
+        
+        # 1. Parse Tree
         tree = ET.parse(opf_path)
         root = tree.getroot()
         
-        # Namespaces
+        # Register namespaces to prevent "ns0" prefixes if possible, though strict valid XML output needs careful handling
+        for prefix, uri in data['namespaces'].items():
+            ET.register_namespace(prefix, uri)
+
+        # Standard Namespaces for finding things
         ns = {
             'opf': 'http://www.idpf.org/2007/opf',
             'dc': 'http://purl.org/dc/elements/1.1/'
         }
         
+        # Update our lookup ns with found ones
+        ns.update(data['namespaces'])
+        
         # 1. Metadata
+        # We look for the metadata tag using the standard namespace or wildcard
         metadata_node = root.find('opf:metadata', ns)
+        if metadata_node is None:
+             # Fallback: try finding it by tag name ignoring namespace
+             for child in root:
+                 if child.tag.endswith('}metadata'):
+                     metadata_node = child
+                     break
+
         if metadata_node is not None:
-            # Capture all dc:* children
+            # Capture ALL children
             for child in metadata_node:
-                # Naive namespace check
-                tag = child.tag
-                # Remove namespace uri from tag for cleaner handling if needed, or keep it
-                # We will store the full tag and attributes to reconstruct
+                # Store the full tag, text, and attributes
+                # We will attempt to reconstruct the tag with the correct prefix later
                 
                 # Check for specific fields for convenience
-                clean_tag = tag.split('}')[-1] if '}' in tag else tag
+                # We use the tag without namespace for checking
+                clean_tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
                 text = child.text
                 
-                if 'title' in clean_tag: data['title'] = text
-                elif 'language' in clean_tag: data['language'] = text
-                elif 'creator' in clean_tag: data['creator'] = text
+                if 'title' == clean_tag: data['title'] = text
+                elif 'language' == clean_tag: data['language'] = text
+                elif 'creator' == clean_tag: data['creator'] = text
                 
                 # Check for cover meta
-                if 'meta' in clean_tag and child.get('name') == 'cover':
+                if 'meta' == clean_tag and child.get('name') == 'cover':
                     data['cover_id'] = child.get('content')
 
-                # Store for reproduction (excluding unique-identifier which we handle separately)
+                # Store for reproduction
                 # We save the raw element info
-                full_tag = tag # keeps {uri}tag
-                
-                # We want to output standard tags without expanding namespaces manually if possible, 
-                # but ET expands them. We will reconstruct them carefully.
-                # Simplified: Store tag and attributes.
-                item = {'tag': tag, 'text': text, 'attrib': child.attrib}
+                item = {'tag': child.tag, 'text': text, 'attrib': child.attrib}
                 data['metadata_items'].append(item)
 
             # Resolve Identifier
             package_uid_ref = root.get('unique-identifier')
             if package_uid_ref:
                 data['uid_scheme'] = package_uid_ref
-                for ident in metadata_node.findall('dc:identifier', ns):
-                    if ident.get('id') == package_uid_ref:
-                        data['uid'] = ident.text
+                # Try to find the specific identifier
+                for child in metadata_node:
+                    if child.tag.endswith('}identifier') and child.get('id') == package_uid_ref:
+                        data['uid'] = child.text
                         break
 
         # 2. Manifest
         manifest_node = root.find('opf:manifest', ns)
+        if manifest_node is None:
+             for child in root:
+                 if child.tag.endswith('}manifest'):
+                     manifest_node = child
+                     break
+
         if manifest_node is not None:
-            for item in manifest_node.findall('opf:item', ns):
-                i_id = item.get('id')
-                i_href = item.get('href')
-                i_media = item.get('media-type')
-                if i_id and i_href:
-                    data['manifest'][i_id] = {'href': i_href, 'media-type': i_media}
+            for item in manifest_node: # Iterate children directly
+                if item.tag.endswith('}item'):
+                    i_id = item.get('id')
+                    i_href = item.get('href')
+                    i_media = item.get('media-type')
+                    if i_id and i_href:
+                        data['manifest'][i_id] = {'href': i_href, 'media-type': i_media}
 
     except Exception as e:
         print(f"Error reading OPF data: {e}")
@@ -1857,7 +1883,7 @@ def process_chapter_pair(args):
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None):
     staging_dir = 'bilingual_epub_staging'
     try:
-        _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback)
+        return _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback)
     except Exception as e:
         print(f"Error during EPUB generation: {e}")
         raise
@@ -1900,7 +1926,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     m_creator = opf_data['creator']
     m_ident = opf_data['uid']
     m_uid_scheme = opf_data['uid_scheme']
+    m_namespaces = opf_data['namespaces']
     
+    # Ensure Calibre namespace is present if likely used
+    if 'calibre' not in m_namespaces and any('calibre:' in item['tag'] for item in opf_data['metadata_items']):
+         m_namespaces['calibre'] = "http://calibre.kovidgoyal.net/2009/metadata"
+
     # Modify Title
     final_title = f"{m_title} (bilingual)"
     print(f"Metadata extracted: Title='{final_title}', Language='{m_lang}'")
@@ -2093,15 +2124,15 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         spine_items += f'<itemref idref="{item_id}"/>\n'
         
     # Reconstruct Metadata Block
-    # We want to preserve everything but override title and identifier if needed so they match the package attributes
-    # Actually we just dump what we found, checking for existing title/ident to update.
     
     metadata_lines = []
     
-    # We use a set to avoid duplicates if we re-inject mapped items (though extraction was linear)
-    # Strategy: Filter out the ID that matches unique-identifier (we write it manually)
-    # Filter out title (we write manual title)
-    # Write others as is.
+    # Helper to resolve namespace prefix
+    # Inverted map: URI -> Prefix
+    uri_to_prefix = {v: k for k, v in m_namespaces.items()}
+    # Add standard checks
+    if 'http://purl.org/dc/elements/1.1/' not in uri_to_prefix: uri_to_prefix['http://purl.org/dc/elements/1.1/'] = 'dc'
+    if 'http://www.idpf.org/2007/opf' not in uri_to_prefix: uri_to_prefix['http://www.idpf.org/2007/opf'] = 'opf'
     
     for item in opf_data['metadata_items']:
         tag = item['tag']
@@ -2117,36 +2148,56 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
              continue
 
         # Reconstruct XML string
-        # Handle Namespace: tag is likely {http://purl.org/dc/elements/1.1/}title
-        # We simply replace known namespaces with prefixes for clean output
-        clean_tag = tag.replace('{http://purl.org/dc/elements/1.1/}', 'dc:') \
-                       .replace('{http://www.idpf.org/2007/opf}', 'opf:')
-                       
-        # Fallback if unknown namespace
-        if clean_tag.startswith('{'): 
-            # Strip it
-            clean_tag = clean_tag.split('}')[-1]
-            
+        clean_tag = tag
+        if '}' in tag:
+             uri, local_name = tag.split('}')
+             uri = uri[1:] # remove {
+             prefix = uri_to_prefix.get(uri)
+             if prefix:
+                 clean_tag = f"{prefix}:{local_name}"
+             else:
+                 # Fallback, just use local name or look harder?
+                 # ideally we registered it.
+                 clean_tag = local_name
+        
         attr_list = []
         for k, v in attribs.items():
-            # Clean attribute key namespaces
-            # Commonly opf:role, opf:file-as, opf:scheme
-            ck = k.replace('{http://www.idpf.org/2007/opf}', 'opf:')
-            if ck.startswith('{'): ck = ck.split('}')[-1] # Fallback
-            attr_list.append(f'{ck}="{v}"')
+            ck = k
+            if '}' in k:
+                 uri, local = k.split('}')
+                 uri = uri[1:]
+                 prefix = uri_to_prefix.get(uri)
+                 if prefix:
+                     ck = f"{prefix}:{local}"
+                 else:
+                     ck = local
+            attr_list.append(f'{ck}="{html.escape(str(v))}"')
             
         attr_str = " " + " ".join(attr_list) if attr_list else ""
         
         if text:
-             metadata_lines.append(f'        <{clean_tag}{attr_str}>{html.escape(text)}</{clean_tag}>')
+             metadata_lines.append(f'        <{clean_tag}{attr_str}>{html.escape(str(text))}</{clean_tag}>')
         else:
              metadata_lines.append(f'        <{clean_tag}{attr_str}/>')
 
     joined_metadata = "\n".join(metadata_lines)
 
+    # Construct xmlns attributes
+    xmlns_attrs = []
+    for prefix, uri in m_namespaces.items():
+         if prefix: # Skip default if handled by package
+              xmlns_attrs.append(f'xmlns:{prefix}="{uri}"')
+    
+    if 'xmlns:dc' not in xmlns_attrs and 'dc' not in m_namespaces:
+         xmlns_attrs.append('xmlns:dc="http://purl.org/dc/elements/1.1/"')
+    if 'xmlns:opf' not in xmlns_attrs and 'opf' not in m_namespaces:
+         xmlns_attrs.append('xmlns:opf="http://www.idpf.org/2007/opf"')
+         
+    xmlns_str = " ".join(xmlns_attrs)
+
     opf_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="{m_uid_scheme}" version="3.0">
-    <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="{m_uid_scheme}" version="3.0" {xmlns_str}>
+    <metadata {xmlns_str}>
         <dc:title>{final_title}</dc:title>
         <dc:identifier id="{m_uid_scheme}">{m_ident}</dc:identifier>
 {joined_metadata}
@@ -2189,7 +2240,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         f.write(ncx_content)
         
     # 9. Zip it
-    print(f"Creating EPUB: {output_epub_path}")
+    print(f"Success! Bilingual EPUB created at: {output_epub_path}")
+    
     with zipfile.ZipFile(output_epub_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(os.path.join(staging_dir, 'mimetype'), 'mimetype', compress_type=zipfile.ZIP_STORED)
         for root, dirs, files in os.walk(staging_dir):
@@ -2200,6 +2252,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 zipf.write(file_path, arc_name)
     
     print("Alignment/Generation Complete.")
+    
+    return {'title': final_title, 'author': m_creator}
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a bilingual EPUB from extracted English and Spanish EPUB OEBPS directories.")

@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+import time
 import re
 import html
 import difflib
@@ -2083,30 +2084,48 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         count_done = 0
         total = len(args_list)
         
-        # imap_unordered returns results as they complete
-        # We process them to updating progress and handling errors
-        for res_idx, res_filename, res_name in pool.imap_unordered(process_chapter_pair, args_list):
-            
-            # Check Cancellation
+        # Use apply_async for non-blocking submission
+        # This allows us to poll for cancellation while tasks are running
+        async_results = [pool.apply_async(process_chapter_pair, (args,)) for args in args_list]
+        
+        # Track completed indices
+        completed_indices = set()
+        
+        while len(completed_indices) < len(async_results):
+            # 1. Check Cancellation immediately
             if cancel_check and cancel_check():
                  print("Cancellation signal received. Terminating pool immediately...")
                  pool.terminate()
                  pool.join()
                  raise InterruptedError("Process cancelled by user")
             
-            if res_filename:
-                results_map[res_idx] = res_filename
-            else:
-                print(f"Task {res_idx} returned no filename (Error: {res_name})")
-            
-            count_done += 1
-            if progress_callback:
-                progress_callback(count_done, total, f"Processed {count_done}/{total} chapters")
-            else:
-                 # Print progress every 10%
-                 if total > 10 and count_done % (total // 10) == 0:
-                      print(f"Progress: {count_done}/{total}...")
-                      
+            # 2. Check Result Progress
+            # We iterate to see if any new ones finished
+            for i, res in enumerate(async_results):
+                if i not in completed_indices and res.ready():
+                    # Get result
+                    try:
+                        res_idx, res_filename, res_name = res.get()
+                        
+                        if res_filename:
+                            results_map[res_idx] = res_filename
+                        else:
+                            print(f"Task {res_idx} returned no filename (Error: {res_name})")
+                    except Exception as exc:
+                        print(f"Task {i} generated an exception: {exc}")
+                        
+                    completed_indices.add(i)
+                    count_done += 1
+                    
+                    if progress_callback:
+                        progress_callback(count_done, total, f"Processed {count_done}/{total} chapters")
+                    else:
+                        if total > 10 and count_done % (total // 10) == 0:
+                            print(f"Progress: {count_done}/{total}...")
+
+            # 3. Small sleep to prevent tight loop CPU usage
+            time.sleep(0.1)
+
         pool.close()
         pool.join()
         

@@ -75,7 +75,15 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
         if use_local_ai:
             config['use_neural'] = True
             
-        result = create_bilingual_epub(en_oebps, es_oebps, output_path, config=config, progress_callback=update_progress)
+        def cancel_check():
+            return active_jobs.get(job_id, {}).get('status') == 'cancelled'
+            
+        result = create_bilingual_epub(en_oebps, es_oebps, output_path, config=config, progress_callback=update_progress, cancel_check=cancel_check)
+        
+        if active_jobs[job_id]['status'] == 'cancelled':
+             active_jobs[job_id]['message'] = 'Job cancelled by user.'
+             active_jobs[job_id]['progress'] = 0
+             return
         
         # Format filename based on metadata
         # "title - author (bilingual).epub"
@@ -119,6 +127,14 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
     except Exception as e:
         active_jobs[job_id]['status'] = 'error'
         active_jobs[job_id]['message'] = str(e)
+
+@app.route('/cancel/<job_id>', methods=['POST'])
+def cancel_job(job_id):
+    if job_id in active_jobs:
+        active_jobs[job_id]['status'] = 'cancelled'
+        active_jobs[job_id]['message'] = 'Cancelling...'
+        return jsonify({'status': 'cancelled'})
+    return jsonify({'error': 'Job not found'}), 404
 
 @app.route('/', methods=['GET'])
 def index():

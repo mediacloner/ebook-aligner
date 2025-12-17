@@ -165,6 +165,22 @@
         border-radius: 0.5rem;
         border: 1px solid #fee2e2;
       }
+      button.stop-btn {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        width: 100%;
+        margin-bottom: 1rem;
+        transition: all 0.2s;
+      }
+      button.stop-btn:hover {
+        background: #dc2626;
+      }
     </style>
   </head>
   <body>
@@ -214,6 +230,9 @@
           id="progressWrapper"
           style="display: none"
         >
+          <button type="button" class="stop-btn" id="stopBtn">
+            Stop Generation
+          </button>
           <div class="progress-container">
             <div class="progress-bar" id="progressBar"></div>
           </div>
@@ -236,6 +255,7 @@
           e.preventDefault();
 
           const btn = document.getElementById("generateBtn");
+          const stopBtn = document.getElementById("stopBtn");
           const progressWrapper = document.getElementById("progressWrapper");
           const progressBar = document.getElementById("progressBar");
           const statusText = document.getElementById("statusText");
@@ -244,6 +264,7 @@
           // Reset UI
           errorMessage.style.display = "none";
           btn.disabled = true;
+          stopBtn.style.display = "block";
           progressWrapper.style.display = "block";
           progressBar.style.width = "0%";
           statusText.innerText = "Uploading files...";
@@ -265,7 +286,19 @@
             const jobId = data.job_id;
 
             // 2. Poll for Status
+            // 2. Poll for Status
             pollStatus(jobId);
+
+            // Setup Stop Button
+            stopBtn.onclick = async function () {
+              try {
+                await fetch(`/cancel/${jobId}`, { method: "POST" });
+                stopBtn.disabled = true;
+                stopBtn.innerText = "Stopping...";
+              } catch (e) {
+                console.error("Stop failed", e);
+              }
+            };
           } catch (err) {
             showError("Error: " + err.message);
             btn.disabled = false;
@@ -276,6 +309,7 @@
         const progressBar = document.getElementById("progressBar");
         const statusText = document.getElementById("statusText");
         const btn = document.getElementById("generateBtn");
+        const stopBtn = document.getElementById("stopBtn");
 
         const interval = setInterval(async () => {
           try {
@@ -302,6 +336,14 @@
               clearInterval(interval);
               showError("Processing Failed: " + job.message);
               btn.disabled = false;
+              stopBtn.style.display = "none";
+            } else if (job.status === "cancelled") {
+              clearInterval(interval);
+              statusText.innerText = "Cancelled.";
+              progressBar.style.width = "0%";
+              btn.disabled = false;
+              stopBtn.style.display = "none";
+              // Create a visual indicator or just reset
             }
           } catch (err) {
             // Don't stop polling immediately on one network blip, but here we keep it simple

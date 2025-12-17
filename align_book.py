@@ -1880,10 +1880,10 @@ def process_chapter_pair(args):
         print(f"Error processing {en_rel}: {e}")
         return (idx, None, str(e))
 
-def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None):
+def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     staging_dir = 'bilingual_epub_staging'
     try:
-        return _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback)
+        return _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config, progress_callback, cancel_check)
     except Exception as e:
         print(f"Error during EPUB generation: {e}")
         raise
@@ -1892,7 +1892,7 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
             print(f"Cleaning up staging directory: {staging_dir}")
             shutil.rmtree(staging_dir)
 
-def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config=None, progress_callback=None):
+def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config=None, progress_callback=None, cancel_check=None):
     """Orchestrates the creation of the full bilingual EPUB."""
     
     en_toc_path = find_toc_file(en_base)
@@ -2078,6 +2078,11 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         total = len(args_list)
         
         for future in concurrent.futures.as_completed(future_to_idx):
+            if cancel_check and cancel_check():
+                 print("Cancellation signal received. Shutting down executor...")
+                 executor.shutdown(wait=False, cancel_futures=True)
+                 raise InterruptedError("Process cancelled by user")
+
             f_idx = future_to_idx[future]
             try:
                 res_idx, res_filename, res_name = future.result()

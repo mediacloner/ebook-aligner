@@ -30,34 +30,62 @@
         align-items: center;
         min-height: 100vh;
         margin: 0;
+        perspective: 1000px;
       }
-      .container {
-        background: var(--card-bg);
-        padding: 3rem;
-        border-radius: 1.5rem;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+
+      /* Flip Card Container */
+      .card-wrapper {
         width: 100%;
         max-width: 550px;
-        text-align: center;
-        backdrop-filter: blur(10px);
-        transform: translateY(0);
-        transition: transform 0.3s ease;
+        min-height: 850px; /* Increased height to prevent overflow */
+        position: relative;
+        transform-style: preserve-3d;
+        transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
-      .container:hover {
-        transform: translateY(-5px);
+
+      .card-wrapper.flipped {
+        transform: rotateY(180deg);
       }
+
+      .card-face {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        backface-visibility: hidden;
+        background: var(--card-bg);
+        border-radius: 1.5rem;
+        padding: 3rem;
+        box-sizing: border-box;
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .card-front {
+        transform: rotateY(0deg);
+      }
+
+      .card-back {
+        transform: rotateY(180deg);
+      }
+
       h1 {
         font-size: 2rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
+        margin-top: 0;
+        text-align: center;
         background: linear-gradient(to right, #4f46e5, #ec4899);
         -webkit-background-clip: text;
+        background-clip: text;
         -webkit-text-fill-color: transparent;
       }
       p.subtitle {
         color: var(--text-sub);
         margin-bottom: 2.5rem;
+        text-align: center;
       }
+
       .upload-area {
         display: flex;
         flex-direction: column;
@@ -67,10 +95,11 @@
         position: relative;
         border: 2px dashed var(--border);
         border-radius: 1rem;
-        padding: 2rem;
+        padding: 1.5rem;
         transition: all 0.3s ease;
         cursor: pointer;
         background: #f9fafb;
+        text-align: center;
       }
       .file-input-wrapper:hover {
         border-color: var(--primary);
@@ -87,7 +116,7 @@
         cursor: pointer;
       }
       .icon {
-        font-size: 2.5rem;
+        font-size: 2rem;
         margin-bottom: 0.5rem;
         display: block;
       }
@@ -98,13 +127,17 @@
         color: #374151;
       }
       .file-name {
-        font-size: 0.875rem;
+        font-size: 0.8rem;
         color: var(--primary);
         display: block;
         min-height: 1.25em;
         font-weight: 500;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
-      button.submit-btn {
+
+      button.action-btn {
         background: linear-gradient(to right, var(--primary), #818cf8);
         color: white;
         border: none;
@@ -118,20 +151,99 @@
         margin-top: 2rem;
         box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
       }
-      button.submit-btn:hover {
+      button.action-btn:hover {
         filter: brightness(1.1);
         transform: translateY(-2px);
         box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
       }
-      button.submit-btn:disabled {
+      button.action-btn:disabled {
         background: var(--text-sub);
         cursor: not-allowed;
         transform: none;
       }
 
+      /* Flip Toggle Button */
+      .flip-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-sub);
+        padding: 0.5rem 1rem;
+        border-radius: 2rem;
+        cursor: pointer;
+        margin: 1rem auto 0;
+        display: block;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+      }
+      .flip-btn:hover {
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+
+      /* Batch List Styles */
+      .batch-list {
+        flex: 1;
+        overflow-y: auto;
+        border: 1px solid var(--border);
+        border-radius: 0.75rem;
+        margin: 1rem 0;
+        padding: 0.5rem;
+        background: #f9fafb;
+      }
+      .batch-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: white;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+        border: 1px solid var(--border);
+        font-size: 0.85rem;
+      }
+      .batch-item span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 60%;
+      }
+      .remove-item {
+        color: #ef4444;
+        cursor: pointer;
+        font-weight: bold;
+        padding: 0.25rem 0.5rem;
+      }
+      .output-dir-container {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+      }
+      .output-dir-input {
+        flex: 1;
+        padding: 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 0.5rem;
+        font-family: inherit;
+        font-size: 0.9rem;
+        box-sizing: border-box;
+      }
+      .browse-btn {
+        background: #f3f4f6;
+        border: 1px solid var(--border);
+        color: var(--text-main);
+        padding: 0 1rem;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.2s;
+      }
+      .browse-btn:hover {
+        background: #e5e7eb;
+      }
+
       /* Progress Bar Styles */
       .progress-wrapper {
-        margin-top: 2rem;
+        margin-top: 1rem;
       }
       .progress-container {
         width: 100%;
@@ -148,11 +260,12 @@
         border-radius: 9999px;
       }
       .status-text {
-        margin-top: 0.75rem;
-        font-size: 0.95rem;
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
         color: var(--text-sub);
         font-weight: 500;
         min-height: 1.5em;
+        text-align: center;
       }
       .error-message {
         color: #ef4444;
@@ -164,6 +277,7 @@
         background: #fef2f2;
         border-radius: 0.5rem;
         border: 1px solid #fee2e2;
+        text-align: center;
       }
       button.stop-btn {
         background: #ef4444;
@@ -184,64 +298,224 @@
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1>Bilingual Ebook Aligner</h1>
-      <p class="subtitle">Create perfectly aligned bilingual books with AI</p>
+    <div class="card-wrapper" id="cardWrapper">
+      <!-- FRONT FACE: Single Mode -->
+      <div class="card-face card-front">
+        <h1>Single Mode</h1>
+        <p class="subtitle">Align one book pair at a time</p>
 
-      <form id="uploadForm">
-        <div class="upload-area">
-          <div class="file-input-wrapper" id="drop-zone-en">
-            <span class="icon">🇬🇧</span>
-            <span class="label-text">Original (English) EPUB</span>
-            <span class="file-name" id="filename-en">Click to upload</span>
-            <input
-              type="file"
-              name="en_file"
-              id="en_file"
-              accept=".epub"
-              required
-              onchange="updateFilename(this, 'filename-en')"
-            />
+        <form
+          id="uploadForm"
+          style="flex: 1; display: flex; flex-direction: column"
+        >
+          <div class="upload-area">
+            <div class="file-input-wrapper">
+              <span class="icon">🇬🇧</span>
+              <span class="label-text">Original (English)</span>
+              <span class="file-name" id="filename-en">Click to upload</span>
+              <input
+                type="file"
+                name="en_file"
+                id="en_file"
+                accept=".epub"
+                required
+                onchange="updateFilename(this, 'filename-en')"
+              />
+            </div>
+
+            <div class="file-input-wrapper">
+              <span class="icon">🇪🇸</span>
+              <span class="label-text">Translation (Spanish)</span>
+              <span class="file-name" id="filename-es">Click to upload</span>
+              <input
+                type="file"
+                name="es_file"
+                id="es_file"
+                accept=".epub"
+                required
+                onchange="updateFilename(this, 'filename-es')"
+              />
+            </div>
           </div>
 
-          <div class="file-input-wrapper" id="drop-zone-es">
-            <span class="icon">🇪🇸</span>
-            <span class="label-text">Translation (Spanish) EPUB</span>
-            <span class="file-name" id="filename-es">Click to upload</span>
-            <input
-              type="file"
-              name="es_file"
-              id="es_file"
-              accept=".epub"
-              required
-              onchange="updateFilename(this, 'filename-es')"
-            />
-          </div>
-        </div>
+          <button type="submit" class="action-btn" id="generateBtn">
+            Generate Book
+          </button>
 
-        <button type="submit" class="submit-btn" id="generateBtn">
-          Generate Bilingual Book
+          <div class="error-message" id="errorMessage"></div>
+
+          <div
+            class="progress-wrapper"
+            id="progressWrapper"
+            style="display: none"
+          >
+            <button type="button" class="stop-btn" id="stopBtn">
+              Stop Generation
+            </button>
+            <div class="progress-container">
+              <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="status-text" id="statusText">Starting...</div>
+          </div>
+        </form>
+
+        <button class="flip-btn" onclick="toggleFlip()">
+          Switch to Batch Mode ↻
         </button>
+      </div>
 
-        <div class="error-message" id="errorMessage"></div>
+      <!-- BACK FACE: Batch Mode -->
+      <div class="card-face card-back">
+        <h1>Batch Mode</h1>
+        <p class="subtitle">Queue multiple books for processing</p>
 
         <div
-          class="progress-wrapper"
-          id="progressWrapper"
-          style="display: none"
+          style="
+            margin-bottom: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          "
         >
-          <button type="button" class="stop-btn" id="stopBtn">
-            Stop Generation
-          </button>
-          <div class="progress-container">
-            <div class="progress-bar" id="progressBar"></div>
+          <div
+            class="file-input-wrapper"
+            style="padding: 0.75rem; width: 100%; box-sizing: border-box"
+          >
+            <span
+              class="label-text"
+              id="batch-en-label"
+              style="
+                font-size: 0.8rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              "
+              >+ Add Pair (EN)</span
+            >
+            <input
+              type="file"
+              id="batch-en"
+              accept=".epub"
+              onchange="document.getElementById('batch-en-label').innerText = this.files[0] ? this.files[0].name : '+ Add Pair (EN)'"
+            />
           </div>
-          <div class="status-text" id="statusText">Starting...</div>
+          <div
+            class="file-input-wrapper"
+            style="padding: 0.75rem; width: 100%; box-sizing: border-box"
+          >
+            <span
+              class="label-text"
+              id="batch-es-label"
+              style="
+                font-size: 0.8rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+              "
+              >+ Add Pair (ES)</span
+            >
+            <input
+              type="file"
+              id="batch-es"
+              accept=".epub"
+              onchange="document.getElementById('batch-es-label').innerText = this.files[0] ? this.files[0].name : '+ Add Pair (ES)'"
+            />
+          </div>
         </div>
-      </form>
+        <button
+          type="button"
+          onclick="addToBatch()"
+          style="
+            width: 100%;
+            padding: 0.5rem;
+            margin-bottom: 1rem;
+            background: #eef2ff;
+            border: 1px dashed var(--primary);
+            color: var(--primary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+          "
+        >
+          Add to Queue
+        </button>
+
+        <div class="batch-list" id="batchList">
+          <div
+            style="text-align: center; color: var(--text-sub); margin-top: 2rem"
+          >
+            Queue is empty
+          </div>
+        </div>
+
+        <div class="output-dir-container">
+          <input
+            type="text"
+            id="outputDir"
+            class="output-dir-input"
+            placeholder="Output Directory (Optional)"
+          />
+          <button type="button" class="browse-btn" onclick="browseFolder()">
+            Browse...
+          </button>
+        </div>
+
+        <button
+          class="action-btn"
+          id="batchProcessBtn"
+          onclick="processBatch()"
+        >
+          Process Batch
+        </button>
+
+        <div
+          id="batchControls"
+          style="display: none; gap: 0.5rem; margin-top: 1rem"
+        >
+          <button
+            type="button"
+            class="stop-btn"
+            style="background: #f59e0b; margin-bottom: 0"
+            onclick="skipJob()"
+          >
+            Skip Current
+          </button>
+          <button
+            type="button"
+            class="stop-btn"
+            style="margin-bottom: 0"
+            onclick="stopBatch()"
+          >
+            Stop Batch
+          </button>
+        </div>
+
+        <div class="error-message" id="batchErrorMessage"></div>
+        <div class="status-text" id="batchStatusText"></div>
+
+        <button class="flip-btn" onclick="toggleFlip()">
+          Switch to Single Mode ↻
+        </button>
+      </div>
     </div>
 
     <script>
+      let batchQueue = [];
+
+      function toggleFlip() {
+        document.getElementById("cardWrapper").classList.toggle("flipped");
+      }
+
+      async function browseFolder() {
+        try {
+          const res = await fetch("/select-directory");
+          const data = await res.json();
+          if (data.path) {
+            document.getElementById("outputDir").value = data.path;
+          }
+        } catch (e) {
+          console.error("Browse failed", e);
+        }
+      }
       function updateFilename(input, targetId) {
         const fileName = input.files[0]
           ? input.files[0].name
@@ -249,118 +523,310 @@
         document.getElementById(targetId).innerText = fileName;
       }
 
+      // --- Single Mode Logic ---
       document
         .getElementById("uploadForm")
         .addEventListener("submit", async function (e) {
           e.preventDefault();
+          startJob(
+            new FormData(this),
+            "generateBtn",
+            "stopBtn",
+            "progressWrapper",
+            "progressBar",
+            "statusText",
+            "errorMessage"
+          );
+        });
 
-          const btn = document.getElementById("generateBtn");
-          const stopBtn = document.getElementById("stopBtn");
-          const progressWrapper = document.getElementById("progressWrapper");
-          const progressBar = document.getElementById("progressBar");
-          const statusText = document.getElementById("statusText");
-          const errorMessage = document.getElementById("errorMessage");
+      async function startJob(
+        formData,
+        btnId,
+        stopBtnId,
+        progWrapId,
+        progBarId,
+        statusId,
+        errorId
+      ) {
+        const btn = document.getElementById(btnId);
+        const stopBtn = document.getElementById(stopBtnId);
+        const progressWrapper = document.getElementById(progWrapId);
+        const progressBar = document.getElementById(progBarId);
+        const statusText = document.getElementById(statusId);
+        const errorMessage = document.getElementById(errorId);
 
-          // Reset UI
-          errorMessage.style.display = "none";
-          btn.disabled = true;
-          stopBtn.style.display = "block";
-          stopBtn.disabled = false;
-          stopBtn.innerText = "Stop Generation";
-          progressWrapper.style.display = "block";
-          progressBar.style.width = "0%";
-          statusText.innerText = "Uploading files...";
+        // Reset UI
+        errorMessage.style.display = "none";
+        btn.disabled = true;
+        stopBtn.style.display = "block";
+        stopBtn.disabled = false;
+        stopBtn.innerText = "Stop Generation";
+        progressWrapper.style.display = "block";
+        progressBar.style.width = "0%";
+        statusText.innerText = "Uploading files...";
 
-          const formData = new FormData(this);
+        try {
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) throw new Error("Upload failed");
+
+          const data = await response.json();
+          const jobId = data.job_id;
+
+          stopBtn.onclick = async function () {
+            try {
+              await fetch(`/cancel/${jobId}`, { method: "POST" });
+              stopBtn.disabled = true;
+              stopBtn.innerText = "Stopping...";
+            } catch (e) {
+              console.error("Stop failed", e);
+            }
+          };
+
+          await pollStatus(
+            jobId,
+            progressBar,
+            statusText,
+            btn,
+            stopBtn,
+            function () {
+              // On complete callback (for single mode default behavior)
+              window.location.href = `/download/${jobId}`;
+              btn.disabled = false;
+              statusText.innerText = "Generation Complete!";
+            }
+          );
+        } catch (err) {
+          errorMessage.innerText = "Error: " + err.message;
+          errorMessage.style.display = "block";
+          btn.disabled = false;
+        }
+      }
+
+      function pollStatus(
+        jobId,
+        progressBar,
+        statusText,
+        btn,
+        stopBtn,
+        onComplete
+      ) {
+        return new Promise((resolve, reject) => {
+          const interval = setInterval(async () => {
+            try {
+              const res = await fetch(`/progress/${jobId}`);
+              if (!res.ok) throw new Error("Status check failed");
+              const job = await res.json();
+
+              if (job.status === "processing" || job.status === "queued") {
+                progressBar.style.width = job.progress + "%";
+                statusText.innerText = job.message;
+              } else if (job.status === "completed") {
+                clearInterval(interval);
+                progressBar.style.width = "100%";
+                statusText.innerText = "Done!"; // Message from server might include save path
+                if (job.message) statusText.innerText = job.message;
+                setTimeout(() => {
+                  onComplete();
+                  resolve();
+                }, 500);
+              } else if (job.status === "error") {
+                clearInterval(interval);
+                throw new Error(job.message);
+              } else if (job.status === "cancelled") {
+                clearInterval(interval);
+                statusText.innerText = "Cancelled.";
+                progressBar.style.width = "0%";
+                btn.disabled = false;
+                stopBtn.style.display = "none";
+                resolve();
+              }
+            } catch (err) {
+              clearInterval(interval);
+              // Propagate error to caller
+              const errorEl = document.getElementById(
+                btn.id === "generateBtn" ? "errorMessage" : "batchErrorMessage"
+              );
+              if (errorEl) {
+                errorEl.innerText = err.message;
+                errorEl.style.display = "block";
+              }
+              btn.disabled = false;
+              reject(err);
+            }
+          }, 1000);
+        });
+      }
+
+      // --- Batch Mode Logic ---
+      function addToBatch() {
+        const enInput = document.getElementById("batch-en");
+        const esInput = document.getElementById("batch-es");
+
+        if (enInput.files.length === 0 || esInput.files.length === 0) {
+          alert("Please select both English and Spanish files.");
+          return;
+        }
+
+        const item = {
+          id: Date.now(),
+          enFile: enInput.files[0],
+          esFile: esInput.files[0],
+        };
+
+        batchQueue.push(item);
+        renderBatchList();
+
+        // Reset inputs
+        enInput.value = "";
+        esInput.value = "";
+        document.getElementById("batch-en-label").innerText = "+ Add Pair (EN)";
+        document.getElementById("batch-es-label").innerText = "+ Add Pair (ES)";
+      }
+
+      function removeFromBatch(id) {
+        batchQueue = batchQueue.filter((i) => i.id !== id);
+        renderBatchList();
+      }
+
+      function renderBatchList() {
+        const list = document.getElementById("batchList");
+        list.innerHTML = "";
+        if (batchQueue.length === 0) {
+          list.innerHTML =
+            '<div style="text-align: center; color: var(--text-sub); margin-top: 2rem;">Queue is empty</div>';
+          return;
+        }
+
+        batchQueue.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "batch-item";
+          div.innerHTML = `
+                <div style="display:flex; flex-direction:column; width:80%;">
+                    <strong>🇬🇧 ${item.enFile.name}</strong>
+                    <strong>🇪🇸 ${item.esFile.name}</strong>
+                </div>
+                <div class="remove-item" onclick="removeFromBatch(${item.id})">✕</div>
+            `;
+          list.appendChild(div);
+        });
+      }
+
+      let isBatchStopped = false;
+      let currentBatchJobId = null;
+
+      async function stopBatch() {
+        isBatchStopped = true;
+        document.getElementById("batchStatusText").innerText =
+          "Stopping batch after current item...";
+        if (currentBatchJobId) {
+          try {
+            await fetch(`/cancel/${currentBatchJobId}`, { method: "POST" });
+          } catch (e) {}
+        }
+      }
+
+      async function skipJob() {
+        if (currentBatchJobId) {
+          try {
+            await fetch(`/cancel/${currentBatchJobId}`, { method: "POST" });
+          } catch (e) {}
+        }
+      }
+
+      async function processBatch() {
+        if (batchQueue.length === 0) return;
+
+        const btn = document.getElementById("batchProcessBtn");
+        const controls = document.getElementById("batchControls");
+        const statusText = document.getElementById("batchStatusText");
+        const outputDir = document.getElementById("outputDir").value;
+        const errorEl = document.getElementById("batchErrorMessage");
+
+        btn.style.display = "none";
+        controls.style.display = "flex";
+        errorEl.style.display = "none";
+        isBatchStopped = false;
+
+        let successCount = 0;
+
+        for (let i = 0; i < batchQueue.length; i++) {
+          if (isBatchStopped) {
+            statusText.innerText = `Batch stopped. Processed ${successCount}/${batchQueue.length}`;
+            break;
+          }
+
+          const item = batchQueue[i];
+          statusText.innerText = `Processing ${i + 1}/${batchQueue.length}: ${
+            item.enFile.name
+          }`;
+
+          const formData = new FormData();
+          formData.append("en_file", item.enFile);
+          formData.append("es_file", item.esFile);
+          if (outputDir) formData.append("output_dir", outputDir);
 
           try {
-            // 1. Upload
             const response = await fetch("/upload", {
               method: "POST",
               body: formData,
             });
-
-            if (!response.ok) {
-              throw new Error("Upload failed");
-            }
-
+            if (!response.ok) throw new Error("Upload failed");
             const data = await response.json();
-            const jobId = data.job_id;
 
-            // 2. Poll for Status
-            // 2. Poll for Status
-            pollStatus(jobId);
+            currentBatchJobId = data.job_id;
 
-            // Setup Stop Button
-            stopBtn.onclick = async function () {
-              try {
-                await fetch(`/cancel/${jobId}`, { method: "POST" });
-                stopBtn.disabled = true;
-                stopBtn.innerText = "Stopping...";
-              } catch (e) {
-                console.error("Stop failed", e);
-              }
-            };
+            // Poll using a simplified approach
+            await new Promise((resolve, reject) => {
+              const interval = setInterval(async () => {
+                try {
+                  const res = await fetch(`/progress/${data.job_id}`);
+                  const job = await res.json();
+
+                  if (job.status === "completed") {
+                    clearInterval(interval);
+                    successCount++;
+                    resolve();
+                  } else if (job.status === "cancelled") {
+                    clearInterval(interval);
+                    // If batch stopped, we break loop outside
+                    // If just skipped, we resolve but don't increment success
+                    resolve();
+                  } else if (job.status === "error") {
+                    clearInterval(interval);
+                    reject(new Error(job.message));
+                  } else {
+                    statusText.innerText = `[${i + 1}/${batchQueue.length}] ${
+                      job.message
+                    }`;
+                  }
+                } catch (e) {
+                  clearInterval(interval);
+                  reject(e);
+                }
+              }, 1000);
+            });
           } catch (err) {
-            showError("Error: " + err.message);
-            btn.disabled = false;
-          }
-        });
-
-      async function pollStatus(jobId) {
-        const progressBar = document.getElementById("progressBar");
-        const statusText = document.getElementById("statusText");
-        const btn = document.getElementById("generateBtn");
-        const stopBtn = document.getElementById("stopBtn");
-
-        const interval = setInterval(async () => {
-          try {
-            const res = await fetch(`/progress/${jobId}`);
-            if (!res.ok) throw new Error("Status check failed");
-
-            const job = await res.json();
-
-            if (job.status === "processing" || job.status === "queued") {
-              progressBar.style.width = job.progress + "%";
-              statusText.innerText = job.message;
-            } else if (job.status === "completed") {
-              clearInterval(interval);
-              progressBar.style.width = "100%";
-              statusText.innerText = "Done! Downloading...";
-
-              // Slight delay for UX
-              setTimeout(() => {
-                window.location.href = `/download/${jobId}`;
-                btn.disabled = false;
-                statusText.innerText = "Generation Complete!";
-              }, 500);
-            } else if (job.status === "error") {
-              clearInterval(interval);
-              showError("Processing Failed: " + job.message);
-              btn.disabled = false;
-              stopBtn.style.display = "none";
-            } else if (job.status === "cancelled") {
-              clearInterval(interval);
-              statusText.innerText = "Cancelled.";
-              progressBar.style.width = "0%";
-              btn.disabled = false;
-              stopBtn.style.display = "none";
-              // Create a visual indicator or just reset
-            }
-          } catch (err) {
-            // Don't stop polling immediately on one network blip, but here we keep it simple
             console.error(err);
-            // clearInterval(interval);
-            // showError("Network Error polling status");
-            // btn.disabled = false;
+            errorEl.innerText += `\nFailed: ${item.enFile.name} - ${err.message}`;
+            errorEl.style.display = "block";
           }
-        }, 1000);
-      }
 
-      function showError(msg) {
-        const el = document.getElementById("errorMessage");
-        el.innerText = msg;
-        el.style.display = "block";
+          currentBatchJobId = null;
+        }
+
+        if (!isBatchStopped) {
+          statusText.innerText = `Batch Complete! Processed ${successCount}/${batchQueue.length}`;
+          if (successCount === batchQueue.length) {
+            batchQueue = [];
+            renderBatchList();
+          }
+        }
+
+        btn.style.display = "block";
+        controls.style.display = "none";
       }
     </script>
   </body>

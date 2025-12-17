@@ -4,6 +4,7 @@ import shutil
 import uuid
 import threading
 import time
+import subprocess
 from flask import Flask, render_template, request, send_file, flash, redirect, url_for, jsonify
 from werkzeug.utils import secure_filename # Added this import
 from align_book import create_bilingual_epub
@@ -51,7 +52,7 @@ def find_oebps(root_dir):
                 return root
     return root_dir # Fallback
 
-def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
+def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_dir=None):
     try:
         active_jobs[job_id]['status'] = 'processing'
         active_jobs[job_id]['message'] = 'Unzipping files...'
@@ -130,9 +131,19 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
         else:
              final_name = 'bilingual_aligned.epub'
 
+        # If output_dir is specified and valid, copy the file there
+        saved_location_msg = ""
+        if output_dir and os.path.isdir(output_dir):
+            try:
+                dest_path = os.path.join(output_dir, final_name)
+                shutil.copy2(output_path, dest_path)
+                saved_location_msg = f"Saved to {final_name}"
+            except Exception as copy_err:
+                print(f"Failed to copy to output_dir: {copy_err}")
+
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
-        active_jobs[job_id]['message'] = 'Complete!'
+        active_jobs[job_id]['message'] = f'Complete! {saved_location_msg}'.strip()
         active_jobs[job_id]['file'] = output_path
         active_jobs[job_id]['download_name'] = final_name
         
@@ -159,6 +170,7 @@ def upload_files():
     
     en_file = request.files['en_file']
     es_file = request.files['es_file']
+    output_dir = request.form.get('output_dir')
     
     # Create a unique session ID for this job
     job_id = str(uuid.uuid4())
@@ -183,7 +195,7 @@ def upload_files():
     }
     
     # Start thread
-    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir, use_local_ai))
+    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir, use_local_ai, output_dir))
     thread.start()
     
     return jsonify({'job_id': job_id})
@@ -203,6 +215,18 @@ def download_file(job_id):
     
     download_name = job.get('download_name', 'bilingual_aligned.epub')
     return send_file(job['file'], as_attachment=True, download_name=download_name)
+
+@app.route('/select-directory', methods=['GET'])
+def select_directory():
+    try:
+        # Use AppleScript to pick folder (macOS only)
+        # This will open a dialog on the SERVER (which is the user's machine)
+        cmd = "osascript -e 'POSIX path of (choose folder with prompt \"Select Output Directory\")'"
+        result = subprocess.check_output(cmd, shell=True).decode('utf-8').strip()
+        return jsonify({'path': result})
+    except Exception as e:
+        # If user cancels or error
+        return jsonify({'error': str(e)}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)

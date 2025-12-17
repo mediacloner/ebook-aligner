@@ -4,12 +4,23 @@ import os
 import re
 import html
 import difflib
+import concurrent.futures
 from html.parser import HTMLParser
 import xml.etree.ElementTree as ET
 import zipfile
 import shutil
 import uuid
 from datetime import datetime
+from difflib import SequenceMatcher
+from collections import Counter
+try:
+    from neural_aligner import NeuralAligner
+except ImportError:
+    NeuralAligner = None
+
+CACHED_ALIGNER = None
+
+
 
 # ----------------------------------------------------------------------------- 
 # Configuration
@@ -253,26 +264,34 @@ def clean_text(text):
     return re.sub(r'\s+', ' ', text).strip()
 
 def split_sentences(text):
-    """Splits text into sentences using simple heuristics to avoid granularity mismatch."""
-    # Robust Strategy: Split on sentence terminators but Keep them using capturing parentheses.
-    # Pattern: Captures the delimiter (Punctuation + optional closing quotes + whitespace)
-    # This avoids zero-width assertion issues.
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
-    # Wait, keeping lookahead in split ensures we only split valid ones, but lookahead is NOT captured.
-    # If we use capturing group around the delimiter, re.split returns [sent1, delim1, sent2, delim2...]
+    """
+    Splits text into sentences using a regex that handles common punctuation, 
+    quotes, and now footnotes (e.g. "end.1 Start" or "end.[2] Start").
+    """
+    if not text:
+        return []
+    
+    # Pattern explanation:
+    # 1. [.!?]+                 : End punctuation
+    # 2. (?:[”"’\'\)\]»]*)      : Optional closing quotes/brackets
+    # 3. (?:\[?\d+\]?)?         : Optional footnote (e.g. 1, [1]) - REFINED
+    # 4. \s+                    : Whitespace
+    # 5. (?=[A-Z¿¡"\'\-])       : Lookahead for uppercase or start char
+    
+    # We need to be careful with the footnote part. 
+    # It handles: "word.1 Word" or "word.[1] Word"
+    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)(?:\[?\d+\]?)?\s+(?=[A-Z¿¡"\'\-]))'
     
     parts = re.split(pattern, text)
-    
-    # Reconstruct
     sentences = []
     current_sent = ""
-    for i, p in enumerate(parts):
+    
+    for i, part in enumerate(parts):
+        # Even indices are text, Odd indices are the split delimiters (captured group)
         if i % 2 == 0:
-            # Content
-            current_sent += p
+            current_sent += part
         else:
-            # Delimiter
-            current_sent += p
+            current_sent += part
             sentences.append(current_sent.strip())
             current_sent = ""
             
@@ -787,7 +806,6 @@ def align_chunks(en_chunks, es_chunks):
     def align_section(en_sec, es_sec, depth=0):
         if not en_sec and not es_sec: return []
         
-        # Base case: if drill-down depth > 1, fall back to linear pairing
         if depth > 1:
              local_res = []
              max_len = max(len(en_sec), len(es_sec))
@@ -801,9 +819,7 @@ def align_chunks(en_chunks, es_chunks):
                     local_res.append({'tag': use_tag, 'classes': use_classes, 'en': t_en, 'es': t_es})
              return local_res
 
-        # Compute Shared Anchors (Intersection Strategy)
-        # Compute Shared Anchors (Intersection Strategy)
-        # Only use proper nouns that appear in BOTH texts to avoid translation artifacts (Gods vs Dios)
+        # Compute Shared Anchors
         en_tokens = set()
         en_nums = set()
         for c in en_sec: 
@@ -914,38 +930,53 @@ def align_chunks(en_chunks, es_chunks):
     # Process each section between headers
     limit = min(len(en_anchors), len(es_anchors))
     
-    for k in range(limit - 1):
-        en_start = en_anchors[k] + 1
-        en_end = en_anchors[k+1]
-        
-        es_start = es_anchors[k] + 1
-        es_end = es_anchors[k+1]
-        
-        if k > 0:
-            h_en = en_chunks[en_anchors[k]]
-            h_es = es_chunks[es_anchors[k]]
-            aligned.append({'tag': h_en['tag'], 'classes': h_en.get('classes', []), 'en': h_en['text'], 'es': h_es['text']})
-            
-        # 2. Process content chunks in this section using Length Profiling
-        section_en = en_chunks[en_start:en_end]
-        section_es = es_chunks[es_start:es_end]
-        
-        aligned_sec = align_section(section_en, section_es)
-        aligned.extend(aligned_sec)
-
-
-    # Post-processing: Merge Orphaned Attributions
-    # Detects split English attributions (e.g. "Quote" + "I said") that map to a single Spanish block
-    # Logic: If item is {en: "small attribution", es: ""} AND prev item is {en: "...", es: "..."}
-    # Then merge EN into prev EN and delete current.
-    
     final_aligned = []
-    for item in aligned:
-        if not final_aligned:
-            final_aligned.append(item)
+    for i in range(limit - 1):
+        en_start = en_anchors[i] + 1
+        en_end = en_anchors[i+1]
+        es_start = es_anchors[i] + 1
+        es_end = es_anchors[i+1]
+        
+        en_section = en_chunks[en_start:en_end]
+        es_section = es_chunks[es_start:es_end]
+        
+        section_aligned = align_section(en_section, es_section)
+        final_aligned.extend(section_aligned)
+
+    # Handle any remaining chunks after the last header (or if no headers)
+    if len(en_anchors) > limit:
+        en_section = en_chunks[en_anchors[limit-1]+1 : en_anchors[limit]]
+        section_aligned = align_section(en_section, [])
+        final_aligned.extend(section_aligned)
+    
+    if len(es_anchors) > limit:
+        es_section = es_chunks[es_anchors[limit-1]+1 : es_anchors[limit]]
+        section_aligned = align_section([], es_section)
+        final_aligned.extend(section_aligned)
+
+    # -------------------------------------------------------------------------
+    # Post-processing 1: Merge short English attribution lines into previous
+    # This handles cases like:
+    # EN: "Hello," she said.
+    # ES: "Hola," dijo.
+    #
+    # EN: "How are you?"
+    # ES: "¿Cómo estás?"
+    #
+    # EN: she asked.
+    # ES:
+    #
+    # We want to merge "she asked." into the previous English chunk.
+    # -------------------------------------------------------------------------
+    
+    # We need a new list to build the result
+    pass_1_aligned = []
+    for item in final_aligned:
+        if not pass_1_aligned:
+            pass_1_aligned.append(item)
             continue
             
-        prev = final_aligned[-1]
+        prev = pass_1_aligned[-1]
         
         # Candidate for merge:
         # 1. Current has EN but no ES
@@ -976,14 +1007,11 @@ def align_chunks(en_chunks, es_chunks):
         if do_merge:
             # Merge
             prev['en'] += " " + item['en']
-            # Update final_aligned[-1] in place
+            # Update pass_1_aligned[-1] in place
         else:
-            final_aligned.append(item)
+            pass_1_aligned.append(item)
 
-
-
-
-
+    final_aligned = pass_1_aligned
     
     # -------------------------------------------------------------------------
     # Post-processing 2: Merge Split Spanish Paragraphs (1-to-N)
@@ -1693,7 +1721,10 @@ def generate_chapter_html(aligned_pairs, title=""):
         if tag.startswith('h') or tag == 'figcaption':
             html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
         else:
-            html_content += f"<p{en_attrs}>{en_text}</p>\n"
+            # Use CSS line-clamping for English text
+            # Append a special class for clamping
+            en_attrs = en_attrs.rstrip('"') + " clamp-text" + '"' if 'class="' in en_attrs else f' class="clamp-text"'
+            html_content += f"<p{en_attrs} title=\"{html.escape(en_text)}\">{en_text}</p>\n"
         
         # Es
         if es_text:
@@ -1773,6 +1804,132 @@ def unzip_epub(epub_path, extract_to):
     #     zip_ref.extractall(extract_to)
     # return extract_to
 
+def process_chapter_pair(args):
+    """
+    Worker function to process a single chapter pair.
+    Args structured as tuple to easier map with executor:
+    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config)
+    """
+    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config = args
+    
+    # Standard processing without dictionary semantic guard
+    try:
+        # English: collect potentially split files (RELATIVE TO OPF DIR!)
+        en_files = collect_split_files(en_rel, en_opf_dir)
+        en_chunks = []
+        for fpath in en_files:
+             try:
+                 chunks = parse_file(fpath, EnglishParser, config)
+                 en_chunks.extend(chunks)
+             except Exception as e:
+                 print(f"Error parsing EN file {fpath}: {e}")
+
+        # Spanish: collect potentially split files (RELATIVE TO OPF DIR!)
+        es_files = collect_split_files(es_rel, es_opf_dir)
+        es_chunks = []
+        for fpath in es_files:
+             try:
+                 chunks = parse_file(fpath, SpanishParser, config)
+                 es_chunks.extend(chunks)
+             except Exception as e:
+                 print(f"Error parsing ES file {fpath}: {e}")
+        
+        # print(f"Processing Pair {idx+1}: {en_rel} <-> {es_rel}")
+        
+        # Align
+        if config.get('use_neural') and NeuralAligner:
+            try:
+                global CACHED_ALIGNER
+                if CACHED_ALIGNER is None:
+                    print(f"Process {os.getpid()}: Loading Neural Model...")
+                    CACHED_ALIGNER = NeuralAligner()
+                aligner = CACHED_ALIGNER
+                
+                # Helper to explode paragraphs into sentences
+                def flatten_to_sentences(chunks):
+                    flat = []
+                    for c in chunks:
+                        if c['type'] == 'header' or c['tag'] == 'figcaption':
+                            flat.append(c) # Keep headers/captions as is
+                        else:
+                            # Split paragraph text
+                            sents = split_sentences(c['text'])
+                            # Debug log for large splits
+                            # if len(sents) > 5:
+                            #    print(f"Split paragraph into {len(sents)} sentences.")
+                            
+                            for s in sents:
+                                if s.strip():
+                                    flat.append({
+                                        'type': c['type'],
+                                        'tag': c['tag'],
+                                        'classes': c.get('classes', []),
+                                        'text': s
+                                    })
+                    return flat
+
+                # Flatten both sides
+                en_sents = flatten_to_sentences(en_chunks)
+                es_sents = flatten_to_sentences(es_chunks)
+                
+                print(f"Aligning {len(en_sents)} EN vs {len(es_sents)} ES sentences...")
+                aligned_groups = aligner.align_dtw(en_sents, es_sents)
+                
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"Critical Neural Alignment Error in pair {idx}: {e}")
+                # Fallback to heuristic
+                print("Falling back to heuristic alignment for this chapter.")
+                aligned = align_chunks(en_chunks, es_chunks)
+            else:
+                # Convert neural groups to the format expected by generate_chapter_html
+                aligned = []
+                for group in aligned_groups:
+                    ens = group['en_chunks']
+                    ess = group['es_chunks']
+                    
+                    merged_en_text = ""
+                    merged_es_text = ""
+                    tag = 'p'
+                    classes = []
+                    
+                    if ens:
+                        merged_en_text = " ".join([c.get('text', '') for c in ens])
+                        tag = ens[0].get('tag', 'p')
+                        classes = ens[0].get('classes', [])
+                    
+                    if ess:
+                        merged_es_text = " ".join([c.get('text', '') for c in ess])
+                        if not ens:
+                            tag = ess[0].get('tag', 'p')
+                            classes = ess[0].get('classes', [])
+                            
+                    aligned.append({
+                        'tag': tag,
+                        'classes': classes,
+                        'en': merged_en_text,
+                        'es': merged_es_text
+                    })
+
+                    
+        else:
+            aligned = align_chunks(en_chunks, es_chunks)
+        
+        # Generate HTML
+        out_filename = f"chapter_{idx:02d}.xhtml"
+        chapter_content = generate_chapter_html(aligned, title=f"Chapter {idx}")
+        
+        out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
+        with open(out_path, 'w', encoding='utf-8') as f:
+            f.write(chapter_content)
+            
+        return (idx, out_filename, en_rel)
+        
+    except Exception as e:
+        print(f"Error processing {en_rel}: {e}")
+        return (idx, None, str(e))
+
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None):
     """Orchestrates the creation of the full bilingual EPUB."""
     
@@ -1839,8 +1996,9 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
                 print(f"Warning: Cover extracted from OPF ({c_href}) not found at {src_full}")
 
 
-    # 1b. Auto-Detect Profile if not provided
-    if config is None:
+    # 1b. Auto-Detect Profile if not provided or partial
+    # We might pass {'use_neural': True}, so check for content keys
+    if config is None or 'en' not in config:
         detected_profile = 'generic'
         # Check first content file (English)
         if pairs:
@@ -1858,7 +2016,17 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
                          break
                          
         print(f"selected profile: {detected_profile}")
-        config = PROFILES.get(detected_profile, PROFILES['generic'])
+        
+        # Load profile settings
+        profile_config = PROFILES.get(detected_profile, PROFILES['generic'])
+        
+        # Merge if we had some partial config (e.g. flags)
+        if config:
+            profile_config.update(config)
+            
+        config = profile_config
+        
+
 
     # 2. Setup Staging Directory
     staging_dir = 'bilingual_epub_staging'
@@ -1898,6 +2066,13 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     /* Optional: tighten bottom of English header too if needed */
     h1:has(+ h1.es-trans), h2:has(+ h2.es-trans), h3:has(+ h3.es-trans), h4:has(+ h4.es-trans) { margin-bottom: 0.1em; } 
     figcaption { font-weight: bold; margin-top: 10px; }
+    .clamp-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     """
     with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:
         f.write(css_content)
@@ -1908,48 +2083,58 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
     en_opf_dir = os.path.dirname(en_opf_path) if en_opf_path else en_base
     es_opf_dir = os.path.dirname(find_opf_file(es_base)) if find_opf_file(es_base) else es_base
 
+    args_list = []
+    print(f"Preparing {len(pairs)} tasks for parallel processing (Multithread CPU)...")
+    
+    # Prepare arguments for each task
     for idx, (en_rel, es_rel) in enumerate(pairs):
-        if progress_callback:
-            progress_callback(idx, len(pairs), f"Processing {en_rel}")
+        # We pass everything needed to process one pair
+        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config)
+        args_list.append(args)
 
-        # English: collect potentially split files (RELATIVE TO OPF DIR!)
-        en_files = collect_split_files(en_rel, en_opf_dir)
-        en_chunks = []
-        for fpath in en_files:
-             try:
-                 chunks = parse_file(fpath, EnglishParser, config)
-                 en_chunks.extend(chunks)
-             except Exception as e:
-                 print(f"Error parsing EN file {fpath}: {e}")
-
-        # Spanish: collect potentially split files (RELATIVE TO OPF DIR!)
-        es_files = collect_split_files(es_rel, es_opf_dir)
-        es_chunks = []
-        for fpath in es_files:
-             try:
-                 chunks = parse_file(fpath, SpanishParser, config)
-                 es_chunks.extend(chunks)
-             except Exception as e:
-                 print(f"Error parsing ES file {fpath}: {e}")
+    # Dictionary to collect results: idx -> filename
+    # We need to maintain order of spine_refs
+    results_map = {}
+    
+    # Use ProcessPoolExecutor for CPU-bound parallelism
+    # max_workers=None defaults to num_cpus
+    # We use 'spawn' start method context implicitly on Mac/Windows, but we handled global DICT_LOADER in worker
+    
+    # If using neural alignment (heavy memory usage per process), limit workers
+    max_workers = 1 if config.get('use_neural') else None
+    
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_idx = {executor.submit(process_chapter_pair, args): args[0] for args in args_list}
         
-        print(f"Processing Pair {idx+1}/{len(pairs)}: {en_rel} <-> {es_rel}")
+        count_done = 0
+        total = len(args_list)
         
-        try:
-            # Align (Function handles headers internally)
-            aligned = align_chunks(en_chunks, es_chunks)
-            
-            # Generate HTML
-            out_filename = f"chapter_{idx:02d}.xhtml"
-            # Use English parser results or similar for title if needed, here just generic
-            chapter_content = generate_chapter_html(aligned, title=f"Chapter {idx}")
-            
-            with open(os.path.join(staging_dir, 'OEBPS', out_filename), 'w', encoding='utf-8') as f:
-                f.write(chapter_content)
+        for future in concurrent.futures.as_completed(future_to_idx):
+            f_idx = future_to_idx[future]
+            try:
+                res_idx, res_filename, res_name = future.result()
+                if res_filename:
+                    results_map[res_idx] = res_filename
+                else:
+                    print(f"Task {f_idx} returned no filename (Error: {res_name})")
+            except Exception as exc:
+                print(f"Task {f_idx} generated an exception: {exc}")
                 
-            spine_refs.append(out_filename)
-        except Exception as e:
-            print(f"Error processing {en_rel}: {e}")
-            raise e
+            count_done += 1
+            if progress_callback:
+                progress_callback(count_done, total, f"Processed {count_done}/{total} chapters")
+            else:
+                 # Print progress every 10%
+                 if total > 10 and count_done % (total // 10) == 0:
+                      print(f"Progress: {count_done}/{total}...")
+
+    # Reconstruct spine_refs in correct order
+    for idx in range(len(pairs)):
+        if idx in results_map:
+            spine_refs.append(results_map[idx])
+        else:
+            print(f"Warning: Chapter {idx} failed or missing from results.")
 
     # 7. Create content.opf
     manifest_items = ""
@@ -2085,11 +2270,17 @@ if __name__ == "__main__":
     parser.add_argument("--en", required=False, default='temp_bilingual/en_full/OEBPS', help="Path to English OEBPS directory")
     parser.add_argument("--es", required=False, default='temp_bilingual/es_full/OEBPS', help="Path to Spanish OEBPS directory")
     parser.add_argument("--output", required=False, default='bilingual_book.epub', help="Output EPUB filename")
+    parser.add_argument("--local-ai", action='store_true', help="Use local neural alignment (LaBSE)")
     
     args = parser.parse_args()
     
     # In a real generalized version, one might load config from a JSON file here.
     # config = load_config(args.config) 
-    config = BOOK_CONFIG
+    # Use generic as base (detect_profile will override usually, but we need a starting dict)
+    config = {} 
+    
+    if args.local_ai:
+        config['use_neural'] = True
+        print("Using Local Neural Alignment (LaBSE)...")
     
     create_bilingual_epub(args.en, args.es, args.output, config)

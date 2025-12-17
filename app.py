@@ -46,7 +46,7 @@ def find_oebps(root_dir):
                 return root
     return root_dir # Fallback
 
-def process_job_worker(job_id, en_path, es_path, job_dir):
+def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai):
     try:
         active_jobs[job_id]['status'] = 'processing'
         active_jobs[job_id]['message'] = 'Unzipping files...'
@@ -71,7 +71,11 @@ def process_job_worker(job_id, en_path, es_path, job_dir):
             active_jobs[job_id]['message'] = msg
             
         # Run alignment
-        create_bilingual_epub(en_oebps, es_oebps, output_path, progress_callback=update_progress)
+        config = {}
+        if use_local_ai:
+            config['use_neural'] = True
+            
+        create_bilingual_epub(en_oebps, es_oebps, output_path, config=config, progress_callback=update_progress)
         
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100
@@ -105,6 +109,9 @@ def upload_files():
     en_file.save(en_path)
     es_file.save(es_path)
     
+    # Enforce Local AI (User Request)
+    use_local_ai = True
+    
     # Initialize job status
     active_jobs[job_id] = {
         'status': 'queued',
@@ -114,7 +121,7 @@ def upload_files():
     }
     
     # Start thread
-    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir))
+    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir, use_local_ai))
     thread.start()
     
     return jsonify({'job_id': job_id})

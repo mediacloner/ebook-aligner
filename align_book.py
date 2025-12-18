@@ -1793,8 +1793,9 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
     if css_files:
         for css in css_files:
             css_links += f'  <link rel="stylesheet" type="text/css" href="{css}"/>\n'
-    else:
-        css_links = '  <link rel="stylesheet" type="text/css" href="styles.css"/>\n'
+    
+    # Always include our custom styles last to override colors
+    css_links += '  <link rel="stylesheet" type="text/css" href="styles.css"/>\n'
 
     html_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -2213,15 +2214,20 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
 
 
-    # 1c. Extract and Copy CSS
+
+
+    # 2. Setup Staging Directory
+    # staging_dir passed as argument
+    if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
+    os.makedirs(os.path.join(staging_dir, 'META-INF'))
+    os.makedirs(os.path.join(staging_dir, 'OEBPS'))
+    
+    # 1c. Extract and Copy CSS (Moved after staging creation)
     css_files = []
-    # Find all CSS items in manifest
-    # We want to maintain original styling
     if opf_data and 'manifest' in opf_data:
         for item_id, item_data in opf_data['manifest'].items():
             if item_data['media-type'] == 'text/css':
                 href = item_data['href']
-                # Copy file
                 if en_opf_path:
                     opf_dir = os.path.dirname(en_opf_path)
                     import urllib.parse
@@ -2232,12 +2238,6 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                          shutil.copy2(src_full, os.path.join(staging_dir, 'OEBPS', fname))
                          css_files.append(fname)
                          print(f"Copied CSS: {fname}")
-
-    # 2. Setup Staging Directory
-    # staging_dir passed as argument
-    if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
-    os.makedirs(os.path.join(staging_dir, 'META-INF'))
-    os.makedirs(os.path.join(staging_dir, 'OEBPS'))
     
     # 3. Write Mimetype (must be first, no newline)
     with open(os.path.join(staging_dir, 'mimetype'), 'w', encoding='utf-8') as f:
@@ -2265,9 +2265,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    p.es-trans, div.es-trans, span.es-trans { color: #666 !important; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
     .no-bottom-margin { margin-bottom: 0 !important; }
-    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666; opacity: 0.8; }
+    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666 !important; opacity: 0.8; }
     /* Remove spacing between English header and Spanish header */
     h1 + h1.es-trans, h2 + h2.es-trans, h3 + h3.es-trans, h4 + h4.es-trans { margin-top: 0; padding-top: 0; }
     /* Optional: tighten bottom of English header too if needed */

@@ -476,6 +476,9 @@ class BaseParser(HTMLParser):
         if self.capture_text and self.current_chunk:
             self.current_chunk['text'] += data
 
+
+
+
 class EnglishParser(BaseParser):
     def __init__(self, config):
         super().__init__(config)
@@ -484,8 +487,23 @@ class EnglishParser(BaseParser):
 
     def handle_starttag(self, tag, attrs):
         attr_dict = dict(attrs)
+        attr_dict = dict(attrs)
         classes = attr_dict.get('class', '').split()
         
+        # Handle BR for English
+        if tag == 'br':
+            if self.current_chunk:
+                self.current_chunk['text'] += " "
+            self.finish_chunk()
+            self.current_chunk = {
+                'tag': 'p',
+                'classes': [],
+                'text': '',
+                'type': 'std'
+            }
+            self.capture_text = True
+            return
+
         header_tags = self.rules.get('header_tags', [])
         
         if tag in header_tags:
@@ -580,6 +598,20 @@ class SpanishParser(BaseParser):
             
         ignore_classes = self.rules.get('ignore_classes', [])
         if any(c in classes for c in ignore_classes):
+            return
+
+        # Handle BR for Spanish
+        if tag == 'br':
+            if self.current_chunk:
+                self.current_chunk['text'] += " "
+            self.finish_chunk()
+            self.current_chunk = {
+                'tag': 'p',
+                'classes': [],
+                'text': '',
+                'type': 'std'
+            }
+            self.capture_text = True
             return
 
         # Block-level tags that should initiate a chunk
@@ -1605,7 +1637,9 @@ def generate_html(aligned_pairs):
     html = """<html><head><style>
     body { font-family: serif; line-height: 1.5; max-width: 800px; margin: 0 auto; padding: 20px; }
     p, h1, h2, h3, div { margin-bottom: 10px; }
-    .es-trans { color: grey; margin-bottom: 20px; display: block; }
+    p, h1, h2, h3, div { margin-bottom: 10px; }
+    .es-trans { color: grey; margin-bottom: 1em; display: block; }
+    .no-bottom-margin { margin-bottom: 0 !important; }
     figcaption { font-weight: bold; margin-top: 10px; }
     </style></head><body>"""
     
@@ -1656,8 +1690,14 @@ def generate_chapter_html(aligned_pairs, title=""):
         cls_str = " ".join(tag_classes)
         en_attrs = f' class="{cls_str}"' if cls_str else ""
         
+        # Check for split continuation (end with asterism)
+        is_split_continuation = en_text.strip().endswith("⁂")
+        
         # For Spanish, we append 'es-trans' to inherited classes
         es_cls_list = tag_classes + ['es-trans']
+        if is_split_continuation:
+            es_cls_list.append('no-bottom-margin')
+            
         es_cls_str = " ".join(es_cls_list)
         es_attrs = f' class="{es_cls_str}"'
         
@@ -2032,7 +2072,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 0.5em; margin-top: 0; }
+    h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
+    p.es-trans, div.es-trans, span.es-trans { color: #666; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    .no-bottom-margin { margin-bottom: 0 !important; }
     h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666; opacity: 0.8; }
     /* Remove spacing between English header and Spanish header */
     h1 + h1.es-trans, h2 + h2.es-trans, h3 + h3.es-trans, h4 + h4.es-trans { margin-top: 0; padding-top: 0; }

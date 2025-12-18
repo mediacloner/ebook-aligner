@@ -338,6 +338,20 @@
             </div>
           </div>
 
+          <div class="output-dir-container" style="margin-top: 1.5rem">
+            <input
+              type="text"
+              name="output_dir"
+              id="outputDirSingle"
+              class="output-dir-input"
+              placeholder="Output Directory (Optional)"
+              oninput="syncOutputPaths(this.value)"
+            />
+            <button type="button" class="browse-btn" onclick="browseFolder()">
+              Browse...
+            </button>
+          </div>
+
           <button type="submit" class="action-btn" id="generateBtn">
             Generate Book
           </button>
@@ -450,9 +464,10 @@
         <div class="output-dir-container">
           <input
             type="text"
-            id="outputDir"
+            id="outputDirBatch"
             class="output-dir-input"
             placeholder="Output Directory (Optional)"
+            oninput="syncOutputPaths(this.value)"
           />
           <button type="button" class="browse-btn" onclick="browseFolder()">
             Browse...
@@ -501,6 +516,48 @@
     <script>
       let batchQueue = [];
 
+      // --- Cookie Helpers ---
+      function setCookie(name, value, days) {
+        let expires = "";
+        if (days) {
+          const date = new Date();
+          date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+          expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/";
+      }
+
+      function getCookie(name) {
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(";");
+        for (let i = 0; i < ca.length; i++) {
+          let c = ca[i];
+          while (c.charAt(0) === " ") c = c.substring(1, c.length);
+          if (c.indexOf(nameEQ) === 0)
+            return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+      }
+
+      // --- Sync Logic ---
+      function syncOutputPaths(value) {
+        const singleInput = document.getElementById("outputDirSingle");
+        const batchInput = document.getElementById("outputDirBatch");
+
+        if (singleInput.value !== value) singleInput.value = value;
+        if (batchInput.value !== value) batchInput.value = value;
+
+        setCookie("last_output_dir", value, 365);
+      }
+
+      // Initialize from cookie on load
+      document.addEventListener("DOMContentLoaded", () => {
+        const savedPath = getCookie("last_output_dir");
+        if (savedPath) {
+          syncOutputPaths(savedPath);
+        }
+      });
+
       function toggleFlip() {
         document.getElementById("cardWrapper").classList.toggle("flipped");
       }
@@ -510,7 +567,7 @@
           const res = await fetch("/select-directory");
           const data = await res.json();
           if (data.path) {
-            document.getElementById("outputDir").value = data.path;
+            syncOutputPaths(data.path);
           }
         } catch (e) {
           console.error("Browse failed", e);
@@ -593,9 +650,15 @@
             stopBtn,
             function () {
               // On complete callback (for single mode default behavior)
-              window.location.href = `/download/${jobId}`;
+              // Only download if NOT saved locally
+              if (job.message && job.message.indexOf("Saved to") !== -1) {
+                // Already saved locally
+                statusText.innerText = job.message;
+              } else {
+                window.location.href = `/download/${jobId}`;
+                statusText.innerText = "Generation Complete!";
+              }
               btn.disabled = false;
-              statusText.innerText = "Generation Complete!";
             }
           );
         } catch (err) {
@@ -629,7 +692,7 @@
                 statusText.innerText = "Done!"; // Message from server might include save path
                 if (job.message) statusText.innerText = job.message;
                 setTimeout(() => {
-                  onComplete();
+                  onComplete(job);
                   resolve();
                 }, 500);
               } else if (job.status === "error") {
@@ -742,7 +805,7 @@
         const btn = document.getElementById("batchProcessBtn");
         const controls = document.getElementById("batchControls");
         const statusText = document.getElementById("batchStatusText");
-        const outputDir = document.getElementById("outputDir").value;
+        const outputDir = document.getElementById("outputDirBatch").value;
         const errorEl = document.getElementById("batchErrorMessage");
 
         btn.style.display = "none";

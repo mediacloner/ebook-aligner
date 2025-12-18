@@ -458,21 +458,54 @@ def read_opf_data(opf_path):
 
 
 class BaseParser(HTMLParser):
-    def __init__(self, config):
+    def __init__(self, config, raw_source=""):
         super().__init__()
         self.config = config
         self.chunks = [] 
         self.current_chunk = None
         self.capture_text = False
+        self.raw_source = raw_source
+        self.line_offsets = []
+        if raw_source:
+             self._calculate_offsets()
+             
+    def _calculate_offsets(self):
+        offset = 0
+        for line in self.raw_source.splitlines(keepends=True):
+            self.line_offsets.append(offset)
+            offset += len(line)
+            
+    def get_offset(self, line, col):
+        if not self.line_offsets or line - 1 >= len(self.line_offsets):
+            return 0
+        return self.line_offsets[line - 1] + col
 
     def finish_chunk(self):
         if self.current_chunk:
             self.current_chunk['text'] = clean_text(self.current_chunk['text'])
+            
+            # Extract Raw HTML if valid
+            if self.raw_source and 'start_pos' in self.current_chunk and 'end_pos' in self.current_chunk:
+                s = self.current_chunk['start_pos']
+                e = self.current_chunk['end_pos']
+                # Try to capture the inner content
+                # The positions from getpos() are at the START of the tag. 
+                # Ideally we want the inner HTML, but capturing the whole element is easier then stripping outer tag.
+                # ACTUALLY: handle_starttag pos is at '<', handle_endtag pos is at '<'.
+                # So we need to find where the start tag ends to get inner HTML? 
+                # Or just store the full outer HTML and we decide how to render?
+                
+                # Let's try to grab the Inner HTML if possible.
+                # But typically regex/parsing re-construction is safer if we just grab outer and strip.
+                # However, for 'p', we might just want to grab the content.
+                
+                # Simple approach for now: grab EVERYTHING from End of Start Tag to Start of End Tag?
+                # We don't easily know length of start tag from handle_starttag without parsing attrs again.
+                # Let's grab the raw slice from (start_line, start_col) to (end_line, end_col).
+                pass
+
             if self.current_chunk['text'] or self.current_chunk['type'] == 'header':
-                # Keep headers even if empty-ish to preserve structure
-                if self.current_chunk['text'] or self.current_chunk['type'] == 'header':
-                    if self.current_chunk['text'] or self.current_chunk['type'] == 'header':
-                         self.chunks.append(self.current_chunk)
+                 self.chunks.append(self.current_chunk)
             self.current_chunk = None
             self.capture_text = False
 
@@ -484,8 +517,8 @@ class BaseParser(HTMLParser):
 
 
 class EnglishParser(BaseParser):
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, raw_source=""):
+        super().__init__(config, raw_source)
         self.in_caption = False
         self.rules = self.config['en']
 
@@ -541,7 +574,8 @@ class EnglishParser(BaseParser):
                 'tag': tag,
                 'classes': classes,
                 'text': '',
-                'type': chunk_type
+                'type': chunk_type,
+                'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
 
@@ -551,7 +585,8 @@ class EnglishParser(BaseParser):
                 'tag': tag,
                 'classes': classes,
                 'text': '',
-                'type': 'caption'
+                'type': 'caption',
+                'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
             self.in_caption = True
@@ -563,24 +598,65 @@ class EnglishParser(BaseParser):
                 'tag': tag,
                 'classes': classes,
                 'text': '',
-                'type': 'std'
+                'type': 'std',
+                'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
 
+
     def handle_endtag(self, tag):
+        # Capture raw html end pos
+        if self.current_chunk and self.capture_text:
+             # This is called at the start of the end tag </p>
+             # To capture raw inner html, we need the end of the previous data?
+             # Or we define that raw_html is everything accumulated?
+             
+             # BETTER STRATEGY: 
+             # We rely on capturing the raw span from the source string.
+             # start_offset was set in handle_starttag?
+             
+             # Calculate current offset
+             end_offset = self.get_offset(*self.getpos())
+             
+             if 'raw_start_offset' in self.current_chunk:
+                  # This slice includes the start tag but excludes the end tag (because getpos is at < of </p>)
+                  # BUT: We don't know the length of the start tag '<p class="foo">'
+                  # So we can't easily isolate just the inner text without parsing the start tag string.
+                  
+                  # ALTERNATIVE: Use the Accumulated Data + Re-tagging?
+                  # No, the user wants <i> and <small> and <span class="foo"> preserved.
+                  # Standard HTMLParser strips those unless we reconstruct them.
+                  
+                  # NEW APPROACH:
+                  # We extract the full content from start_offset to end_offset.
+                  # This includes the Open Tag '<p class="x">'.
+                  # Then we strip the open tag regex-style?
+                  
+                  full_slice = self.raw_source[self.current_chunk['raw_start_offset']:end_offset]
+                  
+                  # Remove the first tag (start tag)
+                  # Be careful with nested tags passed as data (rare in valid XHTML but possible)
+                  # A regex to match the first <[^>]+>
+                  match = re.match(r'<[^>]+>', full_slice)
+                  if match:
+                      inner_html = full_slice[match.end():]
+                      self.current_chunk['raw_html'] = inner_html.strip()
+                  else:
+                      self.current_chunk['raw_html'] = full_slice # Fallback
+             
         header_tags = self.rules.get('header_tags', [])
         if tag in header_tags:
              self.finish_chunk()
         elif tag == self.rules.get('caption_tag'):
-            self.finish_chunk()
-            self.in_caption = False
+             self.finish_chunk()
+             self.in_caption = False
         elif tag == 'p':
             if self.in_caption and self.rules.get('ignore_p_in_caption'): return
             self.finish_chunk()
 
 class SpanishParser(BaseParser):
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, raw_source=""):
+        super().__init__(config, raw_source)
         self.ignore_section = False
         self.ignore_depth = 0
         self.rules = self.config['es']
@@ -670,7 +746,8 @@ class SpanishParser(BaseParser):
                 'classes': classes,
                 'text': '',
                 'type': chunk_type,
-                'special_type': special_type
+                'special_type': special_type,
+                'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
 
@@ -680,6 +757,19 @@ class SpanishParser(BaseParser):
             if self.ignore_depth == 0:
                 self.ignore_section = False
             return
+
+        # Capture raw html logic (Same as English)
+        if self.current_chunk and self.capture_text and tag in ['p', 'div'] + [f'h{i}' for i in range(1, 7)]:
+             end_offset = self.get_offset(*self.getpos())
+             if 'raw_start_offset' in self.current_chunk:
+                  full_slice = self.raw_source[self.current_chunk['raw_start_offset']:end_offset]
+                  match = re.match(r'<[^>]+>', full_slice)
+                  if match:
+                      inner_html = full_slice[match.end():]
+                      self.current_chunk['raw_html'] = inner_html.strip()
+                  else:
+                      self.current_chunk['raw_html'] = full_slice
+
             
         if tag == 'p':
              self.finish_chunk()
@@ -716,13 +806,17 @@ def smart_pair_split(en_text, es_text):
 # -----------------------------------------------------------------------------
 
 def parse_file(path, parser_cls, config):
-    with open(path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    p = parser_cls(config)
-    p.feed(content)
-    p.finish_chunk()
-    return p.chunks
-
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        parser = parser_cls(config, raw_source=content)
+        parser.feed(content)
+        parser.finish_chunk() # Flush
+        return parser.chunks
+    except Exception as e:
+        print(f"Error parsing {path}: {e}")
+        return []
 def get_header_indices(chunks):
     return [i for i, c in enumerate(chunks) if c['type'] == 'header']
 
@@ -1670,14 +1764,21 @@ def generate_html(aligned_pairs):
     html += "</body></html>"
     return html
 
-def generate_chapter_html(aligned_pairs, title=""):
+def generate_chapter_html(aligned_pairs, title="", css_files=None):
     """Generates XHTML for a single chapter."""
+    css_links = ""
+    if css_files:
+        for css in css_files:
+            css_links += f'  <link rel="stylesheet" type="text/css" href="{css}"/>\n'
+    else:
+        css_links = '  <link rel="stylesheet" type="text/css" href="styles.css"/>\n'
+
     html_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
 <head>
   <title>{html.escape(title)}</title>
-  <link rel="stylesheet" type="text/css" href="styles.css"/>
+  {css_links}
 </head>
 <body>
 """
@@ -1706,13 +1807,29 @@ def generate_chapter_html(aligned_pairs, title=""):
         es_attrs = f' class="{es_cls_str}"'
         
         # En
-        if tag.startswith('h') or tag == 'figcaption':
-            html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
+        if 'raw_html' in item and item['raw_html']:
+            # Use raw extracted HTML to preserve styles (<i>, <small>, <span>, etc.)
+            # We must inject our classes though?
+            # If raw_html is just inner content:
+            if tag.startswith('h') or tag == 'figcaption':
+                 html_content += f"<{tag}{en_attrs}>{item['raw_html']}</{tag}>\n"
+            else:
+                 html_content += f"<p{en_attrs}>{item['raw_html']}</p>\n"
         else:
-            # Removed CSS line-clamping
-            html_content += f"<p{en_attrs}>{en_text}</p>\n"
+             if tag.startswith('h') or tag == 'figcaption':
+                html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
+             else:
+                html_content += f"<p{en_attrs}>{en_text}</p>\n"
         
-        # Es
+        # Es (We don't have raw HTML for matched Spanish usually, or if we do it might be good to use it but we are translating/aligning text)
+        # Actually SpanishParser also extracts raw_html now.
+        # But if we did Neural Alignment, we flattened to sentences, so we lost the raw_html block structure often.
+        # IF however we are in aligned_chunks mode (heuristic), we might have it.
+        # TODO: Neural align destroys raw_html structure by splitting sentences.
+        # We need to think if we want to preserve Spanish styling too. The user asked for "Maintain styles of ALL book".
+        # For now, let's use text for Spanish to ensure translation/alignment correctness, 
+        # or use raw if available and not Split?
+        
         if es_text:
             if tag.startswith('h') or tag == 'figcaption':
                  html_content += f"<{tag}{es_attrs}>{es_text}</{tag}>\n"
@@ -1797,9 +1914,9 @@ def process_chapter_pair(args):
     """
     Worker function to process a single chapter pair.
     Args structured as tuple to easier map with executor:
-    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label)
+    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
     """
-    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label = args
+    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files = args
     
     # Standard processing without dictionary semantic guard
     try:
@@ -1919,7 +2036,7 @@ def process_chapter_pair(args):
         # Generate HTML
         # If english title is detectable, use it? Or pass from TOC?
         # We passed 'label' now
-        html_content = generate_chapter_html(aligned, title=label or f"Chapter {idx+1}")
+        html_content = generate_chapter_html(aligned, title=label or f"Chapter {idx+1}", css_files=css_files)
         
         out_filename = f"chapter_{idx+1:03d}.xhtml"
         out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
@@ -2057,6 +2174,26 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
 
 
+    # 1c. Extract and Copy CSS
+    css_files = []
+    # Find all CSS items in manifest
+    # We want to maintain original styling
+    if opf_data and 'manifest' in opf_data:
+        for item_id, item_data in opf_data['manifest'].items():
+            if item_data['media-type'] == 'text/css':
+                href = item_data['href']
+                # Copy file
+                if en_opf_path:
+                    opf_dir = os.path.dirname(en_opf_path)
+                    import urllib.parse
+                    c_path_dec = urllib.parse.unquote(href)
+                    src_full = os.path.join(opf_dir, c_path_dec)
+                    if os.path.exists(src_full):
+                         fname = os.path.basename(c_path_dec)
+                         shutil.copy2(src_full, os.path.join(staging_dir, 'OEBPS', fname))
+                         css_files.append(fname)
+                         print(f"Copied CSS: {fname}")
+
     # 2. Setup Staging Directory
     # staging_dir passed as argument
     if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
@@ -2120,7 +2257,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # Prepare arguments for each task
     for idx, (label, en_rel, es_rel) in enumerate(pairs):
         # We pass everything needed to process one pair
-        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label)
+        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
         args_list.append(args)
 
     # Dictionary to collect results: idx -> filename
@@ -2207,7 +2344,13 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     spine_items = ""
     
     # CSS
-    manifest_items += f'<item id="css" href="styles.css" media-type="text/css"/>\n'
+    if css_files:
+        for css in css_files:
+             manifest_items += f'<item id="css-{css}" href="{css}" media-type="text/css"/>\n'
+    
+    # Also include our custom styles for minimal layout if no original css?
+    # Or always include ours for 'es-trans' classes?
+    manifest_items += f'<item id="css-custom" href="styles.css" media-type="text/css"/>\n'
     
     # Cover
     if cover_item_to_copy:

@@ -897,7 +897,15 @@ def align_chunks(en_chunks, es_chunks):
                     t_es = itm_es['text'] if itm_es else ""
                     use_tag = itm_en['tag'] if itm_en else 'p'
                     use_classes = itm_en.get('classes', []) if itm_en else []
-                    local_res.append({'tag': use_tag, 'classes': use_classes, 'en': t_en, 'es': t_es})
+                    use_raw = itm_en.get('raw_html') if itm_en else None
+                    
+                    local_res.append({
+                        'tag': use_tag, 
+                        'classes': use_classes, 
+                        'en': t_en, 
+                        'es': t_es,
+                        'raw_html': use_raw
+                    })
              return local_res
 
         # Compute Shared Anchors
@@ -936,7 +944,8 @@ def align_chunks(en_chunks, es_chunks):
                         'tag': en_item['tag'],
                         'classes': en_item.get('classes', []),
                         'en': en_text,
-                        'es': es_text
+                        'es': es_text,
+                        'raw_html': en_item.get('raw_html')
                     })
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
@@ -948,7 +957,11 @@ def align_chunks(en_chunks, es_chunks):
                 for c in sub_en:
                     if c['type'] == 'std' and c['text']:
                         sents = split_sentences(c['text'])
-                        for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', [])})
+                        if len(sents) <= 1:
+                             # Preserve raw/dict if no split
+                             v_en_chunks.append(c)
+                        else:
+                            for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', []), 'raw_html': None})
                     else:
                         v_en_chunks.append(c)
 
@@ -1073,6 +1086,11 @@ def align_chunks(en_chunks, es_chunks):
         if do_merge:
             # Merge
             prev['en'] += " " + item['en']
+            # Merge raw_html if present
+            if prev.get('raw_html') is not None:
+                to_append = item.get('raw_html') or item['en']
+                prev['raw_html'] += " " + to_append
+                
             # Update pass_1_aligned[-1] in place
         else:
             pass_1_aligned.append(item)
@@ -1170,7 +1188,8 @@ def align_chunks(en_chunks, es_chunks):
                          'type': nxt.get('type', 'p'),
                          'en': nxt['en'], 
                          'es': '',
-                         'text': nxt.get('text', '')
+                         'text': nxt.get('text', ''),
+                         'raw_html': nxt.get('raw_html')
                      })
                 
                 # Consume i+1
@@ -1423,8 +1442,12 @@ def align_chunks(en_chunks, es_chunks):
                    # Swap!
                    # Current Orphan takes the English key.
                    curr['en'] = en
+                   curr['raw_html'] = nxt.get('raw_html')
+                   
                    # Next Item (Old Match) loses English key -> Becomes Orphan
                    nxt['en'] = ""
+                   nxt['raw_html'] = None
+                   
                    # Note: We don't move Spanish texts. We move the English KEY "up".
                    continue
         
@@ -1960,18 +1983,22 @@ def process_chapter_pair(args):
                         else:
                             # Split paragraph text
                             sents = split_sentences(c['text'])
-                            # Debug log for large splits
-                            # if len(sents) > 5:
-                            #    print(f"Split paragraph into {len(sents)} sentences.")
                             
-                            for s in sents:
-                                if s.strip():
-                                    flat.append({
-                                        'type': c['type'],
-                                        'tag': c['tag'],
-                                        'classes': c.get('classes', []),
-                                        'text': s
-                                    })
+                            # If only 1 sentence, we can preserve raw_html!
+                            if len(sents) <= 1:
+                                flat.append(c)
+                            else:
+                                for s in sents:
+                                    if s.strip():
+                                        flat.append({
+                                            'type': c['type'],
+                                            'tag': c['tag'],
+                                            'classes': c.get('classes', []),
+                                            'text': s,
+                                            # We generally lose raw_html on split, unless we want to try attaching to 1st?
+                                            # No, better to drop raw_html for split parts to avoid duplicating id/etc
+                                            'raw_html': None 
+                                        })
                     return flat
 
                 # Flatten both sides
@@ -2004,6 +2031,17 @@ def process_chapter_pair(args):
                         merged_en_text = " ".join([c.get('text', '') for c in ens])
                         tag = ens[0].get('tag', 'p')
                         classes = ens[0].get('classes', [])
+                        
+                        # Try to use raw_html if available and applicable
+                        # If we have multiple chunks, merging raw_html is dangerous/hard.
+                        # If we have 1 chunk, use its raw_html.
+                        if len(ens) == 1:
+                             raw_html = ens[0].get('raw_html')
+                        else:
+                             # If we merged multiple, we probably don't have valid raw_html for the combo.
+                             # Unless they were splits of the same original?
+                             # Too complex for now.
+                             raw_html = None
                     
                     if ess:
                         merged_es_text = " ".join([c.get('text', '') for c in ess])
@@ -2015,7 +2053,8 @@ def process_chapter_pair(args):
                         'tag': tag,
                         'classes': classes,
                         'en': merged_en_text,
-                        'es': merged_es_text
+                        'es': merged_es_text,
+                        'raw_html': raw_html
                     })
 
                     

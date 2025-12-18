@@ -215,13 +215,28 @@ class Splitter:
             # Only split paragraphs
             if tag == 'p' and en and es:
                 splits = self.process_pair(en, es)
-                for split in splits:
-                    new_aligned.append({
-                        'tag': 'p',
-                        'classes': classes,
-                        'en': split['en'],
-                        'es': split['es']
-                    })
+                if len(splits) == 1:
+                     # No split (or single chunk result). Preserve original structure including raw_html.
+                     # We update text just in case process_pair did some cleanup, but usually it's same.
+                     # Actually process_pair returns early with original text if no split.
+                     # So we can just append item.
+                     # BUT process_pair returns a dict list with 'en', 'es'.
+                     # If we use 'split' dict, we lose keys.
+                     # If we use 'item', we keep them.
+                     # Let's ensure we use the text from split result (in case of normalization) but keep item props.
+                     combined = item.copy()
+                     combined['en'] = splits[0]['en']
+                     combined['es'] = splits[0]['es']
+                     new_aligned.append(combined)
+                else:
+                    for split in splits:
+                        new_aligned.append({
+                            'tag': 'p',
+                            'classes': classes,
+                            'en': split['en'],
+                            'es': split['es'],
+                            'raw_html': None # Splits are parts, raw_html is whole.
+                        })
             else:
                 new_aligned.append(item)
                 

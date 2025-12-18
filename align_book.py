@@ -237,9 +237,8 @@ def normalize_label(label):
 def align_tocs(en_toc, es_toc):
     """
     Aligns chapters using a hybrid 'Anchor and Fill' strategy.
-    1. Identify high-confidence matches (Anchors) using Structure/String matching.
-    2. Fill gaps between anchors using positional alignment (linear zip).
-    This ensures 'all book' is processed even if names don't match (e.g. Prologue vs Prólogo if typo/mismatch).
+    Returns list of (label, en_src, es_src).
+    Includes unmatched items from both sides (paired with None) to ensure no content is lost.
     """
     en_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(en_toc)]
     es_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(es_toc)]
@@ -277,8 +276,6 @@ def align_tocs(en_toc, es_toc):
     final_pairs = []
     
     # 2. Fill Gaps
-    # We iterate through the anchors and fill the space before/between/after.
-    
     last_en_idx = -1
     last_es_idx = -1
     
@@ -292,21 +289,28 @@ def align_tocs(en_toc, es_toc):
         current_es_idx = anchor_es['idx']
         
         # Identification of Gap Items
-        # Items strictly BETWEEN last_en_idx and current_en_idx
         gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_matched]
         gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_matched]
         
-        # Linear Alignment of Gap (Zip)
-        # We pair 1st unmatched EN with 1st unmatched ES in this region.
-        # Any excess on either side is unfortunately dropped (or could be appended as unmatched, but we need pairs)
-        # "Translate all book" -> We prioritize pairing over precision here.
-        limit = min(len(gap_en), len(gap_es))
+        # Linear Alignment of Gap (Zip Longest)
+        limit = max(len(gap_en), len(gap_es))
         for k in range(limit):
-            final_pairs.append((gap_en[k]['item']['src'], gap_es[k]['item']['src']))
+            # English item
+            en_src = gap_en[k]['item']['src'] if k < len(gap_en) else None
+            en_lbl = gap_en[k]['item']['label'] if k < len(gap_en) else None
+            
+            # Spanish item
+            es_src = gap_es[k]['item']['src'] if k < len(gap_es) else None
+            es_lbl = gap_es[k]['item']['label'] if k < len(gap_es) else None
+            
+            # Use English label if available, else Spanish
+            label = en_lbl if en_lbl else es_lbl
+            
+            final_pairs.append((label, en_src, es_src))
             
         # Add the Anchor itself (if not sentinel)
         if current_en_idx < len(en_items) and current_es_idx < len(es_items):
-             final_pairs.append((anchor_en['item']['src'], anchor_es['item']['src']))
+             final_pairs.append((anchor_en['item']['label'], anchor_en['item']['src'], anchor_es['item']['src']))
              
         last_en_idx = current_en_idx
         last_es_idx = current_es_idx
@@ -1734,6 +1738,9 @@ def collect_split_files(base_src, base_dir):
     If base_src is 'chapter001_split_000.xhtml', find all siblings like 'chapter001_split_*.xhtml'.
     Returns list of absolute paths.
     """
+    if not base_src:
+        return []
+    
     full_path = os.path.join(base_dir, base_src)
     if not os.path.exists(full_path):
         return []
@@ -1790,9 +1797,9 @@ def process_chapter_pair(args):
     """
     Worker function to process a single chapter pair.
     Args structured as tuple to easier map with executor:
-    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config)
+    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label)
     """
-    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config = args
+    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label = args
     
     # Standard processing without dictionary semantic guard
     try:
@@ -1819,7 +1826,7 @@ def process_chapter_pair(args):
         # print(f"Processing Pair {idx+1}: {en_rel} <-> {es_rel}")
         
         # Align
-        if config.get('use_neural') and NeuralAligner:
+        if config.get('use_neural') and NeuralAligner and en_files and es_files:
             try:
                 global CACHED_ALIGNER
                 if CACHED_ALIGNER is None:
@@ -1896,30 +1903,35 @@ def process_chapter_pair(args):
 
                     
         else:
+            # Fallback for single side or disabled neural
             aligned = align_chunks(en_chunks, es_chunks)
         
         # -------------------------------------------------------------------------
         # Phase 5: Splitter Service (Post-Alignment Refinement)
         # -------------------------------------------------------------------------
-        if Splitter and aligned:
-             # Ensure we have an aligner if possible (might be None for heuristic path, that's fine)
+        if config.get('use_neural') and Splitter:
+             # Ensure we have an aligner if possible
              aligner_instance = CACHED_ALIGNER if config.get('use_neural') else None
              t_len = config.get('split_length', 280)
              splitter_svc = Splitter(aligner=aligner_instance, trigger_length=t_len)
              aligned = splitter_svc.process_all(aligned)
 
         # Generate HTML
-        out_filename = f"chapter_{idx:02d}.xhtml"
-        chapter_content = generate_chapter_html(aligned, title=f"Chapter {idx}")
+        # If english title is detectable, use it? Or pass from TOC?
+        # We passed 'label' now
+        html_content = generate_chapter_html(aligned, title=label or f"Chapter {idx+1}")
         
+        out_filename = f"chapter_{idx+1:03d}.xhtml"
         out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
+        
         with open(out_path, 'w', encoding='utf-8') as f:
-            f.write(chapter_content)
+            f.write(html_content)
             
-        return (idx, out_filename, en_rel)
+        return (idx, out_filename, label) # Pass label back
         
     except Exception as e:
-        print(f"Error processing {en_rel}: {e}")
+        import traceback
+        traceback.print_exc()
         return (idx, None, str(e))
 
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
@@ -2015,13 +2027,17 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         detected_profile = 'generic'
         # Check first content file (English)
         if pairs:
-            first_content = os.path.join(en_base, pairs[0][0])
-            if os.path.exists(first_content):
-                 detected_profile = detect_profile(first_content)
+            # pairs is list of tuples (label, en_rel, es_rel)
+            first_content_rel = pairs[0][1]
+            if first_content_rel:
+                first_content = os.path.join(en_base, first_content_rel)
+                if os.path.exists(first_content):
+                     detected_profile = detect_profile(first_content)
         
         # If still generic, check Spanish files (often have distinctive classes)
         if detected_profile == 'generic' and pairs:
-             for _, sp in pairs: # Check first available Spanish file
+             for _, _, sp in pairs: # Check first available Spanish file
+                 if not sp: continue
                  full_es = os.path.join(es_base, sp)
                  if os.path.exists(full_es):
                      detected_profile = detect_profile(full_es)
@@ -2102,9 +2118,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     print(f"Preparing {len(pairs)} tasks for parallel processing (Multithread CPU)...")
     
     # Prepare arguments for each task
-    for idx, (en_rel, es_rel) in enumerate(pairs):
+    for idx, (label, en_rel, es_rel) in enumerate(pairs):
         # We pass everything needed to process one pair
-        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config)
+        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label)
         args_list.append(args)
 
     # Dictionary to collect results: idx -> filename
@@ -2147,12 +2163,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 if i not in completed_indices and res.ready():
                     # Get result
                     try:
-                        res_idx, res_filename, res_name = res.get()
+                        res_idx, res_filename, res_label = res.get()
                         
                         if res_filename:
-                            results_map[res_idx] = res_filename
+                            results_map[res_idx] = (res_filename, res_label)
                         else:
-                            print(f"Task {res_idx} returned no filename (Error: {res_name})")
+                            print(f"Task {res_idx} returned no filename (Error: {res_label})")
                     except Exception as exc:
                         print(f"Task {i} generated an exception: {exc}")
                         
@@ -2201,7 +2217,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         manifest_items += f'<item id="{cover_id}" href="{dest_name}" media-type="{c_media}"/>\n'
     
     # Chapters
-    for idx, filename in enumerate(spine_refs):
+    for idx, (filename, _) in enumerate(spine_refs):
         item_id = f"item_{idx}"
         manifest_items += f'<item id="{item_id}" href="{filename}" media-type="application/xhtml+xml"/>\n'
         spine_items += f'<itemref idref="{item_id}"/>\n'
@@ -2299,9 +2315,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
 
     # 8. Create Simple TOC (NCX)
     nav_points = ""
-    for idx, filename in enumerate(spine_refs):
+    for idx, (filename, label) in enumerate(spine_refs):
         nav_points += f"""<navPoint id="navPoint-{idx+1}" playOrder="{idx+1}">
-      <navLabel><text>Section {idx+1}</text></navLabel>
+      <navLabel><text>{html.escape(label)}</text></navLabel>
       <content src="{filename}"/>
     </navPoint>\n"""
     

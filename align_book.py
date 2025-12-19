@@ -43,7 +43,11 @@ PROFILES = {
             'caption_classes': [],
             'ignore_tags': [],
             'ignore_classes': [],
-            'SPLIT_TRIGGER_CHARS': 240
+            'caption_classes': [],
+            'ignore_tags': [],
+            'ignore_classes': [],
+            'SPLIT_TRIGGER_CHARS': 240,
+            'image_tag': 'img'
         },
         'es': {
             'header_tags': ['p', 'div'],
@@ -70,7 +74,10 @@ PROFILES = {
             'caption_classes': ['caption'],
             'ignore_tags': [],
             'ignore_classes': [],
-            'SPLIT_TRIGGER_CHARS': 300
+            'ignore_tags': [],
+            'ignore_classes': [],
+            'SPLIT_TRIGGER_CHARS': 300,
+            'image_tag': 'img'
         },
         'es': {
             'header_tags': ['h1', 'h2', 'h3'],
@@ -461,6 +468,11 @@ class BaseParser(HTMLParser):
     def __init__(self, config, raw_source=""):
         super().__init__()
         self.config = config
+        self.image_tag = config.get('image_tag', 'img') # Deprecated single
+        self.image_tags = config.get('image_tags', ['img', 'image', 'svg:image'])
+        # Merge single into list if present
+        if self.image_tag not in self.image_tags:
+            self.image_tags.append(self.image_tag)
         self.chunks = [] 
         self.current_chunk = None
         self.capture_text = False
@@ -504,7 +516,7 @@ class BaseParser(HTMLParser):
                 # Let's grab the raw slice from (start_line, start_col) to (end_line, end_col).
                 pass
 
-            if self.current_chunk['text'] or self.current_chunk['type'] == 'header':
+            if self.current_chunk['text'] or self.current_chunk['type'] == 'header' or self.current_chunk['type'] == 'image':
                  self.chunks.append(self.current_chunk)
             self.current_chunk = None
             self.capture_text = False
@@ -578,6 +590,43 @@ class EnglishParser(BaseParser):
                 'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
+            
+        elif tag in self.image_tags:
+            # Capture current context before finishing chunk
+            parent_tag = self.current_chunk['tag'] if self.current_chunk else 'p'
+            
+            self.finish_chunk()
+            
+            src = attr_dict.get('src') or attr_dict.get('xlink:href') # Support xlink for svg:image
+            alt = attr_dict.get('alt', '')
+            
+            if src:
+                self.chunks.append({
+                    'type': 'image',
+                    'tag': 'img', # Normalize to img for internal use
+                    'src': src,
+                    'alt': alt,
+                    'text': '',
+                    'classes': [],
+                    'as_en': True # Assume EN by default, alignment will fix
+                })
+            
+            # Start a new chunk for subsequent text, inheriting the current container tag
+            self.current_chunk = {
+                'type': 'std',
+                'tag': parent_tag,
+                'text': '',
+                'classes': [],
+                'raw_html': None
+            }
+            self.capture_text = True
+            return
+
+        if tag in ['br', 'hr']:
+            if self.current_chunk:
+                self.current_chunk['text'] += " "
+            self.finish_chunk()
+            return
 
         elif tag == self.rules.get('caption_tag'):
             self.finish_chunk()
@@ -647,6 +696,8 @@ class EnglishParser(BaseParser):
         header_tags = self.rules.get('header_tags', [])
         if tag in header_tags:
              self.finish_chunk()
+        elif tag == 'img':
+             pass # Void tag, already finished
         elif tag == self.rules.get('caption_tag'):
              self.finish_chunk()
              self.in_caption = False
@@ -865,6 +916,13 @@ def align_chunks(en_chunks, es_chunks):
         anchor_sig = ""
         if anchors_list: anchor_sig = "ANCHOR:" + "|".join(anchors_list)
         
+        # Image Handling
+        if c.get('type') == 'image':
+             # Use basename of src as unique identifier
+             src = c.get('src', '')
+             fname = os.path.basename(src)
+             return f"IMG:{fname}"
+        
         # Structural signal
         dialog_sig = "DIALOG" if is_dialog else "NARRATION"
         
@@ -940,13 +998,15 @@ def align_chunks(en_chunks, es_chunks):
                     en_text = en_item['text']
                     es_text = es_item['text']
                     
-                    local_res.append({
-                        'tag': en_item['tag'],
-                        'classes': en_item.get('classes', []),
+                    item_data = en_item.copy()
+                    item_data.update({
                         'en': en_text,
                         'es': es_text,
-                        'raw_html': en_item.get('raw_html')
+                        'raw_html': en_item.get('raw_html') # Preserve raw
                     })
+                    # Remove 'text' key to avoid confusion? Or keep it?
+                    # Keep everything else (src, alt, etc)
+                    local_res.append(item_data)
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
                 sub_en = en_sec[i1:i2]
@@ -994,7 +1054,12 @@ def align_chunks(en_chunks, es_chunks):
             elif tag == 'delete':
                 # EN Content, No ES
                 for k in range(i1, i2):
-                    local_res.append({'tag': en_sec[k]['tag'], 'classes': en_sec[k].get('classes', []), 'en': en_sec[k]['text'], 'es': ""})
+                    item_data = en_sec[k].copy()
+                    item_data.update({
+                        'en': en_sec[k]['text'],
+                        'es': ""
+                    })
+                    local_res.append(item_data)
             elif tag == 'insert':
                 # ES Content, No EN
                 for k in range(j1, j2):
@@ -1128,6 +1193,9 @@ def align_chunks(en_chunks, es_chunks):
             nxt = final_aligned[i+1]
             
             # Extract texts
+            if nxt.get('tag') == 'img' or nxt.get('type') == 'image':
+                 break
+            
             en1 = curr['en'].strip()
             es1 = curr['es'].strip()
             es2 = nxt['es'].strip()
@@ -1208,7 +1276,7 @@ def align_chunks(en_chunks, es_chunks):
 
         
     # Filter out completely empty items to prevent gaps from blocking Phase 3
-    pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip()]
+    pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip() or x.get('type') == 'image' or x.get('tag') == 'img']
         
     # Phase 3: Fix the gaps created by Phase 2 (The Ripple Effect)
 
@@ -1224,7 +1292,7 @@ def align_chunks(en_chunks, es_chunks):
     # Check if ES_K+1 belongs to EN_K.
     
     # Filter out completely empty items to prevent gaps from blocking Phase 3
-    pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip()]
+    pass_2_aligned = [x for x in pass_2_aligned if x['en'].strip() or x['es'].strip() or x.get('type') == 'image' or x.get('tag') == 'img']
     
     final_pass = []
 
@@ -1282,7 +1350,7 @@ def align_chunks(en_chunks, es_chunks):
                      curr['es'] = ""
                      
                      # We append curr (now empty)
-                     if curr['en'].strip() or curr['es'].strip():
+                     if curr['en'].strip() or curr['es'].strip() or curr.get('tag') == 'img':
                         final_pass.append(curr)
                      # Loop continues to process nxt (now full) in next iteration
                      continue
@@ -1322,11 +1390,11 @@ def align_chunks(en_chunks, es_chunks):
                            nxt['es'] = es_orphan + " " + es_current
                            curr['es'] = ""
                            
-                           if curr['en'].strip() or curr['es'].strip():
+                           if curr['en'].strip() or curr['es'].strip() or curr.get('tag') == 'img':
                                final_pass.append(curr)
                            continue
 
-        if curr['en'].strip() or curr['es'].strip():
+        if curr['en'].strip() or curr['es'].strip() or curr.get('tag') == 'img':
             final_pass.append(curr)
 
     # Phase 3b: Zipper Merge (Fix Fragmentation)
@@ -1482,7 +1550,7 @@ def align_chunks(en_chunks, es_chunks):
                    # Continue
 
     # Filter empty
-    final_pass = [x for x in final_pass if x['en'].strip() or x['es'].strip()]
+    final_pass = [x for x in final_pass if x['en'].strip() or x['es'].strip() or x.get('type') == 'image' or x.get('tag') == 'img']
 
 
 
@@ -1762,6 +1830,7 @@ def generate_html(aligned_pairs):
     .es-trans { color: grey; margin-bottom: 1em; display: block; }
     .no-bottom-margin { margin-bottom: 0 !important; }
     figcaption { font-weight: bold; margin-top: 10px; }
+    .image-subtitle { font-style: italic; color: #555; margin: 10px 0; text-align: center; }
     </style></head><body>"""
     
     for item in aligned_pairs:
@@ -1769,15 +1838,24 @@ def generate_html(aligned_pairs):
         en_text = item['en']
         es_text = item['es']
         
-        if not en_text and not es_text: continue
+        if not en_text and not es_text and tag != 'img': continue
 
         # English Block
         if tag.startswith('h') or tag == 'figcaption':
             html += f"<{tag}>{en_text}</{tag}>"
+        elif tag == 'img':
+             src = item.get('src', '')
+             alt = item.get('alt', '')
+             html += f'<img src="{src}" alt="{alt}" />'
         else:
             html += f"<p>{en_text}</p>"
         
         # Spanish Block (Mirroring Tag)
+        # For images, we usually don't want to duplicate, unless we want to show the Spanish one too?
+        # User request: "take pictures from the original book".
+        # So usually we ignore Spanish image chunk if aligned.
+        # But if we have text in Spanish side? Images have empty text.
+        
         if es_text:
             if tag.startswith('h') or tag == 'figcaption':
                  html += f"<{tag} class='es-trans'>{es_text}</{tag}>"
@@ -1786,6 +1864,92 @@ def generate_html(aligned_pairs):
             
     html += "</body></html>"
     return html
+
+def reconstruct_aligned_items(aligned_groups):
+    """
+    Reconstructs a flat list of aligned items from Neural Alignment groups.
+    Handles splitting of groups containing images or special blocks that shouldn't be merged.
+    """
+    aligned = []
+    
+    # Helper to merge a subset of chunks (local to this function context if simple, or defined here)
+    def create_merged_item(sub_ens, sub_ess):
+        m_en = ""
+        m_es = ""
+        t_tag = 'p'
+        t_classes = []
+        
+        if sub_ens:
+                m_en = " ".join([c.get('text', '') for c in sub_ens])
+                t_tag = sub_ens[0].get('tag', 'p')
+                t_classes = sub_ens[0].get('classes', [])
+        
+        if sub_ess:
+                m_es = " ".join([c.get('text', '') for c in sub_ess])
+                if not sub_ens:
+                    t_tag = sub_ess[0].get('tag', 'p')
+                    t_classes = sub_ess[0].get('classes', [])
+
+        raw = None
+        if sub_ens and len(sub_ens) == 1:
+            raw = sub_ens[0].get('raw_html')
+        
+        # Base copy to preserve attrs (src, alt)
+        b_item = {}
+        if sub_ens:
+            b_item = sub_ens[0].copy()
+        elif sub_ess:
+            b_item = sub_ess[0].copy()
+            b_item['en'] = ""
+        else:
+            # Should not happen if passed valid stuff
+            return None
+        
+        b_item.update({
+            'tag': t_tag,
+            'classes': t_classes,
+            'en': m_en,
+            'es': m_es,
+            'raw_html': raw
+        })
+        return b_item
+
+    for group in aligned_groups:
+        ens = group['en_chunks']
+        ess = group['es_chunks']
+
+        # Check for images in ens
+        has_image = any(c.get('type') == 'image' or c.get('tag') == 'img' for c in ens)
+        
+        if not has_image:
+            # Standard Merge
+            aligned.append(create_merged_item(ens, ess))
+        else:
+            # Split Logic: Flush text buffers around images
+            cur_buf = []
+            es_consumed = False
+            
+            for c in ens:
+                if c.get('type') == 'image' or c.get('tag') == 'img':
+                    # Flush buffer
+                    if cur_buf:
+                        # Assign ES to first block?
+                        use_es = ess if not es_consumed else []
+                        aligned.append(create_merged_item(cur_buf, use_es))
+                        if use_es: es_consumed = True
+                        cur_buf = []
+                    
+                    # Emit Image
+                    aligned.append(create_merged_item([c], []))
+                else:
+                    cur_buf.append(c)
+            
+            # Flush final
+            if cur_buf:
+                    use_es = ess if not es_consumed else []
+                    aligned.append(create_merged_item(cur_buf, use_es))
+                    
+    return aligned
 
 def generate_chapter_html(aligned_pairs, title="", css_files=None):
     """Generates XHTML for a single chapter."""
@@ -1812,7 +1976,7 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         en_text = item['en']
         es_text = item['es']
         
-        if not en_text and not es_text: continue
+        if not en_text and not es_text and tag != 'img': continue
 
         # Format attributes
         tag_classes = item.get('classes', [])
@@ -1859,6 +2023,17 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
                  html_content += f"<{tag}{es_attrs}>{es_text}</{tag}>\n"
             else:
                  html_content += f"<p{es_attrs}>{es_text}</p>\n"
+                 
+        # Image (English Only usually)
+        if tag == 'img':
+             # Logic: If item has src, print it.
+             # We put it OUTSIDE the p/h blocks.
+             src = item.get('src', '')
+             alt = item.get('alt', '')
+             # We should wrap it in a div or figure for containment?
+             # Simple img for now.
+             if src:
+                 html_content += f'<div class="image-container"><img src="{src}" alt="{alt}" /></div>\n'
             
     html_content += "</body></html>"
     return html_content
@@ -1947,9 +2122,59 @@ def process_chapter_pair(args):
         # English: collect potentially split files (RELATIVE TO OPF DIR!)
         en_files = collect_split_files(en_rel, en_opf_dir)
         en_chunks = []
+        
+        # Prepare valid image directory
+        img_staging_dir = os.path.join(staging_dir, 'OEBPS', 'images')
+        if not os.path.exists(img_staging_dir):
+            os.makedirs(img_staging_dir, exist_ok=True)
+            
+        collected_images = set() # (filename, media_type)
+        
+        import mimetypes
+        import urllib.parse
+        
         for fpath in en_files:
              try:
                  chunks = parse_file(fpath, EnglishParser, config)
+                 
+                 # Process Images in this file context
+                 file_dir = os.path.dirname(fpath)
+                 for c in chunks:
+                     if c.get('type') == 'image' and c.get('src'):
+                         raw_src = c['src']
+                         # 1. Resolve Path
+                         try:
+                             dec_src = urllib.parse.unquote(raw_src)
+                             abs_src = os.path.abspath(os.path.join(file_dir, dec_src))
+                             
+                             if os.path.exists(abs_src):
+                                 # 2. Determine Destination
+                                 # Avoid collisions: use unique name? 
+                                 # Or folder structure?
+                                 # Simple: use {chapter_idx}_{basename}
+                                 base = os.path.basename(dec_src)
+                                 # Sanitized base
+                                 base = re.sub(r'[^\w\.-]', '_', base)
+                                 new_name = f"ch{idx}_{base}"
+                                 
+                                 dest_path = os.path.join(img_staging_dir, new_name)
+                                 
+                                 # 3. Copy
+                                 shutil.copy2(abs_src, dest_path)
+                                 
+                                 # 4. Update Chunk
+                                 c['src'] = f"images/{new_name}"
+                                 
+                                 # 5. Record for Manifest
+                                 mime, _ = mimetypes.guess_type(dest_path)
+                                 if not mime: mime = 'image/jpeg' # Fallback
+                                 collected_images.add((new_name, mime))
+                                 
+                             else:
+                                 print(f"Warning: Image not found: {abs_src}")
+                         except Exception as img_err:
+                             print(f"Error processing image {raw_src}: {img_err}")
+
                  en_chunks.extend(chunks)
              except Exception as e:
                  print(f"Error parsing EN file {fpath}: {e}")
@@ -1979,8 +2204,8 @@ def process_chapter_pair(args):
                 def flatten_to_sentences(chunks):
                     flat = []
                     for c in chunks:
-                        if c['type'] == 'header' or c['tag'] == 'figcaption':
-                            flat.append(c) # Keep headers/captions as is
+                        if c['type'] == 'header' or c['tag'] == 'figcaption' or c['type'] == 'image':
+                            flat.append(c) # Keep headers/captions/images as is
                         else:
                             # Split paragraph text
                             sents = split_sentences(c['text'])
@@ -2018,45 +2243,8 @@ def process_chapter_pair(args):
                 aligned = align_chunks(en_chunks, es_chunks)
             else:
                 # Convert neural groups to the format expected by generate_chapter_html
-                aligned = []
-                for group in aligned_groups:
-                    ens = group['en_chunks']
-                    ess = group['es_chunks']
-                    
-                    merged_en_text = ""
-                    merged_es_text = ""
-                    tag = 'p'
-                    classes = []
-                    
-                    if ens:
-                        merged_en_text = " ".join([c.get('text', '') for c in ens])
-                        tag = ens[0].get('tag', 'p')
-                        classes = ens[0].get('classes', [])
-                        
-                        # Try to use raw_html if available and applicable
-                        # If we have multiple chunks, merging raw_html is dangerous/hard.
-                        # If we have 1 chunk, use its raw_html.
-                        if len(ens) == 1:
-                             raw_html = ens[0].get('raw_html')
-                        else:
-                             # If we merged multiple, we probably don't have valid raw_html for the combo.
-                             # Unless they were splits of the same original?
-                             # Too complex for now.
-                             raw_html = None
-                    
-                    if ess:
-                        merged_es_text = " ".join([c.get('text', '') for c in ess])
-                        if not ens:
-                            tag = ess[0].get('tag', 'p')
-                            classes = ess[0].get('classes', [])
-                            
-                    aligned.append({
-                        'tag': tag,
-                        'classes': classes,
-                        'en': merged_en_text,
-                        'es': merged_es_text,
-                        'raw_html': raw_html
-                    })
+                # Convert neural groups to the format expected by generate_chapter_html
+                aligned = reconstruct_aligned_items(aligned_groups)
 
                     
         else:
@@ -2084,12 +2272,12 @@ def process_chapter_pair(args):
         with open(out_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
             
-        return (idx, out_filename, label) # Pass label back
+        return (idx, out_filename, label, list(collected_images)) # Pass label and images back
         
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return (idx, None, str(e))
+        return (idx, None, str(e), [])
 
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     # Use a staging directory relative to the output path (job-specific)
@@ -2339,10 +2527,10 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 if i not in completed_indices and res.ready():
                     # Get result
                     try:
-                        res_idx, res_filename, res_label = res.get()
+                        res_idx, res_filename, res_label, res_images = res.get()
                         
                         if res_filename:
-                            results_map[res_idx] = (res_filename, res_label)
+                            results_map[res_idx] = {'file': res_filename, 'label': res_label, 'images': res_images}
                         else:
                             print(f"Task {res_idx} returned no filename (Error: {res_label})")
                     except Exception as exc:
@@ -2374,7 +2562,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # Reconstruct spine_refs in correct order
     for idx in range(len(pairs)):
         if idx in results_map:
-            spine_refs.append(results_map[idx])
+            spine_refs.append((results_map[idx]['file'], results_map[idx]['label']))
         else:
             print(f"Warning: Chapter {idx} failed or missing from results.")
 
@@ -2396,7 +2584,19 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         _, dest_name, c_media = cover_item_to_copy
         # Re-use original cover ID if possible, or 'cover-image'
         cover_id = opf_data['cover_id'] or 'cover-image'
+        cover_id = opf_data['cover_id'] or 'cover-image'
         manifest_items += f'<item id="{cover_id}" href="{dest_name}" media-type="{c_media}"/>\n'
+    
+    # Collected Images
+    all_images = set()
+    for info in results_map.values():
+        if 'images' in info:
+             for img_fname, img_mime in info['images']:
+                 all_images.add((img_fname, img_mime))
+                 
+    for img_fname, img_mime in all_images:
+        i_id = f"img-{img_fname.replace('.', '-')}"
+        manifest_items += f'<item id="{i_id}" href="images/{img_fname}" media-type="{img_mime}"/>\n'
     
     # Chapters
     for idx, (filename, _) in enumerate(spine_refs):

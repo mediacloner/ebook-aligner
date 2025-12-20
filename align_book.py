@@ -2229,6 +2229,13 @@ def generate_passthrough_chapter(en_src, es_src, title, staging_dir=None):
     en_body = process_content(en_src, staging_dir)
     es_body = process_content(es_src, staging_dir)
     
+    # Check if this page should be centered (Title Page, Cover)
+    is_centered = False
+    if title and any(x in title.lower() for x in ['title page', 'cover']):
+        is_centered = True
+        
+    center_class = " centered-content" if is_centered else ""
+    
     html_content = f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
@@ -2238,17 +2245,19 @@ def generate_passthrough_chapter(en_src, es_src, title, staging_dir=None):
   <link rel="stylesheet" type="text/css" href="styles.css"/>
   <style>
      .passthrough-container {{ margin-bottom: 2em; padding-bottom: 1em; border-bottom: 1px solid #ccc; }}
+     .passthrough-container.centered-content {{ text-align: center; }}
+     .passthrough-container.centered-content img {{ margin: 0 auto; display: block; }}
      .es-original {{ color: #444; margin-top: 2em; }}
   </style>
 </head>
 <body>
     <!-- English Content -->
-    <div class="en-original passthrough-container">
+    <div class="en-original passthrough-container{center_class}">
        {en_body}
     </div>
     
     <!-- Spanish Content -->
-    <div class="es-original passthrough-container">
+    <div class="es-original passthrough-container{center_class}">
        {es_body}
     </div>
 </body>

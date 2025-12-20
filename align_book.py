@@ -2540,6 +2540,9 @@ def process_chapter_pair(args):
         # print(f"Processing Pair {idx+1}: {en_rel} <-> {es_rel}")
         
         # Align
+        if config.get('use_neural') and not NeuralAligner:
+             print(f"WARNING: Neural Alignment requested but NeuralAligner not available (ImportError?). Fallback to Heuristic.")
+
         if config.get('use_neural') and NeuralAligner and en_files and es_files:
             try:
                 global CACHED_ALIGNER

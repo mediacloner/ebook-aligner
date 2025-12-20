@@ -661,7 +661,7 @@
             statusText,
             btn,
             stopBtn,
-            function () {
+            function (job) {
               // On complete callback (for single mode default behavior)
               // Only download if NOT saved locally
               if (job.message && job.message.indexOf("Saved to") !== -1) {

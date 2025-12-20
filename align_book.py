@@ -127,20 +127,41 @@ def parse_toc(ncx_path):
             return found.text
         return ""
 
+    # Find all navPoints recursively but preserve hierarchy via level
+    # We'll use a recursive helper
+    def parse_navpoint(node, level, ns):
+        items = []
+        # Current node details
+        label = find_text(node, './ncx:navLabel/ncx:text')
+        content_node = node.find('./ncx:content', ns)
+        content = content_node.get('src') if content_node is not None else ""
+        
+        # Cleanup content
+        if '#' in content:
+            content = content.split('#')[0]
+            
+        # Add self
+        # Note: We append self BEFORE children
+        items.append({'label': label.strip(), 'src': content, 'level': level})
+        
+        # Process children
+        for child in node.findall('./ncx:navPoint', ns):
+            items.extend(parse_navpoint(child, level + 1, ns))
+            
+        return items
+
     base_dir = os.path.dirname(ncx_path)
     nav_points = []
     
-    # Find all navPoints recursively (flattened)
-    for nav_point in root.findall('.//ncx:navPoint', ns):
-        label = find_text(nav_point, './ncx:navLabel/ncx:text')
-        content_node = nav_point.find('./ncx:content', ns)
-        content = content_node.get('src') if content_node is not None else ""
-        
-        # Fallback: Sniff content if label is empty
-        if not label and content:
-            # Construct absolute path to sniff
-            # content might be relative to ncx
-            # e.g. src="Text/ch01.html"
+    # Iterate top-level navPoints
+    for nav_point in root.findall('./ncx:navMap/ncx:navPoint', ns):
+         nav_points.extend(parse_navpoint(nav_point, 0, ns))
+         
+    # Fallback sniffing logic (same as before but iterated over flat list)
+    for item in nav_points:
+        if not item['label'] and item['src']:
+             # Construct absolute path to sniff
+            content = item['src']
             try:
                 # Remove anchor for file path
                 file_part = content.split('#')[0]
@@ -148,14 +169,10 @@ def parse_toc(ncx_path):
                 if os.path.exists(full_path):
                     label = extract_title_from_html(full_path)
                     print(f"Sniffed label for {content}: '{label}'")
+                    item['label'] = label
             except Exception as e:
                 print(f"Failed to sniff {content}: {e}")
 
-        # Final cleanup
-        if '#' in content:
-            content = content.split('#')[0]
-            
-        nav_points.append({'label': label.strip(), 'src': content})
     return nav_points
 
 def roman_to_int(s):
@@ -286,19 +303,23 @@ def align_tocs(en_toc, es_toc):
             # English item
             en_src = gap_en[k]['item']['src'] if k < len(gap_en) else None
             en_lbl = gap_en[k]['item']['label'] if k < len(gap_en) else None
+            en_lvl = gap_en[k]['item']['level'] if k < len(gap_en) else 0
             
             # Spanish item
             es_src = gap_es[k]['item']['src'] if k < len(gap_es) else None
             es_lbl = gap_es[k]['item']['label'] if k < len(gap_es) else None
+            es_lvl = gap_es[k]['item']['level'] if k < len(gap_es) else 0
             
-            # Use English label if available, else Spanish
+            # Use English label/level if available, else Spanish
             label = en_lbl if en_lbl else es_lbl
+            level = en_lvl if en_lbl else es_lvl
             
-            final_pairs.append((label, en_src, es_src))
+            final_pairs.append((label, en_src, es_src, level))
             
         # Add the Anchor itself (if not sentinel)
         if current_en_idx < len(en_items) and current_es_idx < len(es_items):
-             final_pairs.append((anchor_en['item']['label'], anchor_en['item']['src'], anchor_es['item']['src']))
+             level = anchor_en['item'].get('level', 0)
+             final_pairs.append((anchor_en['item']['label'], anchor_en['item']['src'], anchor_es['item']['src'], level))
              
         last_en_idx = current_en_idx
         last_es_idx = current_es_idx
@@ -810,6 +831,17 @@ class SpanishParser(BaseParser):
         if self.ignore_section:
             return
         super().handle_data(data)
+
+    def finish_chunk(self):
+        # Override to perform text-based classification before finalizing
+        if self.current_chunk and self.current_chunk['type'] == 'std':
+             text = self.current_chunk['text'].strip()
+             # Check for "Figura X" pattern
+             # We match "Figura" followed by a number
+             if re.match(r'^Figura\s+\d+', text, re.IGNORECASE):
+                 self.current_chunk['type'] = 'caption'
+                 
+        super().finish_chunk()
 
 # -----------------------------------------------------------------------------
 # Helpers
@@ -2383,7 +2415,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
         # If still generic, check Spanish files (often have distinctive classes)
         if detected_profile == 'generic' and pairs:
-             for _, _, sp in pairs: # Check first available Spanish file
+             for _, _, sp, _ in pairs: # Check first available Spanish file
                  if not sp: continue
                  full_es = os.path.join(es_base, sp)
                  if os.path.exists(full_es):
@@ -2484,7 +2516,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     print(f"Preparing {len(pairs)} tasks for parallel processing (Multithread CPU)...")
     
     # Prepare arguments for each task
-    for idx, (label, en_rel, es_rel) in enumerate(pairs):
+    for idx, (label, en_rel, es_rel, level) in enumerate(pairs):
         # We pass everything needed to process one pair
         args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
         args_list.append(args)
@@ -2564,7 +2596,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # Reconstruct spine_refs in correct order
     for idx in range(len(pairs)):
         if idx in results_map:
-            spine_refs.append((results_map[idx]['file'], results_map[idx]['label']))
+            # pairs[idx] is (label, en_rel, es_rel, level)
+            level = pairs[idx][3]
+            spine_refs.append((results_map[idx]['file'], results_map[idx]['label'], level))
         else:
             print(f"Warning: Chapter {idx} failed or missing from results.")
 
@@ -2601,7 +2635,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         manifest_items += f'<item id="{i_id}" href="images/{img_fname}" media-type="{img_mime}"/>\n'
     
     # Chapters
-    for idx, (filename, _) in enumerate(spine_refs):
+    for idx, (filename, label, level) in enumerate(spine_refs):
         item_id = f"item_{idx}"
         manifest_items += f'<item id="{item_id}" href="{filename}" media-type="application/xhtml+xml"/>\n'
         spine_items += f'<itemref idref="{item_id}"/>\n'
@@ -2697,13 +2731,39 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     with open(os.path.join(staging_dir, 'OEBPS', 'content.opf'), 'w', encoding='utf-8') as f:
         f.write(opf_content)
 
-    # 8. Create Simple TOC (NCX)
+    # 8. Create Nested TOC (NCX)
     nav_points = ""
-    for idx, (filename, label) in enumerate(spine_refs):
-        nav_points += f"""<navPoint id="navPoint-{idx+1}" playOrder="{idx+1}">
-      <navLabel><text>{html.escape(label)}</text></navLabel>
-      <content src="{filename}"/>
-    </navPoint>\n"""
+    last_level = -1
+    
+    for idx, (filename, label, level) in enumerate(spine_refs):
+        # Indentation (for pretty printing)
+        indent = "  " * (level + 2)
+        
+        # Logic to close previous tags
+        if idx > 0:
+            if level == last_level:
+                # Sibling: Close previous
+                nav_points += f"{indent}</navPoint>\n"
+            elif level < last_level:
+                # Outdent: Close previous and its parents
+                diff = last_level - level
+                for i in range(diff + 1):
+                    # Indent for the closing tag being written
+                    # We are closing last_level - i
+                    cl_indent = "  " * (last_level - i + 2)
+                    nav_points += f"{cl_indent}</navPoint>\n"
+        
+        # Write current open tag
+        nav_points += f"""{indent}<navPoint id="navPoint-{idx+1}" playOrder="{idx+1}">
+{indent}  <navLabel><text>{html.escape(label)}</text></navLabel>
+{indent}  <content src="{filename}"/>\n"""
+        
+        last_level = level
+
+    # Close any remaining open tags
+    for i in range(last_level + 1):
+        cl_indent = "  " * (last_level - i + 2)
+        nav_points += f"{cl_indent}</navPoint>\n"
     
     ncx_content = f"""<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">

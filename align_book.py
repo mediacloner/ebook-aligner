@@ -35,80 +35,41 @@ SPLIT_TOLERANCE = 0.20     # 20% +/- deviation allowed
 # Default configuration for "Artificial Intelligence" book
 # Configuration Profiles
 PROFILES = {
-    'melanie': {
+    'generic': {
         'en': {
-            'header_tags': ['h1', 'h2'],
+            'header_tags': ['h1', 'h2', 'h3'],
             'header_classes': ['CN', 'CN-Only', 'CT'], 
             'caption_start_tags': ['figcaption'],
-            'caption_classes': [],
-            'ignore_tags': [],
-            'ignore_classes': [],
-            'caption_classes': [],
+            'caption_classes': ['caption'],
             'ignore_tags': [],
             'ignore_classes': [],
             'SPLIT_TRIGGER_CHARS': 240,
             'image_tag': 'img'
         },
         'es': {
-            'header_tags': ['p', 'div'],
+            'header_tags': ['h1', 'h2', 'h3', 'p', 'div'],
             'header_indicators': [
                 'Capitulos_Capitulo_Numero', 
                 'Capitulos_Capitulo_1_Linea', 
                 'Subcapitulos_subcapitulo', 
                 'Subcapitulos_Subcapitulo'
             ],
-            'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado'],
-            'ignore_tags': ['h1'], # Ignore original H1s as typically book title in header
+            'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado', 'caption'],
+            'ignore_tags': [],
             'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo'],
-
-            'merge_headers': True, # Merge logic for split titles
+            'merge_headers': True,
             'header_merge_trigger': 'Capitulos_Capitulo_1_Linea',
             'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo']
-        }
-    },
-    'generic': {
-        'en': {
-            'header_tags': ['h1', 'h2', 'h3'],
-            'header_classes': [], # Any allowed tag is header if no classes specified
-            'caption_start_tags': ['figcaption'],
-            'caption_classes': ['caption'],
-            'ignore_tags': [],
-            'ignore_classes': [],
-            'ignore_tags': [],
-            'ignore_classes': [],
-            'SPLIT_TRIGGER_CHARS': 300,
-            'image_tag': 'img'
-        },
-        'es': {
-            'header_tags': ['h1', 'h2', 'h3'],
-            'header_indicators': [],
-            'caption_classes': ['caption'],
-            'ignore_tags': [],
-            'ignore_classes': [],
-            'merge_headers': False
         }
     }
 }
 
 def detect_profile(file_path):
     """Detects likely profile based on content signatures."""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            sample = f.read(10000) # Read first 10KB
-            
-        # Signatures for Melanie Mitchell book
-        if 'class="CN"' in sample or 'class="Capitulos_Capitulo' in sample or 'class="block_21"' in sample:
-             # Added block_21 as slight heuristic for that specific es file if needed, 
-             # but sticking to strict class names is safer.
-             if 'class="CN"' in sample or 'Capitulos_' in sample:
-                 print(f"Auto-detection: Matched 'melanie' profile for {os.path.basename(file_path)}")
-                 return 'melanie'
-        
-        print(f"Auto-detection: Using 'generic' profile for {os.path.basename(file_path)}")
-        return 'generic'
-    except Exception as e:
-        print(f"Auto-detection failed ({e}), defaulting to generic.")
-        return 'generic'
+    # Always default to generic now that we have merged capabilities
+    print(f"Auto-detection: Using 'generic' profile for {os.path.basename(file_path)}")
+    return 'generic'
+    return 'generic'
 
 def extract_title_from_html(file_path):
     """Fallback: peeks into HTML file to find a likely chapter title."""
@@ -648,7 +609,7 @@ class EnglishParser(BaseParser):
             self.finish_chunk()
             return
 
-        elif tag == self.rules.get('caption_tag'):
+        elif tag in self.rules.get('caption_start_tags', []):
             self.finish_chunk()
             self.current_chunk = {
                 'tag': tag,
@@ -667,7 +628,7 @@ class EnglishParser(BaseParser):
                 'tag': tag,
                 'classes': classes,
                 'text': '',
-                'type': 'std',
+                'type': 'caption' if self.in_caption else 'std',
                 'raw_start_offset': self.get_offset(*self.getpos())
             }
             self.capture_text = True
@@ -718,7 +679,7 @@ class EnglishParser(BaseParser):
              self.finish_chunk()
         elif tag == 'img':
              pass # Void tag, already finished
-        elif tag == self.rules.get('caption_tag'):
+        elif tag in self.rules.get('caption_start_tags', []):
              self.finish_chunk()
              self.in_caption = False
         elif tag == 'p':

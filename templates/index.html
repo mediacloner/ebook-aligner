@@ -596,6 +596,19 @@
           );
         });
 
+      function resetUI() {
+        const btn = document.getElementById("generateBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const progressWrapper = document.getElementById("progressWrapper");
+        const errorMessage = document.getElementById("errorMessage");
+
+        errorMessage.style.display = "none";
+        progressWrapper.style.display = "none";
+        btn.disabled = false;
+        stopBtn.innerText = "Stop Generation";
+        stopBtn.disabled = false;
+      }
+
       async function startJob(
         formData,
         btnId,
@@ -665,6 +678,7 @@
           errorMessage.innerText = "Error: " + err.message;
           errorMessage.style.display = "block";
           btn.disabled = false;
+          setTimeout(resetUI, 3000);
         }
       }
 
@@ -704,6 +718,7 @@
                 progressBar.style.width = "0%";
                 btn.disabled = false;
                 stopBtn.style.display = "none";
+                setTimeout(resetUI, 3000);
                 resolve();
               }
             } catch (err) {

@@ -186,6 +186,71 @@ def roman_to_int(s):
             int_val += rom_val.get(s[i], 0)
     return int_val
 
+def parse_written_number(text):
+    """Parses English or Spanish written numbers (e.g. 'twenty-one', 'veintiuno') to int."""
+    text = text.lower().strip().replace('-', ' ')
+    
+    # 1. Simple En/Es map for base numbers
+    num_map = {
+        'one': 1, 'uno': 1, 'un': 1, 'una': 1, 'first': 1, 'primero': 1,
+        'two': 2, 'dos': 2, 'second': 2, 'segundo': 2,
+        'three': 3, 'tres': 3, 'third': 3, 'tercero': 3,
+        'four': 4, 'cuatro': 4, 'fourth': 4, 'cuarto': 4,
+        'five': 5, 'cinco': 5, 'fifth': 5, 'quinto': 5,
+        'six': 6, 'seis': 6, 'sixth': 6, 'sexto': 6,
+        'seven': 7, 'siete': 7, 'seventh': 7, 'séptimo': 7,
+        'eight': 8, 'ocho': 8, 'eighth': 8, 'octavo': 8,
+        'nine': 9, 'nueve': 9, 'ninth': 9, 'noveno': 9,
+        'ten': 10, 'diez': 10, 'tenth': 10, 'décimo': 10,
+        'eleven': 11, 'once': 11,
+        'twelve': 12, 'doce': 12,
+        'thirteen': 13, 'trece': 13,
+        'fourteen': 14, 'catorce': 14,
+        'fifteen': 15, 'quince': 15,
+        'sixteen': 16, 'dieciséis': 16, 'dieciseis': 16,
+        'seventeen': 17, 'diecisiete': 17,
+        'eighteen': 18, 'dieciocho': 18,
+        'nineteen': 19, 'diecinueve': 19,
+        'twenty': 20, 'veinte': 20,
+        'thirty': 30, 'treinta': 30,
+        'forty': 40, 'cuarenta': 40,
+        'fifty': 50, 'cincuenta': 50,
+        'sixty': 60, 'sesenta': 60,
+        'seventy': 70, 'setenta': 70,
+        'eighty': 80, 'ochenta': 80,
+        'ninety': 90, 'noventa': 90,
+        'hundred': 100, 'cien': 100, 'ciento': 100
+    }
+    
+    if text in num_map:
+        return num_map[text]
+        
+    # compound check
+    words = text.split()
+    total = 0
+    current = 0
+    
+    for w in words:
+        if w in num_map:
+            val = num_map[w]
+            if val == 100:
+                current = (current if current else 1) * val
+            else:
+                current += val
+        elif w in ['and', 'y']:
+            continue
+        elif 'veinti' in w: # Spanish 21-29 agglutinated (veintiuno, veintidos...)
+            # veinti = 20
+            suffix = w.replace('veinti', '')
+            if suffix in num_map:
+                current += 20 + num_map[suffix]
+        else:
+             # Unknown word, abort
+             return None
+             
+    total += current
+    return total if total > 0 else None
+
 def normalize_label(label):
     label = label.lower().strip()
     
@@ -212,10 +277,11 @@ def normalize_label(label):
         return ('part', num)
 
     clean_label = re.sub(r'^(chapter|capitulo|capítulo)\s*', '', label)
+    
+    # Check for digit or roman
     num_match = re.match(r'^(\d+|[ivxlcdm]+)(?:[\.\:\s]|$)', clean_label)
     if num_match:
         num_str = num_match.group(1).upper()
-        # Simple heuristic: if it looks Roman (all matches in IVXLCDM) and not digit
         is_digit = num_str.isdigit()
         is_roman = not is_digit and all(c in 'IVXLCDM' for c in num_str)
         
@@ -223,6 +289,11 @@ def normalize_label(label):
             return ('chapter', int(num_str))
         elif is_roman:
             return ('chapter', roman_to_int(num_str))
+            
+    # Check for written number
+    parsed_num = parse_written_number(clean_label)
+    if parsed_num:
+        return ('chapter', parsed_num)
             
     return label 
 

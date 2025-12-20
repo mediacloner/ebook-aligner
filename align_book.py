@@ -2295,19 +2295,18 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         # Check for split continuation (end with asterism)
         is_split_continuation = en_text.strip().endswith("⁂")
         
-        # For Spanish, we append 'es-trans' to inherited classes
-        es_cls_list = tag_classes + ['es-trans']
+        # For Spanish, we apply structural classes to the container,
+        # but stylistic 'es-trans' to the inner content (via span) to avoid overrides.
+        es_container_classes = list(tag_classes)
         if is_split_continuation:
-            es_cls_list.append('no-bottom-margin')
+            es_container_classes.append('no-bottom-margin')
             
-        es_cls_str = " ".join(es_cls_list)
-        es_attrs = f' class="{es_cls_str}"'
+        es_cls_str = " ".join(es_container_classes)
+        es_attrs = f' class="{es_cls_str}"' if es_cls_str else ""
         
         # En
         if 'raw_html' in item and item['raw_html']:
             # Use raw extracted HTML to preserve styles (<i>, <small>, <span>, etc.)
-            # We must inject our classes though?
-            # If raw_html is just inner content:
             if tag.startswith('h') or tag == 'figcaption':
                  html_content += f"<{tag}{en_attrs}>{item['raw_html']}</{tag}>\n"
             else:
@@ -2321,10 +2320,16 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         # Es
         if es_text or item.get('es_raw_html'):
             content = item.get('es_raw_html') or es_text
+            
+            # Wrap in generic span for styling isolation
+            # Check if content is not just an image or empty
+            # If tag is block-like, span is valid.
+            wrapped_content = f'<span class="es-trans">{content}</span>'
+            
             if tag.startswith('h') or tag == 'figcaption':
-                 html_content += f"<{tag}{es_attrs}>{content}</{tag}>\n"
+                 html_content += f"<{tag}{es_attrs}>{wrapped_content}</{tag}>\n"
             else:
-                 html_content += f"<p{es_attrs}>{content}</p>\n"
+                 html_content += f"<p{es_attrs}>{wrapped_content}</p>\n"
                  
         # Image (English Only usually)
         if tag == 'img':

@@ -1105,12 +1105,114 @@ def align_chunks(en_chunks, es_chunks):
         en_section = en_chunks[en_anchors[limit-1]+1 : en_anchors[limit]]
         section_aligned = align_section(en_section, [])
         final_aligned.extend(section_aligned)
-    
     if len(es_anchors) > limit:
         es_section = es_chunks[es_anchors[limit-1]+1 : es_anchors[limit]]
         section_aligned = align_section([], es_section)
         final_aligned.extend(section_aligned)
+        
+    # Post-Process: Fix Merged Spanish Captions
+    # Scenario: En Caption is orphan (Delete). Es Chunk has Caption + Body (merged).
+    # Since Es Chunk matches En Body, it aligns with En Body.
+    # Result: En Caption (empty ES). En Body (Es Caption + Es Body).
+    
+    final_aligned = fix_merged_captions(final_aligned)
+        
+    return final_aligned
 
+def fix_merged_captions(aligned_items):
+    """
+    Detects and fixes cases where a Spanish caption is merged with the following paragraph,
+    causing it to look like the English Body text's translation.
+    """
+    unmatched_captions = []
+    
+    for idx, item in enumerate(aligned_items):
+        en_val = item.get('en', '')
+        es_val = item.get('es', '')
+        
+        # if "30" in es_val:
+        #     print(f"DEBUG: GLOBAL TRACE 30 at {idx}: ENtype={item.get('type')} EN='{en_val[:15]}...' ES='{es_val[:30]}...'")
+        
+        # 1. Identify Orphan English Caption
+        if en_val and not es_val:
+             txt = en_val.strip()
+             is_caption = item.get('type') == 'caption' or re.match(r'^FIGURE\s+\d+|Figure\s+\d+', txt, re.IGNORECASE)
+             if is_caption:
+                 # print(f"DEBUG: Found Orphan EN Caption at {idx}: '{txt[:30]}...'")
+                 unmatched_captions.append((idx, item))
+                 
+        # 2. Identify Suspicious Merged Spanish Chunk
+        elif en_val and es_val:
+             es_txt = es_val.strip()
+             
+             # if "Figura" in es_txt:
+             #     print(f"DEBUG: TRACE FIGURA at {idx}: ENtype={item.get('type')} EN='{en_val[:15]}...' ES='{es_txt[:30]}...'")
+
+             if re.match(r'^Figura\s+\d+', es_txt, re.IGNORECASE):
+                 # print(f"DEBUG: Found Potential Merged ES Caption at {idx}: '{es_txt[:30]}...'")
+                 
+                 if unmatched_captions:
+                     cand_idx, cand_item = unmatched_captions[-1]
+                     # Only consider if candidate is reasonably close (e.g. within last 10 items? Or just last one?)
+                     # If it's too far, maybe irrelevant.
+                     # But for now, just take last.
+                     
+                     en_body = en_val
+                     es_full = es_val
+                     
+                     s = SequenceMatcher(None, en_body, es_full, autojunk=False)
+                     match_block = s.find_longest_match(0, len(en_body), 0, len(es_full))
+                     
+                     # print(f"DEBUG: Match Analysis at {idx}: EN('{en_body[:20]}') ES('{es_full[:20]}') -> MatchStart={match_block.b} Len={match_block.size}")
+                     
+                     if match_block.b > 0:
+                         prefix = es_full[:match_block.b].strip()
+                         if re.match(r'^Figura\s+\d+', prefix, re.IGNORECASE):
+                             # print(f"Refining Alignment: Extracted Spanish Caption '{prefix[:30]}...' from merged paragraph.")
+                             
+                             cand_item['es'] = prefix
+                             cand_item['classes'] =  item.get('classes', []) + ['es-trans']
+                             
+                             remainder = es_full[match_block.b:].strip()
+                             item['es'] = remainder
+                             
+                             unmatched_captions.pop()
+                     else:
+                         pass
+                         
+        # 3. Identify Orphan Spanish Caption (Displaced)
+        elif not en_val and es_val:
+             es_txt = es_val.strip()
+             if re.match(r'^Figura\s+\d+', es_txt, re.IGNORECASE):
+                 # print(f"DEBUG: Found Orphan ES Caption at {idx}: '{es_txt[:30]}...'")
+                 
+                 if unmatched_captions:
+                     # Check the list of candidates for a match
+                     # We might need to search backwards or check all?
+                     # Simple heuristic: Check the LAST one first.
+                     
+                     cand_idx, cand_item = unmatched_captions[-1]
+                     en_txt = cand_item['en'].strip()
+                     
+                     # Extract numbers
+                     en_nums = re.findall(r'\d+', en_txt)
+                     es_nums = re.findall(r'\d+', es_txt)
+                     
+                     if en_nums and es_nums and en_nums[0] == es_nums[0]:
+                         # print(f"Refining Alignment: Paired Displaced Spanish Caption '{es_txt[:30]}...' with English Caption '{en_txt[:30]}...'")
+                         
+                         cand_item['es'] = es_txt
+                         cand_item['classes'] = cand_item.get('classes', []) + item.get('classes', []) + ['es-trans']
+                         
+                         # Clear the current orphan ES item
+                         item['es'] = ""
+                         item['en'] = "" # Should be empty already
+                         
+                         unmatched_captions.pop()
+                     # else:
+                        # print(f"DEBUG: Mismatch or No Num: EN={en_nums} ES={es_nums}")
+                             
+    return aligned_items
     # -------------------------------------------------------------------------
     # Post-processing 1: Merge short English attribution lines into previous
     # This handles cases like:

@@ -219,6 +219,13 @@ def normalize_label(label):
     if 'bibliograph' in label or 'bibliograf' in label: return 'bibliography'
     if 'note' in label or 'nota' in label: return 'notes'
     
+    # Enhanced mappings
+    if 'dedication' in label or 'dedicación' in label or 'dedicatoria' in label: return 'dedication'
+    if 'acknowledg' in label or 'agradecimiento' in label or 'gratitud' in label: return 'acknowledgments'
+    if 'about' in label and 'author' in label: return 'about_author'
+    if 'acerca' in label and 'autor' in label: return 'about_author'
+    if 'sobre' in label and 'autor' in label: return 'about_author'
+    
     part_match = re.search(r'(?:part|parte)\s*(\d+|[ivxlcdm]+)', label)
     if part_match:
         num_str = part_match.group(1).upper()
@@ -247,8 +254,21 @@ def align_tocs(en_toc, es_toc):
     Returns list of (label, en_src, es_src).
     Includes unmatched items from both sides (paired with None) to ensure no content is lost.
     """
-    en_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(en_toc)]
-    es_items = [{'idx': i, 'item': item, 'norm': normalize_label(item['label'])} for i, item in enumerate(es_toc)]
+    en_items = []
+    for i, item in enumerate(en_toc):
+        norm = normalize_label(item['label'])
+        raw = item['label'].lower().strip()
+        # Filter Ignored Items
+        if raw in ['table of contents', 'contents', 'title page', 'cover', 'copyright']: continue
+        en_items.append({'idx': i, 'item': item, 'norm': norm})
+
+    es_items = []
+    for i, item in enumerate(es_toc):
+        norm = normalize_label(item['label'])
+        raw = item['label'].lower().strip()
+        # Filter Ignored Items
+        if raw in ['tabla de contenido', 'contenido', 'página de título', 'cubierta', 'derechos de autor']: continue
+        es_items.append({'idx': i, 'item': item, 'norm': norm})
     
     anchors = []
     en_matched = set()
@@ -1229,7 +1249,15 @@ def align_chunks(en_chunks, es_chunks):
             
             should_merge = False
             
-            if ratio_curr < 1.05 and ratio_combined <= 1.8:
+            # SAFETY CHECK: If next item has English, be very conservative about merging.
+            # Only merge if current is VERY short (implying it's just a fragment).
+            # Standard Spanish/English expansion is ~1.2.
+            # 0.8 is short but plausible. 0.5 is definitely a fragment.
+            
+            has_next_en = bool(nxt['en'].strip())
+            thresh_curr = 0.6 if has_next_en else 1.05
+            
+            if ratio_curr < thresh_curr and ratio_combined <= 1.8:
                  should_merge = True
                  
             if should_merge:
@@ -1320,7 +1348,7 @@ def align_chunks(en_chunks, es_chunks):
                 # Verify match
                 sim = SequenceMatcher(None, en, es).ratio()
                 
-                if sim > 0.1: # Loose threshold?
+                if sim > 0.35: # INCREASED THRESHOLD (was 0.1)
                     # Pull Up!
                     curr['es'] = es
                     nxt['es'] = "" # Steal it
@@ -2073,6 +2101,11 @@ def collect_split_files(base_src, base_dir):
     prefix = match.group(1)
     suffix = match.group(3)
     
+    # SAFEGUARD 1: Generic Prefix "index"
+    # Calibre often names ALL files index_split_xxx. merging them connects the whole book.
+    if prefix.lower() == 'index':
+        return [full_path]
+
     # Search dir
     siblings = []
     try:
@@ -2087,6 +2120,14 @@ def collect_split_files(base_src, base_dir):
         return [full_path]
         
     if not siblings: return [full_path]
+    
+    # SAFEGUARD 2: Excessive Splitting
+    # If we matched > 50 files, it's likely a mis-identification of a split sequence
+    # unless it's a huge dictionary. But for normal chapters, 50 parts is suspicious.
+    if len(siblings) > 50:
+        print(f"Warning: Found {len(siblings)} split parts for {base_src}. Assuming false positive and using single file.")
+        return [full_path]
+
     siblings.sort() # Ensure textual sort matches numeric order
     return siblings
 

@@ -747,7 +747,46 @@ class SpanishParser(BaseParser):
             self.capture_text = True
             return
 
-        # Block-level tags that should initiate a chunk
+        # Image Handling (Ported from EnglishParser)
+        if tag in self.image_tags:
+            # Capture current context before finishing chunk
+            parent_tag = self.current_chunk['tag'] if self.current_chunk else 'p'
+            
+            self.finish_chunk()
+            
+            src = attr_dict.get('src') or attr_dict.get('xlink:href')
+            alt = attr_dict.get('alt', '')
+            
+            if src:
+                # Synthesize raw_html so it carries through alignment
+                raw_img = f'<img src="{src}" alt="{alt}" />'
+                if classes:
+                     cls_str = " ".join(classes)
+                     raw_img = f'<img src="{src}" class="{cls_str}" alt="{alt}" />'
+                     
+                self.chunks.append({
+                    'type': 'image',
+                    'tag': 'img', 
+                    'src': src,
+                    'alt': alt,
+                    'text': '',
+                    'classes': classes,
+                    'raw_html': raw_img,
+                    'as_en': False 
+                })
+            
+            # Start a new chunk for subsequent text
+            self.current_chunk = {
+                'type': 'std',
+                'tag': parent_tag,
+                'text': '',
+                'classes': [],
+                'raw_html': None
+            }
+            self.capture_text = True
+            return
+
+    # Block-level tags that should initiate a chunk
         block_tags = ['p', 'div'] + [f'h{i}' for i in range(1, 7)]
         target_tags = set(block_tags + self.rules.get('header_tags', []))
 
@@ -975,7 +1014,8 @@ def align_chunks(en_chunks, es_chunks):
                         'classes': use_classes, 
                         'en': t_en, 
                         'es': t_es,
-                        'raw_html': use_raw
+                        'raw_html': use_raw,
+                        'es_raw_html': itm_es.get('raw_html') if itm_es else None
                     })
              return local_res
 
@@ -1015,7 +1055,8 @@ def align_chunks(en_chunks, es_chunks):
                     item_data.update({
                         'en': en_text,
                         'es': es_text,
-                        'raw_html': en_item.get('raw_html') # Preserve raw
+                        'raw_html': en_item.get('raw_html'), # Preserve raw
+                        'es_raw_html': es_item.get('raw_html') # Preserve ES raw
                     })
                     # Remove 'text' key to avoid confusion? Or keep it?
                     # Keep everything else (src, alt, etc)
@@ -1076,14 +1117,20 @@ def align_chunks(en_chunks, es_chunks):
             elif tag == 'insert':
                 # ES Content, No EN
                 for k in range(j1, j2):
-                    # Use ES classes if available? Or default?
-                    # Probably default or grab from ES if we want to preserve ES styling
-                    local_res.append({'tag': 'p', 'classes': es_sec[k].get('classes', []), 'en': "", 'es': es_sec[k]['text']})
+                    item_data = es_sec[k].copy()
+                    item_data.update({
+                        'en': "", 
+                        'es': es_sec[k]['text'],
+                        'raw_html': None,
+                        'es_raw_html': es_sec[k].get('raw_html')
+                    })
+                    local_res.append(item_data)
                     
         return local_res    # Add implicit start (0) and end (len) sentinels
     en_anchors = [-1] + en_headers + [len(en_chunks)]
     es_anchors = [-1] + es_headers + [len(es_chunks)]
     
+    # Process each section between headers
     # Process each section between headers
     limit = min(len(en_anchors), len(es_anchors))
     
@@ -1099,14 +1146,50 @@ def align_chunks(en_chunks, es_chunks):
         
         section_aligned = align_section(en_section, es_section)
         final_aligned.extend(section_aligned)
-
-    # Handle any remaining chunks after the last header (or if no headers)
+        
+        # Explicitly align the headers themselves if they are not sentinels
+        idx_en_h = en_anchors[i+1]
+        idx_es_h = es_anchors[i+1]
+        
+        is_en_real = idx_en_h < len(en_chunks)
+        is_es_real = idx_es_h < len(es_chunks)
+        
+        if is_en_real and is_es_real:
+             # Matched Header Pair
+             h_en = en_chunks[idx_en_h]
+             h_es = es_chunks[idx_es_h]
+             final_aligned.append({
+                 'tag': h_en['tag'],
+                 'classes': h_en.get('classes', []),
+                 'en': h_en['text'],
+                 'es': h_es['text'],
+                 'type': 'header'
+             })
+             
+    # Handle any remaining chunks after the last header
+    # If len > limit, it means we have Headers remaining (orphans) or content after the last matched/sentinel anchor.
+    # The last processed anchor was at index `limit-1`. 
+    # If that anchor was a real header (and not a sentinel), it was paired with a Sentinel in the loop check (and skipped).
+    # So we must include it now.
+    
     if len(en_anchors) > limit:
-        en_section = en_chunks[en_anchors[limit-1]+1 : en_anchors[limit]]
+        # Start from the anchor itself if it's real
+        last_anchor_idx = en_anchors[limit-1]
+        start_idx = last_anchor_idx if last_anchor_idx != -1 else 0
+        
+        # NOTE: If we start at last_anchor_idx, we include the header.
+        # But wait, if `limit-1` was 0 (start), last_anchor was -1. Start=0. Correct.
+        # If `limit-1` was 1, last_anchor was H1_index. Start=H1_index. Correct (include H1).
+        
+        en_section = en_chunks[start_idx : en_anchors[limit]]
         section_aligned = align_section(en_section, [])
         final_aligned.extend(section_aligned)
+        
     if len(es_anchors) > limit:
-        es_section = es_chunks[es_anchors[limit-1]+1 : es_anchors[limit]]
+        last_anchor_idx = es_anchors[limit-1]
+        start_idx = last_anchor_idx if last_anchor_idx != -1 else 0
+        
+        es_section = es_chunks[start_idx : es_anchors[limit]]
         section_aligned = align_section([], es_section)
         final_aligned.extend(section_aligned)
         
@@ -1160,7 +1243,8 @@ def fix_merged_captions(aligned_items):
                      en_body = en_val
                      es_full = es_val
                      
-                     s = SequenceMatcher(None, en_body, es_full, autojunk=False)
+                     
+                     s = difflib.SequenceMatcher(None, en_body, es_full, autojunk=False)
                      match_block = s.find_longest_match(0, len(en_body), 0, len(es_full))
                      
                      # print(f"DEBUG: Match Analysis at {idx}: EN('{en_body[:20]}') ES('{es_full[:20]}') -> MatchStart={match_block.b} Len={match_block.size}")
@@ -2098,8 +2182,12 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         tag = item['tag']
         en_text = item['en']
         es_text = item['es']
+
+        if not en_text and not es_text and not item.get('raw_html') and not item.get('es_raw_html') and tag != 'img': 
+             continue
         
-        if not en_text and not es_text and tag != 'img': continue
+        # if tag == 'img':
+             # print(f"DEBUG: Rendering Image Item {item.get('src')}")
 
         # Format attributes
         tag_classes = item.get('classes', [])
@@ -2132,20 +2220,13 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
              else:
                 html_content += f"<p{en_attrs}>{en_text}</p>\n"
         
-        # Es (We don't have raw HTML for matched Spanish usually, or if we do it might be good to use it but we are translating/aligning text)
-        # Actually SpanishParser also extracts raw_html now.
-        # But if we did Neural Alignment, we flattened to sentences, so we lost the raw_html block structure often.
-        # IF however we are in aligned_chunks mode (heuristic), we might have it.
-        # TODO: Neural align destroys raw_html structure by splitting sentences.
-        # We need to think if we want to preserve Spanish styling too. The user asked for "Maintain styles of ALL book".
-        # For now, let's use text for Spanish to ensure translation/alignment correctness, 
-        # or use raw if available and not Split?
-        
-        if es_text:
+        # Es
+        if es_text or item.get('es_raw_html'):
+            content = item.get('es_raw_html') or es_text
             if tag.startswith('h') or tag == 'figcaption':
-                 html_content += f"<{tag}{es_attrs}>{es_text}</{tag}>\n"
+                 html_content += f"<{tag}{es_attrs}>{content}</{tag}>\n"
             else:
-                 html_content += f"<p{es_attrs}>{es_text}</p>\n"
+                 html_content += f"<p{es_attrs}>{content}</p>\n"
                  
         # Image (English Only usually)
         if tag == 'img':

@@ -599,6 +599,7 @@ class EnglishParser(BaseParser):
         elif tag in self.image_tags:
             # Capture current context before finishing chunk
             parent_tag = self.current_chunk['tag'] if self.current_chunk else 'p'
+            parent_classes = self.current_chunk['classes'] if self.current_chunk else []
             
             self.finish_chunk()
             
@@ -612,7 +613,7 @@ class EnglishParser(BaseParser):
                     'src': src,
                     'alt': alt,
                     'text': '',
-                    'classes': [],
+                    'classes': parent_classes, # Inherit parent classes
                     'as_en': True # Assume EN by default, alignment will fix
                 })
             
@@ -2494,7 +2495,13 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
              # We should wrap it in a div or figure for containment?
              # Simple img for now.
              if src:
-                 html_content += f'<div class="image-container"><img src="{src}" alt="{alt}" /></div>\n'
+                 # Add derived classes to container
+                 img_classes = item.get('classes', [])
+                 container_class = "image-container"
+                 if img_classes:
+                     container_class += " " + " ".join(img_classes)
+                     
+                 html_content += f'<div class="{container_class}"><img src="{src}" alt="{alt}" /></div>\n'
             
     html_content += "</body></html>"
     return html_content

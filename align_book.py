@@ -2256,6 +2256,45 @@ def generate_passthrough_chapter(en_src, es_src, title, staging_dir=None):
 """
     return html_content
 
+def apply_common_styles(en_html, es_text):
+    """
+    Attempts to transfer common formatting styles from English HTML to Spanish text.
+    Handles:
+    1. Full wrapping tags (i, b, strong, em, small)
+    2. Dialogue patterns (specific <small>LABEL:</small> <i>Text</i>)
+    """
+    if not en_html or not es_text:
+        return es_text
+
+    # 1. Check for Full Wrapping Tags
+    # Matches <tag>content</tag> with no other tags at top level
+    # Simple regex for the requested tags
+    full_wrap_pattern = re.compile(r'^<(i|b|strong|em|small)>(.*?)</\1>$', re.DOTALL)
+    match = full_wrap_pattern.match(en_html)
+    if match:
+        tag = match.group(1)
+        # We wrap the entire Spanish text in the same tag
+        return f"<{tag}>{es_text}</{tag}>"
+
+    # 2. Check for Dialogue Pattern
+    # Pattern: <small>SPEAKER:</small> <i>Dialogue</i>
+    # We are lenient with whitespace
+    dia_pattern = re.compile(r'^<small>([^<]+):</small>\s*<i>(.*?)</i>$', re.DOTALL)
+    dia_match = dia_pattern.match(en_html)
+    
+    if dia_match:
+        # Check if Spanish has a similar structure (finding the first colon)
+        # We look for "Speaker: Dialogue"
+        if ':' in es_text:
+            parts = es_text.split(':', 1)
+            speaker = parts[0].strip()
+            dialogue = parts[1].strip()
+            
+            # Reconstruct with transferred styles
+            return f"<small>{speaker}:</small> <i>{dialogue}</i>"
+
+    return es_text
+
 def generate_chapter_html(aligned_pairs, title="", css_files=None):
     """Generates XHTML for a single chapter."""
     css_links = ""
@@ -2276,7 +2315,9 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
 <body>
 """
     
-    for item in aligned_pairs:
+    
+    for i in range(len(aligned_pairs)):
+        item = aligned_pairs[i]
         tag = item['tag']
         en_text = item['en']
         es_text = item['es']
@@ -2284,9 +2325,12 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         if not en_text and not es_text and not item.get('raw_html') and not item.get('es_raw_html') and tag != 'img': 
              continue
         
-        # if tag == 'img':
-             # print(f"DEBUG: Rendering Image Item {item.get('src')}")
+        # DEBUG
+        if 'ch6' in str(item) or 'Closer Look' in str(item) or '06' in str(item):
+             print(f"DEBUG_ITEM[{i}]: tag={tag} type={item.get('type')} en='{en_text}' raw='{item.get('raw_html')}' es='{es_text}' es_raw='{item.get('es_raw_html')}'")
 
+
+        
         # Format attributes
         tag_classes = item.get('classes', [])
         cls_str = " ".join(tag_classes)
@@ -2301,25 +2345,125 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         if is_split_continuation:
             es_container_classes.append('no-bottom-margin')
             
+        # Ensure Spanish container has es-trans class for CSS targeting
+        if 'es-trans' not in es_container_classes:
+            es_container_classes.append('es-trans')
+            
         es_cls_str = " ".join(es_container_classes)
         es_attrs = f' class="{es_cls_str}"' if es_cls_str else ""
         
-        # En
-        if 'raw_html' in item and item['raw_html']:
-            # Use raw extracted HTML to preserve styles (<i>, <small>, <span>, etc.)
-            if tag.startswith('h') or tag == 'figcaption':
-                 html_content += f"<{tag}{en_attrs}>{item['raw_html']}</{tag}>\n"
-            else:
-                 html_content += f"<p{en_attrs}>{item['raw_html']}</p>\n"
-        else:
-             if tag.startswith('h') or tag == 'figcaption':
-                html_content += f"<{tag}{en_attrs}>{en_text}</{tag}>\n"
+        
+        # Calculate English Attributes with optional margin logic
+        limit_margin = False
+        has_spanish_local = (es_text or item.get('es_raw_html'))
+        
+        # Logic: We want to trigger margin removal IF:
+        # 1. We have local Spanish (Standard Case)
+        # 2. OR We are the LAST English header in a group immediately followed by a Spanish block (Split Header Case)
+        
+        is_last_english_before_spanish = False
+        
+        
+        
+        # Check subsequent items to see what is next
+        for k in range(i + 1, len(aligned_pairs)):
+            check_item = aligned_pairs[k]
+            
+            # Check content presence
+            c_en = check_item.get('en', '')
+            c_raw = check_item.get('raw_html')
+            has_en_content = (c_en and c_en.strip()) or c_raw
+            
+            c_es = check_item.get('es', '')
+            c_es_raw = check_item.get('es_raw_html')
+            has_es_content = (c_es and c_es.strip()) or c_es_raw
+            
+            if has_en_content:
+
+                # We found another English item before finding a Spanish one.
+                # So we are NOT the last English item in this group.
+                is_last_english_before_spanish = False
+                break
+            
+            if has_es_content:
+                # We found a Spanish item, and haven't seen English yet.
+                # So we ARE the last English item connecting to this Spanish block.
+                is_last_english_before_spanish = True
+                break
+        
+        if (has_spanish_local or is_last_english_before_spanish) and (tag.startswith('h') or item.get('type') == 'caption'):
+             limit_margin = True
+         
+        final_en_attrs = en_attrs
+        if limit_margin:
+             # Inject class
+             if 'class="' in en_attrs:
+                 final_en_attrs = en_attrs.replace('class="', 'class="no-bottom-margin ')
              else:
-                html_content += f"<p{en_attrs}>{en_text}</p>\n"
+                 final_en_attrs = ' class="no-bottom-margin"'
+
+        # En
+        # Only render English block if there is content (or raw_html)
+        # Simplify check:
+        c_en = en_text.strip()
+        c_raw = item.get('raw_html')
+        
+        if c_en or c_raw:
+            if c_raw:
+                # Use raw extracted HTML to preserve styles (<i>, <small>, <span>, etc.)
+                final_raw = c_raw
+                
+                # SPECIAL HANDLING: If raw_html contains block-level tags (like merged headers),
+                # we must inject the margin class into the LAST block element within it.
+                # Otherwise, the wrapper's class only affects the first element (due to browser HTML parsing).
+                if limit_margin:
+                    # Find all block start tags: <h1...>, <p...>, <div...>
+                    # We look for <(h1-6|p|div) ... >
+                    # Using a regex that captures: 1=TagStart(<h1), 2=Attributes, 3=TagEnd(>)
+                    pattern = r'(<(?:h[1-6]|p|div|figcaption)\b)([^>]*?)(/?>)'
+                    matches = list(re.finditer(pattern, final_raw, re.IGNORECASE))
+                    if matches:
+                        last_m = matches[-1]
+                        g1, g2, g3 = last_m.group(1), last_m.group(2), last_m.group(3)
+                        
+                        # Inject class
+                        if 'class="' in g2 or "class='" in g2:
+                             new_attrs = re.sub(r'class=(["\'])', r'class=\1no-bottom-margin ', g2)
+                        else:
+                             new_attrs = g2 + ' class="no-bottom-margin"'
+                        
+                        # Reconstruct string
+                        replacement = f"{g1}{new_attrs}{g3}"
+                        final_raw = final_raw[:last_m.start()] + replacement + final_raw[last_m.end():]
+
+                if tag.startswith('h') or tag == 'figcaption':
+                     html_content += f"<{tag}{final_en_attrs}>{final_raw}</{tag}>\n"
+                else:
+                     html_content += f"<p{final_en_attrs}>{final_raw}</p>\n"
+            else:
+                 if tag.startswith('h') or tag == 'figcaption':
+
+                    html_content += f"<{tag}{final_en_attrs}>{en_text}</{tag}>\n"
+                 else:
+                    html_content += f"<p{final_en_attrs}>{en_text}</p>\n"
         
         # Es
-        if es_text or item.get('es_raw_html'):
-            content = item.get('es_raw_html') or es_text
+        # First, try to apply style transfer if we have raw English HTML
+        final_es_content = None
+        
+        # Use English Raw HTML map if available, else plain text (less useful for transfer)
+        en_source_for_transfer = item.get('raw_html') or en_text
+        
+        if es_text and not item.get('es_raw_html'):
+             # Try transfer
+             final_es_content = apply_common_styles(en_source_for_transfer, es_text)
+        elif item.get('es_raw_html'):
+             final_es_content = item.get('es_raw_html')
+        else:
+             final_es_content = es_text # Fallback
+
+        if final_es_content:
+            content = final_es_content
             
             # Wrap in generic span for styling isolation
             # Check if content is not just an image or empty
@@ -2327,6 +2471,7 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
             wrapped_content = f'<span class="es-trans">{content}</span>'
             
             if tag.startswith('h') or tag == 'figcaption':
+
                  html_content += f"<{tag}{es_attrs}>{wrapped_content}</{tag}>\n"
             else:
                  html_content += f"<p{es_attrs}>{wrapped_content}</p>\n"
@@ -2807,10 +2952,11 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     p.es-trans, div.es-trans, span.es-trans { color: #666 !important; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
     .no-bottom-margin { margin-bottom: 0 !important; }
     h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666 !important; opacity: 0.8; }
-    /* Remove spacing between English header and Spanish header */
-    h1 + h1.es-trans, h2 + h2.es-trans, h3 + h3.es-trans, h4 + h4.es-trans { margin-top: 0; padding-top: 0; }
-    /* Optional: tighten bottom of English header too if needed */
-    h1:has(+ h1.es-trans), h2:has(+ h2.es-trans), h3:has(+ h3.es-trans), h4:has(+ h4.es-trans) { margin-bottom: 0.1em; } 
+    
+    /* Remove spacing between English header/caption and Spanish translation */
+    .no-bottom-margin + .es-trans { margin-top: 0 !important; padding-top: 0 !important; }
+    
+    /* Optional: tight spacing for specific cases if needed */ 
     figcaption { font-weight: bold; margin-top: 10px; }
     .clamp-text {
         display: -webkit-box;

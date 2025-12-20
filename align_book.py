@@ -929,7 +929,7 @@ def get_header_indices(chunks):
 
 def align_chunks(en_chunks, es_chunks):
     aligned = []
-    print(f"Aligning: EN {len(en_chunks)} chunks (Headers: {len(get_header_indices(en_chunks))}) vs ES {len(es_chunks)} chunks (Headers: {len(get_header_indices(es_chunks))})")
+
     
     en_headers = get_header_indices(en_chunks)
     es_headers = get_header_indices(es_chunks)
@@ -937,7 +937,7 @@ def align_chunks(en_chunks, es_chunks):
     # Fix for structure mismatch: If header counts differ, fall back to flat alignment
     # This handles cases where one language uses <h1> and the other uses <p class="title">
     if len(en_headers) != len(es_headers):
-        print(f"  -> Header mismatch ({len(en_headers)} vs {len(es_headers)}). Falling back to flat alignment.")
+
         en_headers = []
         es_headers = []
     
@@ -2335,9 +2335,7 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         if not en_text and not es_text and not item.get('raw_html') and not item.get('es_raw_html') and tag != 'img': 
              continue
         
-        # DEBUG
-        if 'ch6' in str(item) or 'Closer Look' in str(item) or '06' in str(item):
-             print(f"DEBUG_ITEM[{i}]: tag={tag} type={item.get('type')} en='{en_text}' raw='{item.get('raw_html')}' es='{es_text}' es_raw='{item.get('es_raw_html')}'")
+
 
 
         

@@ -236,8 +236,11 @@ def align_tocs(en_toc, es_toc):
     for i, item in enumerate(en_toc):
         norm = normalize_label(item['label'])
         raw = item['label'].lower().strip()
-        # Filter Ignored Items
-        if raw in ['table of contents', 'contents', 'title page', 'cover', 'copyright']: continue
+        # Filter Ignored Items - Modified to allow Title Page, Cover, etc.
+        # We only strictly filter recursives like 'Table of Contents'? 
+        # Actually user wants 'Table of Contents' too? "like original one".
+        # Let's remove the filter entirely or just keep empty checks.
+        if not raw: continue
         en_items.append({'idx': i, 'item': item, 'norm': norm})
 
     es_items = []
@@ -2158,6 +2161,101 @@ def reconstruct_aligned_items(aligned_groups):
                     
     return aligned
 
+def extract_body_content(file_path):
+    """Extracts the raw inner HTML of the body tag."""
+    if not file_path or not os.path.exists(file_path): return ""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            # Simple regex to find body
+            m = re.search(r'<body[^>]*>(.*?)</body>', content, re.DOTALL | re.IGNORECASE)
+            if m:
+                return m.group(1).strip()
+            else:
+                 # Fallback: return everything? No, might include Head.
+                 # Just return generic placeholder if failed?
+                 return ""
+    except Exception as e:
+        print(f"Error extracting body from {file_path}: {e}")
+        return ""
+
+def generate_passthrough_chapter(en_src, es_src, title, staging_dir=None):
+    """Generates a combined chapter without alignment, preserving raw structure and images."""
+    
+    def process_content(source_path, staging_dir):
+        if not source_path: return ""
+        content = extract_body_content(source_path)
+        if not content or not staging_dir: return content
+        
+        # Regex to find src attributes (img, audio, video)
+        # Matches src="...", src='...'
+        # We also need to handle xlink:href for svg images if present, but standard img src is main target
+        
+        base_dir = os.path.dirname(source_path)
+        img_dest_dir = os.path.join(staging_dir, 'OEBPS', 'images')
+        if not os.path.exists(img_dest_dir): os.makedirs(img_dest_dir, exist_ok=True)
+        
+        def replace_src(match):
+            original_src = match.group(3)
+            # Ignore external links or data URIs
+            if original_src.startswith('http') or original_src.startswith('data:'):
+                return match.group(0)
+                
+            # Resolve absolute path
+            # Handle encoded URL chars in filename if any
+            import urllib.parse
+            dec_src = urllib.parse.unquote(original_src)
+            
+            # If path starts with ../ resolve it
+            full_src_path = os.path.normpath(os.path.join(base_dir, dec_src))
+            
+            if os.path.exists(full_src_path):
+                fname = os.path.basename(full_src_path)
+                dest_path = os.path.join(img_dest_dir, fname)
+                shutil.copy2(full_src_path, dest_path)
+                print(f"Passthrough Copy: {fname}")
+                return f'{match.group(1)}="images/{fname}"'
+            else:
+                print(f"Warning: Passthrough image missing: {full_src_path}")
+                return match.group(0)
+
+        # Pattern: (src|href)=["'](.*?)["']
+        # We focus on src attribute primarily. 
+        # Use re.sub with callback to robustly handle replacements
+        processed = re.sub(r'(src|href)=([\'"])(.*?)\2', replace_src, content)
+        
+        return processed
+
+    en_body = process_content(en_src, staging_dir)
+    es_body = process_content(es_src, staging_dir)
+    
+    html_content = f"""<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>{html.escape(title)}</title>
+  <link rel="stylesheet" type="text/css" href="stylesheet.css"/>
+  <link rel="stylesheet" type="text/css" href="styles.css"/>
+  <style>
+     .passthrough-container {{ margin-bottom: 2em; padding-bottom: 1em; border-bottom: 1px solid #ccc; }}
+     .es-original {{ color: #444; margin-top: 2em; }}
+  </style>
+</head>
+<body>
+    <!-- English Content -->
+    <div class="en-original passthrough-container">
+       {en_body}
+    </div>
+    
+    <!-- Spanish Content -->
+    <div class="es-original passthrough-container">
+       {es_body}
+    </div>
+</body>
+</html>
+"""
+    return html_content
+
 def generate_chapter_html(aligned_pairs, title="", css_files=None):
     """Generates XHTML for a single chapter."""
     css_links = ""
@@ -2333,6 +2431,34 @@ def process_chapter_pair(args):
     (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
     """
     idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files = args
+    
+    # PASSTHROUGH MODE: Skip alignment for specific chapters
+    PASSTHROUGH_LABELS = ['table of contents', 'contents', 'title page', 'cover', 'copyright']
+    if label and label.lower().strip() in PASSTHROUGH_LABELS:
+        try:
+             print(f"Passthrough Mode: Generating '{label}' without alignment.")
+             en_src = os.path.join(en_opf_dir, en_rel) if en_rel else None
+             es_src = os.path.join(es_opf_dir, es_rel) if es_rel else None
+             
+             # Pass staging_dir for image handling
+             html_content = generate_passthrough_chapter(en_src, es_src, label, staging_dir)
+             
+             # determine output filename from source if possible
+             if en_rel:
+                 out_filename = os.path.basename(en_rel)
+             elif es_rel:
+                 out_filename = os.path.basename(es_rel)
+             else:
+                 out_filename = f"passthrough_{idx}.xhtml"
+                 
+             out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
+             with open(out_path, 'w', encoding='utf-8') as f:
+                 f.write(html_content)
+                 
+             return (idx, out_filename, label, [])
+        except Exception as e:
+             print(f"Error in Passthrough for {label}: {e}")
+             return (idx, None, str(e), [])
     
     # Standard processing without dictionary semantic guard
     try:

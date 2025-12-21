@@ -76,6 +76,7 @@ def extract_title_from_html(file_path):
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read(6000) 
+
             
             # 1. Standard Headers
             # Use findall to check all headers, ignoring empty ones (e.g. image-only)
@@ -91,11 +92,13 @@ def extract_title_from_html(file_path):
             count = 0
             for p_text in p_matches:
                 clean = re.sub(r'<[^>]+>', '', p_text).strip()
-                clean = html.unescape(clean)
+                clean = html.unescape(clean).strip()
                 if not clean: continue
+
+
                 
                 count += 1
-                if count > 10: break 
+                if count > 20: break 
                 
                 if len(clean) > 80: continue
                 
@@ -106,9 +109,22 @@ def extract_title_from_html(file_path):
                 
                 if any(c.isdigit() for c in clean) and len(clean) < 30:
                      return clean
+            
+            
+            # 3. Check for specific Dedication/About patterns in first few paragraphs
+            # Only if we haven't found a strong title yet.
+            if count < 15: # Checked up to 15 non-empty paragraphs
+                lower = clean.lower()
+                if lower.startswith('para ') or lower.startswith('a ') or lower.startswith('to ') or lower.startswith('for ') or 'dedicada' in lower:
+                     return "Dedication"
+
+                if 'sobre el autor' in lower or 'about the author' in lower:
+                     return "About the Author"
+
+
 
     except Exception as e:
-        print(f"Error sniffing title from {file_path}: {e}")
+        pass # Error sniffing title from {file_path}: {e}
     return ""
 
 def parse_toc(ncx_path):
@@ -168,10 +184,9 @@ def parse_toc(ncx_path):
                 full_path = os.path.join(base_dir, file_part)
                 if os.path.exists(full_path):
                     label = extract_title_from_html(full_path)
-                    print(f"Sniffed label for {content}: '{label}'")
                     item['label'] = label
             except Exception as e:
-                print(f"Failed to sniff {content}: {e}")
+                pass # Failed to sniff {content}: {e}
 
     return nav_points
 
@@ -269,12 +284,22 @@ def normalize_label(label):
     if 'acerca' in label and 'autor' in label: return 'about_author'
     if 'sobre' in label and 'autor' in label: return 'about_author'
     
-    part_match = re.search(r'(?:part|parte)\s*(\d+|[ivxlcdm]+)', label)
+    part_match = re.search(r'\b(?:part|parte)\s+(.+)', label)
     if part_match:
-        num_str = part_match.group(1).upper()
-        if num_str.isdigit(): num = int(num_str)
-        else: num = roman_to_int(num_str)
+
+        num_str = part_match.group(1).strip().upper()
+        if num_str.isdigit(): 
+            num = int(num_str)
+        elif all(c in 'IVXLCDM' for c in num_str):
+             num = roman_to_int(num_str)
+        else:
+             # Try parse written
+             num = parse_written_number(num_str)
+             if not num: 
+                 return label # Fail to parse number
+                 
         return ('part', num)
+
 
     clean_label = re.sub(r'^(chapter|capitulo|capítulo)\s*', '', label)
     

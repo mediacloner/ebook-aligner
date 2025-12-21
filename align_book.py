@@ -701,6 +701,12 @@ class EnglishParser(BaseParser):
             
             src = attr_dict.get('src') or attr_dict.get('xlink:href') # Support xlink for svg:image
             alt = attr_dict.get('alt', '')
+            width = attr_dict.get('width')
+            height = attr_dict.get('height')
+            style = attr_dict.get('style')
+            # Extract classes specifically on the img tag. 
+            # Note: 'classes' key stores PARENT classes (from p/div), so we use 'img_classes'
+            img_classes = attr_dict.get('class', '').split()
             
             if src:
                 self.chunks.append({
@@ -708,8 +714,13 @@ class EnglishParser(BaseParser):
                     'tag': 'img', # Normalize to img for internal use
                     'src': src,
                     'alt': alt,
+                    'width': width,
+                    'height': height,
+                    'img_style': style,
+                    'img_classes': img_classes,
                     'text': '',
                     'classes': parent_classes, # Inherit parent classes
+                    'wrapper_tag': parent_tag, # Preserve original wrapper (figure, etc)
                     'as_en': True # Assume EN by default, alignment will fix
                 })
             
@@ -2374,12 +2385,14 @@ def apply_common_styles(en_html, es_text):
 
     # 1. Check for Full Wrapping Tags
     # Matches <tag>content</tag> with no other tags at top level
-    # Simple regex for the requested tags
-    full_wrap_pattern = re.compile(r'^<(i|b|strong|em|small)>(.*?)</\1>$', re.DOTALL)
+    # Updated to allow attributes and whitespace
+    # Matches: <tag attr>content</tag>
+    full_wrap_pattern = re.compile(r'^\s*<(i|b|strong|em|small)(?:\s+[^>]*)?>(.*?)</\1>\s*$', re.DOTALL | re.IGNORECASE)
     match = full_wrap_pattern.match(en_html)
     if match:
-        tag = match.group(1)
-        # We wrap the entire Spanish text in the same tag
+        tag = match.group(1).lower() # Normalize tag name
+        # We wrap the entire Spanish text in the CLEAN tag (no attributes)
+        # This preserves the style (italics/bold) but strips specific classes/colors
         return f"<{tag}>{es_text}</{tag}>"
 
     # 2. Check for Dialogue Pattern
@@ -2581,21 +2594,41 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
                  html_content += f"<p{es_attrs}>{wrapped_content}</p>\n"
                  
         # Image (English Only usually)
+        # Image (English Only usually)
         if tag == 'img':
              # Logic: If item has src, print it.
              # We put it OUTSIDE the p/h blocks.
              src = item.get('src', '')
              alt = item.get('alt', '')
+             width = item.get('width')
+             height = item.get('height')
+             style = item.get('img_style')
+             direct_classes = item.get('img_classes', [])
+             
              # We should wrap it in a div or figure for containment?
              # Simple img for now.
              if src:
-                 # Add derived classes to container
-                 img_classes = item.get('classes', [])
+                 # Add derived classes to container from PARENT
+                 parent_classes = item.get('classes', [])
                  container_class = "image-container"
-                 if img_classes:
-                     container_class += " " + " ".join(img_classes)
+                 if parent_classes:
+                     container_class += " " + " ".join(parent_classes)
+                 
+                 # Construct img tag attributes
+                 img_attrs_list = [f'src="{src}"', f'alt="{alt}"']
+                 if width: img_attrs_list.append(f'width="{width}"')
+                 if height: img_attrs_list.append(f'height="{height}"')
+                 if style: img_attrs_list.append(f'style="{style}"')
+                 
+                 # Add direct img classes
+                 if direct_classes:
+                     img_attrs_list.append(f'class="{" ".join(direct_classes)}"')
                      
-                 html_content += f'<div class="{container_class}"><img src="{src}" alt="{alt}" /></div>\n'
+                 img_tag = f'<img {" ".join(img_attrs_list)} />'
+                 
+                 # Use preserved wrapper tag (e.g., figure) or default to div
+                 wrapper = item.get('wrapper_tag', 'div')
+                 html_content += f'<{wrapper} class="{container_class}">{img_tag}</{wrapper}>\n'
             
     html_content += "</body></html>"
     return html_content
@@ -3059,7 +3092,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
     h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    p.es-trans, div.es-trans, span.es-trans { color: #666 !important; font-family: serif; font-size: 0.95em; margin-bottom: 1em; margin-top: 0; }
+    /* Spanish Translation Styling: Only change color, inherit everything else */
+    p.es-trans, div.es-trans, span.es-trans { color: #666 !important; }
     .no-bottom-margin { margin-bottom: 0 !important; }
     h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666 !important; opacity: 0.8; }
     

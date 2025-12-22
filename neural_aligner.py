@@ -193,10 +193,57 @@ class NeuralAligner:
         processed_en = set()
         processed_es = set()
         
+        # Pre-process: Identify hard constraint pairs that should be isolated (1:1 blocks)
+        # Create a set of (en_idx, es_idx) tuples that MUST stay isolated
+        hard_pairs = set()
+        if constraints:
+            for item in constraints:
+                if len(item) == 2:
+                    i, j = item
+                    options = {}
+                else:
+                    i, j, options = item
+                if not options.get('soft', False):
+                    hard_pairs.add((i, j))
+        
         final_alignment = []
+        
+        # FIRST: Emit ALL hard constraint pairs as isolated 1:1 blocks
+        # This must happen BEFORE the main loop to prevent them from being absorbed
+        for (hi, hj) in sorted(hard_pairs):  # Sort by en index for consistent ordering
+            if hi not in processed_en and hj not in processed_es:
+                if hi < n and hj < m:  # Bounds check
+                    final_alignment.append({
+                        'en_indices': [hi],
+                        'es_indices': [hj], 
+                        'en_chunks': [en_chunks[hi]],
+                        'es_chunks': [es_chunks[hj]]
+                    })
+                    processed_en.add(hi)
+                    processed_es.add(hj)
         
         for i in range(n):
             if i in processed_en:
+                continue
+            
+            # Check if this En index is part of a hard constraint pair
+            # If so, emit it as an isolated 1:1 block (bypass expansion)
+            hard_partner = None
+            for (hi, hj) in hard_pairs:
+                if hi == i:
+                    hard_partner = hj
+                    break
+            
+            if hard_partner is not None and hard_partner not in processed_es:
+                # Emit isolated 1:1 block for hard constraint
+                final_alignment.append({
+                    'en_indices': [i],
+                    'es_indices': [hard_partner], 
+                    'en_chunks': [en_chunks[i]],
+                    'es_chunks': [es_chunks[hard_partner]]
+                })
+                processed_en.add(i)
+                processed_es.add(hard_partner)
                 continue
                 
             # Who does i map to?
@@ -214,20 +261,28 @@ class NeuralAligner:
             while True:
                 initial_size = len(block_en) + len(block_es)
                 
-                # Add all En that map to any in block_es
+                # Add all En that map to any in block_es (excluding already processed)
                 for es_idx in list(block_es):
-                    block_en.update(es_to_en[es_idx])
+                    for en_idx in es_to_en[es_idx]:
+                        if en_idx not in processed_en:
+                            block_en.add(en_idx)
                     
-                # Add all Es that map to any in block_en
+                # Add all Es that map to any in block_en (excluding already processed)
                 for en_idx in list(block_en):
-                    block_es.update(en_to_es[en_idx])
+                    for es_idx in en_to_es[en_idx]:
+                        if es_idx not in processed_es:
+                            block_es.add(es_idx)
                     
                 if len(block_en) + len(block_es) == initial_size:
                     break
             
-            # Sort and store
-            sorted_en = sorted(list(block_en))
-            sorted_es = sorted(list(block_es))
+            # Sort and store (filter out any processed indices that slipped in)
+            sorted_en = sorted([x for x in block_en if x not in processed_en])
+            sorted_es = sorted([x for x in block_es if x not in processed_es])
+            
+            # Skip empty blocks
+            if not sorted_en:
+                continue
             
             final_alignment.append({
                 'en_indices': sorted_en,

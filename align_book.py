@@ -1379,7 +1379,7 @@ def extract_nodes(soup):
     
     # Target meaningful content elements
     # Added li, blockquote, div to be safe, but main content usually in p/h tags
-    target_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'div']
+    target_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'div', 'figcaption']
     
     # We use find_all to get them in document order
     # Note: This might get nested elements (div containing p). 
@@ -1390,8 +1390,15 @@ def extract_nodes(soup):
     
     for el in elements:
         # Check if this element contains other target elements (e.g. div wrapper)
-        if el.find(target_tags):
+        # EXCEPTION: figcaption often contains <p> but we want to extract figcaption itself
+        if el.name != 'figcaption' and el.find(target_tags):
             continue
+        # Skip elements whose parent is a figcaption (we already extract figcaption itself)
+        if el.parent and el.parent.name == 'figcaption':
+            continue
+        # If it's figcaption, extract it (don't skip)
+        if el.name == 'figcaption':
+            pass # Proceed to extract
             
         text = el.get_text().strip()
         if not text:
@@ -2985,6 +2992,52 @@ def apply_common_styles(en_html, es_text):
             # Reconstruct with transferred styles
             return f"<small>{speaker}:</small> <i>{dialogue}</i>"
 
+    # 3. Check for Figure/Table Caption Pattern (Robust BS4)
+    # Pattern: <p class="..."><small>FIGURE X:</small> Description</p> or just <small>FIGURE X:</small> Description
+    # We parse the HTML structure explicitly to handle wrappers like <figcaption>.
+    
+    try:
+        soup = BeautifulSoup(en_html, 'html.parser')
+        
+        # Look for the <small> tag defining the figure label
+        small = soup.find('small')
+        if small:
+             small_text = small.get_text()
+             # Check if it looks like a figure label
+             if re.match(r'^(FIGURE|FIGURA|TABLE|TABLA|FIG\.)', small_text, re.IGNORECASE):
+                 # Found English Label
+                 en_label = small_text.strip()
+                 
+                 # Check if Spanish text starts with a similar label pattern
+                 es_fig_pattern = re.compile(r'^((?:Figura|Tabla|Figure|Table|Cuadro|Grafico|Fig\.)\s*\d+[\.\:]?)\s*(.*)', re.DOTALL | re.IGNORECASE)
+                 es_fig_match = es_fig_pattern.match(es_text.strip())
+                 
+                 if es_fig_match:
+                     es_label = es_fig_match.group(1).strip()
+                     es_description = es_fig_match.group(2).strip()
+                     
+                     # Reconstruct content with small tag
+                     es_content = f"<small>{es_label}</small> {es_description}"
+                     
+                     # Check if there is a wrapping <p> tag with classes we should inherit
+                     # We favor the innermost <p> that wraps the <small> tag
+                     # But in <figcaption><p class="CAP">..., the <p> is a parent of <small>
+                     p_tag = small.find_parent('p')
+                     if p_tag and p_tag.get('class'):
+                         classes = " ".join(p_tag.get('class'))
+                         return f'<p class="{classes}">{es_content}</p>'
+                     
+                     # If no p tag, or no classes, just return the content using the inferred tag?
+                     # If the original was just <p> without class, we might want to preserve <p>?
+                     if p_tag:
+                         return f'<p>{es_content}</p>'
+                         
+                     return es_content
+
+    except Exception as e:
+        print(f"Warning: BS4 parsing failed in apply_common_styles: {e}")
+        pass
+
     return es_text
 
 def generate_chapter_html(aligned_pairs, title="", css_files=None):
@@ -3155,16 +3208,26 @@ def generate_chapter_html(aligned_pairs, title="", css_files=None):
         if final_es_content:
             content = final_es_content
             
-            # Wrap in generic span for styling isolation
-            # Check if content is not just an image or empty
-            # If tag is block-like, span is valid.
-            wrapped_content = f'<span class="es-trans">{content}</span>'
+            # Check if content already contains block-level elements (from apply_common_styles)
+            # If so, don't wrap in span - just use directly
+            has_block_element = re.search(r'<(?:p|div|h[1-6])\s', content, re.IGNORECASE)
             
-            if tag.startswith('h') or tag == 'figcaption':
-
-                 html_content += f"<{tag}{es_attrs}>{wrapped_content}</{tag}>\n"
+            if has_block_element:
+                # Content already has proper structure, output directly
+                # For figcaption, we still need the outer figcaption tag
+                if tag == 'figcaption':
+                    html_content += f"<{tag}{es_attrs}>{content}</{tag}>\n"
+                else:
+                    # For other tags, content is self-contained
+                    html_content += f"{content}\n"
             else:
-                 html_content += f"<p{es_attrs}>{wrapped_content}</p>\n"
+                # Wrap in generic span for styling isolation
+                wrapped_content = f'<span class="es-trans">{content}</span>'
+                
+                if tag.startswith('h') or tag == 'figcaption':
+                     html_content += f"<{tag}{es_attrs}>{wrapped_content}</{tag}>\n"
+                else:
+                     html_content += f"<p{es_attrs}>{wrapped_content}</p>\n"
                  
         # Image (English Only usually)
         # Image (English Only usually)
@@ -3298,6 +3361,7 @@ def process_chapter_pair(args):
     """
     idx, target_path, es_rel, es_opf_dir, config, label = args
     print(f"DEBUG: Entering process_chapter_pair for {label}")
+    print(f"DEBUG: MAPPING: {os.path.basename(target_path)} <-> {os.path.basename(es_rel) if es_rel else 'None'}")
     
     # Check bypass
     if config.get('bypass_alignment'):
@@ -3314,6 +3378,26 @@ def process_chapter_pair(args):
         # 2. Extract Nodes for Alignment
         en_chunks = extract_nodes(soup)
         print(f"DEBUG: {label} - Extracted {len(en_chunks)} EN chunks")
+
+        # --- PRE-PROCESS: Split Massive English Chunks ---
+        # Same rationale as Spanish: Granularity mismatch causes alignment drifts/merges.
+        temp_splitter_en = Splitter()
+        new_en_chunks = []
+        for c in en_chunks:
+            txt = c['text']
+            # Only split standard text, preserve headers/captions structure if small enough
+            # But here we just use length check. 
+            if len(txt) > 600 and c['type'] == 'std':
+                parts = temp_splitter_en.split_sentences(txt)
+                for part in parts:
+                     if not part.strip(): continue
+                     new_c = c.copy()
+                     new_c['text'] = part
+                     new_en_chunks.append(new_c)
+            else:
+                new_en_chunks.append(c)
+        en_chunks = new_en_chunks
+        print(f"DEBUG: {label} - Split EN chunks to {len(en_chunks)}")
         
         # 3. Parse Spanish Content
         if not es_rel or not os.path.exists(es_rel):
@@ -3378,7 +3462,7 @@ def process_chapter_pair(args):
                  # Filter out captions from the alignment input to prevent strict monotonic constraint failures 
                  # when captions float (e.g. Figure X appears before text in EN vs after in ES).
                  
-                 should_filter = config.get('filter_captions', True)
+                 should_filter = config.get('filter_captions', False) # Default to False to include captions
                  print(f"DEBUG: {label} - Initial should_filter={should_filter}")
                  if not should_filter:
                       print("DEBUG: Caption filtering DISABLED by config.")
@@ -3430,8 +3514,8 @@ def process_chapter_pair(args):
                      en_nums = {} # Num -> [list of indices]
                      for i, c in enumerate(en_filtered):
                          txt = c['text'].strip()
-                         # Safety: Captions shouldn't be huge paragraphs
-                         if len(txt) > 120: continue 
+                         # Safety: Captions shouldn't be huge paragraphs, unless explicit caption type
+                         if len(txt) > 300 and c.get('type') != 'caption': continue 
 
                          m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', txt, re.IGNORECASE)
                          if m:
@@ -3446,6 +3530,8 @@ def process_chapter_pair(args):
                      # --- PRIMARY ANCHORS (Starts with Figure X) ---
                      for j, c in enumerate(es_filtered):
                          es_loop_txt = c['text'].strip()
+                         # Safety:
+                         if len(es_loop_txt) > 300 and c.get('type') != 'caption': continue
                          m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
                          if m:
                              num = m.group(1).rstrip('.:,;- ')
@@ -3454,11 +3540,20 @@ def process_chapter_pair(args):
                                  candidates = en_nums[num]
                                  best_match = -1
                                  for candidate in candidates:
+                                     # Enforce strict Type matching for Captions to avoid Body<->Caption misalignment
+                                     en_type = en_filtered[candidate].get('type')
+                                     es_type = c.get('type')
+                                     # Assuming 'caption' type is reliable. If not, maybe relax.
+                                     # But En Parser sets 'caption' for figcaption matches.
+                                     if es_type == 'caption' and en_type != 'caption': continue
+                                     if es_type != 'caption' and en_type == 'caption': continue
+
                                      if candidate > last_en_idx:
                                          best_match = candidate
                                          break
                                  if best_match != -1:
-                                     constraints.append((best_match, j, {'soft': True}))
+                                     constraints.append((best_match, j, {'soft': False}))
+
                                      last_en_idx = best_match
 
                      # --- SECONDARY ANCHORS (References in Text) ---
@@ -3466,6 +3561,10 @@ def process_chapter_pair(args):
                      # This anchors the body text surrounding captions without numbers.
                      en_refs = {}
                      for i, c in enumerate(en_filtered):
+                         # Skip Definition Chunks (Anchors)
+                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
+                             print(f"DEBUG: Skipping EN Ref Source (Definition): {c['text'][:30]}...")
+                             continue
                          refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
                          for r in refs:
                              if r not in en_refs: en_refs[r] = []
@@ -3473,8 +3572,10 @@ def process_chapter_pair(args):
                               
                      es_refs = {}
                      for j, c in enumerate(es_filtered):
-                         # Skip if it's already a primary anchor (Start) to avoid duplicate constraints?
-                         # No, redundant constraints are fine.
+                         # Skip Definition Chunks (Anchors)
+                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
+                             print(f"DEBUG: Skipping ES Ref Source (Definition): {c['text'][:30]}...")
+                             continue
                          refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
                          for r in refs:
                              if r not in es_refs: es_refs[r] = []
@@ -3532,7 +3633,9 @@ def process_chapter_pair(args):
                                  'node': ens[k]['node'],
                                  'es': ess[k]['text'],
                                  'en': ens[k]['text'],
-                                 'tag': ens[k]['tag']
+                                 'tag': ens[k]['tag'],
+                                 'raw_html': ens[k].get('raw_html'),
+                                 'classes': ens[k].get('classes', [])
                              })
                          continue
                      

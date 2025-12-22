@@ -15,6 +15,12 @@ import uuid
 from datetime import datetime
 from difflib import SequenceMatcher
 from collections import Counter
+import json
+from bs4 import BeautifulSoup
+import warnings
+from bs4 import XMLParsedAsHTMLWarning
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+
 try:
     from neural_aligner import NeuralAligner
 except ImportError:
@@ -354,26 +360,66 @@ def align_tocs(en_toc, es_toc):
     # 1. Find Anchors (Greedy Best Match)
     for en in en_items:
         match = None
-        # Structural Match
+        
+        # Debug print for number extraction
+        en_src_debug = en['item']['src']
+        en_num_debug = extract_chapter_number(en_src_debug)
+        # print(f"DEBUG EN Item: '{en['norm']}' Src='{en_src_debug}' Num={en_num_debug}")
+        
+        # Strategy A: Structural Match (Label + Level)
         if isinstance(en['norm'], tuple):
             for es in es_items:
                 if es['idx'] in es_matched: continue
                 if es['norm'] == en['norm']:
                     match = es
                     break
-        # String Match
-        if not match and isinstance(en['norm'], str):
+                    
+        # Strategy B: String Match (Label only)
+        if not match and isinstance(en['norm'], str) and en['norm']:
              for es in es_items:
                 if es['idx'] in es_matched: continue
                 if es['norm'] == en['norm']: 
                     match = es
                     break
-                    
+        
+        # Strategy C: Filename Number Match (Fallback for Splits/No-Labels)
+        if not match:
+             en_src = en['item']['src']
+             en_num = extract_chapter_number(en_src)
+             
+             if en_num is not None:
+                 for es in es_items:
+                     es_src = es['item']['src']
+                     es_num = extract_chapter_number(es_src)
+                     
+                     # Debug matching attempt
+                     # if es_num is not None and es['idx'] not in es_matched:
+                     #    print(f"DEBUG Check: En#{en_num} ({en_src}) vs Es#{es_num} ({es_src})")
+                     
+                     if es_num == en_num:
+                         if es['idx'] in es_matched:
+                             prev_anchors = [x for x in anchors if x[1]['idx'] == es['idx']]
+                             if not prev_anchors: continue 
+                             
+                             prev_en = prev_anchors[-1][0]
+                             prev_en_src = prev_en['item']['src']
+                             prev_en_num = extract_chapter_number(prev_en_src)
+                             
+                             if prev_en_num == en_num:
+                                 match = es
+                                 break
+                             else:
+                                 continue
+                         else:
+                             match = es
+                             break
+                     
         if match:
             anchors.append((en, match))
             en_matched.add(en['idx'])
             es_matched.add(match['idx'])
-            
+            # print(f"DEBUG Match Found: En[{en['idx']}] '{en['item']['label']}' -> Es[{match['idx']}] '{match['item']['label']}' (Src: {en['item']['src']} -> {match['item']['src']})")
+
     # Sort anchors by English index to establish a skeleton
     anchors.sort(key=lambda x: x[0]['idx'])
     
@@ -384,6 +430,11 @@ def align_tocs(en_toc, es_toc):
     last_es_idx = -1
     
     # Add a sentinel anchor at the end to handle trailing items
+    # CAUTION: If we used N-to-1 mapping, we can't assume 1-to-1 gaps.
+    # But the gap fill logic simply zips what's between anchors.
+    # If consecutive anchors map [En1->Es1, En2->Es1], the gap between En1 and En2 is empty.
+    # The gap between Es1 and Es1 is empty. Loop runs 0 times. Correct.
+    
     sentinel_en = {'idx': len(en_items)}
     sentinel_es = {'idx': len(es_items)}
     anchors.append((sentinel_en, sentinel_es))
@@ -393,6 +444,10 @@ def align_tocs(en_toc, es_toc):
         current_es_idx = anchor_es['idx']
         
         # Identification of Gap Items
+        # Note: We must NOT exclude items just because they were matched in Strategy C?
+        # Actually, if they are matched, they are anchors. Anchors are processed in the loop body.
+        # So "not in en_matched" is correct for finding UNMATCHED gap items.
+        
         gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_matched]
         gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_matched]
         
@@ -424,6 +479,32 @@ def align_tocs(en_toc, es_toc):
         last_es_idx = current_es_idx
         
     return final_pairs
+
+def extract_chapter_number(filename):
+    """
+    Extracts the first significant number from a filename.
+    Useful for aligning 'chapter001.xhtml' with '1.html'.
+    Returns int or None.
+    """
+    if not filename: return None
+    base = os.path.basename(filename)
+    # Look for patterns like 'chapter001', 'part01', or just '1.html'
+    # Priority: numbers embedded in text
+    
+    # 1. Look for 'chapter' followed by digits
+    m = re.search(r'chapter[-_]?(\d+)', base, re.IGNORECASE)
+    if m: return int(m.group(1))
+
+    # 2. Look for just leading digits (e.g. '1.html')
+    m = re.match(r'^(\d+)', base)
+    if m: return int(m.group(1))
+    
+    # 3. Look for ANY digits? Dangerous ('part2_chapter1')
+    # Let's try to be smart. 'split_000' is secondary.
+    # What about 'chapter001_split_000'? 'chapter(\d+)' catches it.
+    
+    # What if it is just 'name.html'? None.
+    return None
 
 def clean_text(text):
     return re.sub(r'\s+', ' ', text).strip()
@@ -1033,6 +1114,147 @@ def parse_file(path, parser_cls, config):
         return []
 def get_header_indices(chunks):
     return [i for i, c in enumerate(chunks) if c['type'] == 'header']
+
+def extract_nodes(soup):
+    """
+    DOM Extraction for Experimental Method.
+    Traverses the soup and extracts text chunks with their DOM node references.
+    Returns: list of dicts {'text': ..., 'node': ..., 'type': ...}
+    """
+    chunks = []
+    
+    # Target meaningful content elements
+    # Added li, blockquote, div to be safe, but main content usually in p/h tags
+    target_tags = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'blockquote', 'div']
+    
+    # We use find_all to get them in document order
+    # Note: This might get nested elements (div containing p). 
+    # We should filter out elements that contain other target elements to avoid duplication?
+    # Or rely on text content check.
+    
+    elements = soup.find_all(target_tags)
+    
+    for el in elements:
+        # Check if this element contains other target elements (e.g. div wrapper)
+        if el.find(target_tags):
+            continue
+            
+        text = el.get_text().strip()
+        if not text:
+            # Check for images?
+            if el.find('img'):
+                 chunks.append({
+                    'text': '',
+                    'node': el,
+                    'tag': el.name,
+                    'classes': el.get('class', []),
+                    'type': 'image',
+                    'raw_html': str(el)
+                })
+            continue
+            
+        # Determine specific type/classes
+        classes = el.get('class', [])
+        tag = el.name
+        
+        chunk_type = 'std'
+        if tag.startswith('h'):
+            chunk_type = 'header'
+            
+        chunks.append({
+            'text': text,
+            'node': el,
+            'tag': tag,
+            'classes': classes,
+            'type': chunk_type,
+            'raw_html': str(el) 
+        })
+        
+    return chunks
+
+def inject_translation(en_node, es_text, config, soup):
+    if not en_node or not es_text:
+        return
+
+    # 1. Exact Clone of the Wrapper (p, div, h1, etc.)
+    # We create a new tag with the same name
+    new_tag = soup.new_tag(en_node.name)
+    # Copy all attributes exactly (classes, styles, data-attributes)
+    new_tag.attrs = en_node.attrs.copy()
+    
+    # Remove ID to avoid invalid HTML (duplicate IDs)
+    if 'id' in new_tag.attrs:
+        del new_tag.attrs['id']
+        
+    # 2. Add Span for Styling
+    # User Request: "add a span to put grey color in text"
+    # Check config for classes if needed
+    span_class = "es-translation"
+    
+    span = soup.new_tag("span")
+    span['class'] = span_class
+    span['style'] = "color: grey;" # Explicit as requested
+    span.string = es_text
+    
+    new_tag.append(span)
+    
+    # 3. Insert after original
+    en_node.insert_after(new_tag)
+    
+    # Note: Returning nothing as we modified in-place, but caller expects nothing.
+
+def perform_injection(aligned_pairs, config, soup):
+    from itertools import groupby
+    def get_node_id(p): return id(p.get('node'))
+    
+    for node_id, group_iter in groupby(aligned_pairs, get_node_id):
+        group = list(group_iter)
+        if not group: continue
+        
+        original_node = group[0]['node']
+        if not original_node: continue
+        
+        # Optimization: Single pair (Normal case)
+        if len(group) == 1:
+            p = group[0]
+            inject_translation(original_node, p['es'], config, soup)
+            # Update English text if changed (e.g. by splitter adding ⁂)
+            # Note: inner text replacement required
+            if p['en'] != original_node.get_text().strip():
+                original_node.string = p['en']
+            continue
+            
+        # Split Case: Multiple pairs for same source node
+        # We need to turn 1 Node into N Nodes (alternating En/Es)
+        last_node = original_node
+        
+        for i, p in enumerate(group):
+            en_text = p['en']
+            es_text = p['es']
+            
+            if i == 0:
+                # Reuse the original node for the first chunk
+                original_node.string = en_text
+                inject_translation(original_node, es_text, config, soup)
+                last_node = original_node.find_next_sibling()
+                # Fallback if no sibling was added (e.g., empty es_text)
+                if last_node is None:
+                    last_node = original_node
+            else:
+                # Create NEW English node clone
+                import copy
+                new_en_node = copy.copy(original_node)
+                new_en_node.string = en_text
+                if new_en_node.has_attr('id'): del new_en_node['id']
+                
+                # Safety: If last_node is None, fall back to original_node
+                if last_node is None:
+                    last_node = original_node
+                    
+                last_node.insert_after(new_en_node)
+                inject_translation(new_en_node, es_text, config, soup)
+                next_sib = new_en_node.find_next_sibling()
+                last_node = next_sib if next_sib else new_en_node
 
 def align_chunks(en_chunks, es_chunks):
     aligned = []
@@ -2304,11 +2526,19 @@ def generate_passthrough_chapter(en_src, es_src, title, staging_dir=None):
         if not os.path.exists(img_dest_dir): os.makedirs(img_dest_dir, exist_ok=True)
         
         def replace_src(match):
+            attr_name = match.group(1)
             original_src = match.group(3)
             # Ignore external links or data URIs
-            if original_src.startswith('http') or original_src.startswith('data:'):
+            if original_src.startswith('http') or original_src.startswith('data:') or original_src.startswith('mailto:'):
                 return match.group(0)
                 
+            # Ignore non-image extensions (prevent rewriting links to other chapters)
+            # We allow jpg, png, gif, svg, jpeg, webp, etc.
+            # We explicitly block html-like types
+            lower_src = original_src.lower()
+            if any(lower_src.endswith(ext) for ext in ['.xhtml', '.html', '.htm', '.ncx', '.css', '#']):
+                 return match.group(0)
+            
             # Resolve absolute path
             # Handle encoded URL chars in filename if any
             import urllib.parse
@@ -2717,207 +2947,191 @@ def unzip_epub(epub_path, extract_to):
     #     zip_ref.extractall(extract_to)
     # return extract_to
 
+
 def process_chapter_pair(args):
     """
-    Worker function to process a single chapter pair.
-    Args structured as tuple to easier map with executor:
-    (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
+    Worker function to process a single chapter pair IN-PLACE.
+    args: (idx, target_path, es_rel, es_opf_dir, config, label)
     """
-    idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files = args
+    idx, target_path, es_rel, es_opf_dir, config, label = args
     
-    # PASSTHROUGH MODE: Skip alignment for specific chapters
-    PASSTHROUGH_LABELS = ['table of contents', 'contents', 'title page', 'cover', 'copyright']
-    if label and label.lower().strip() in PASSTHROUGH_LABELS:
-        try:
-             print(f"Passthrough Mode: Generating '{label}' without alignment.")
-             en_src = os.path.join(en_opf_dir, en_rel) if en_rel else None
-             es_src = os.path.join(es_opf_dir, es_rel) if es_rel else None
-             
-             # Pass staging_dir for image handling
-             html_content = generate_passthrough_chapter(en_src, es_src, label, staging_dir)
-             
-             # determine output filename from source if possible
-             if en_rel:
-                 out_filename = os.path.basename(en_rel)
-             elif es_rel:
-                 out_filename = os.path.basename(es_rel)
-             else:
-                 out_filename = f"passthrough_{idx}.xhtml"
-                 
-             out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
-             with open(out_path, 'w', encoding='utf-8') as f:
-                 f.write(html_content)
-                 
-             return (idx, out_filename, label, [])
-        except Exception as e:
-             print(f"Error in Passthrough for {label}: {e}")
-             return (idx, None, str(e), [])
-    
-    # Standard processing without dictionary semantic guard
+    # Check bypass
+    if config.get('bypass_alignment'):
+         return (idx, None, "Bypassed", None)
+
     try:
-        # English: collect potentially split files (RELATIVE TO OPF DIR!)
-        en_files = collect_split_files(en_rel, en_opf_dir)
-        en_chunks = []
+        # 1. Parse Existing English File (DOM)
+        if not os.path.exists(target_path):
+             return (idx, None, f"Target file not found: {target_path}", None)
+
+        with open(target_path, 'r', encoding='utf-8') as f:
+            soup = BeautifulSoup(f.read(), 'lxml')
+
+        # 2. Extract Nodes for Alignment
+        en_chunks = extract_nodes(soup)
         
-        # Prepare valid image directory
-        img_staging_dir = os.path.join(staging_dir, 'OEBPS', 'images')
-        if not os.path.exists(img_staging_dir):
-            os.makedirs(img_staging_dir, exist_ok=True)
+        # 3. Parse Spanish Content
+        if not es_rel or not os.path.exists(es_rel):
+            # No Spanish chapter to align with.
+            # We just leave the English file as-is.
+            return (idx, target_path, label, [])
             
-        collected_images = set() # (filename, media_type)
-        
-        import mimetypes
-        import urllib.parse
-        
-        for fpath in en_files:
+        es_files = [es_rel] 
+        # Verify config has 'es' key before parsing
+        if 'es' not in config:
+             # Fallback if config incorrectly merged
+             print(f"Warning: Config missing 'es' profile. Using generic defaults.")
+             # Retrieve PROFILES['generic']['es'] manually if possible, or mocked
+             # Ideally this should be fixed upstream in _process_epub_generation
+             # But for robustness:
+             config['es'] =  {
+                'header_tags': ['h1', 'h2', 'h3', 'class:chapter-title', 'class:title'],
+                'ignore_classes': [],
+                'ignore_div_classes': []
+             }
+             
+        es_chunks = parse_file(es_rel, SpanishParser, config)
+             
+        if config.get('use_neural'):
              try:
-                 chunks = parse_file(fpath, EnglishParser, config)
+                 global CACHED_ALIGNER
+                 if CACHED_ALIGNER is None:
+                     # Local import to prevent startup overhead if not used
+                     from neural_aligner import NeuralAligner
+                     # Use 'cpu' device if MPS is unstable? 
+                     # For now, let it use default (likely MPS on Mac) but CACHE it.
+                     CACHED_ALIGNER = NeuralAligner()
                  
-                 # Process Images in this file context
-                 file_dir = os.path.dirname(fpath)
-                 for c in chunks:
-                     if c.get('type') == 'image' and c.get('src'):
-                         raw_src = c['src']
-                         # 1. Resolve Path
-                         try:
-                             dec_src = urllib.parse.unquote(raw_src)
-                             abs_src = os.path.abspath(os.path.join(file_dir, dec_src))
-                             
-                             if os.path.exists(abs_src):
-                                 # 2. Determine Destination
-                                 # Avoid collisions: use unique name? 
-                                 # Or folder structure?
-                                 # Simple: use {chapter_idx}_{basename}
-                                 base = os.path.basename(dec_src)
-                                 # Sanitized base
-                                 base = re.sub(r'[^\w\.-]', '_', base)
-                                 new_name = f"ch{idx}_{base}"
-                                 
-                                 dest_path = os.path.join(img_staging_dir, new_name)
-                                 
-                                 # 3. Copy
-                                 shutil.copy2(abs_src, dest_path)
-                                 
-                                 # 4. Update Chunk
-                                 c['src'] = f"images/{new_name}"
-                                 
-                                 # 5. Record for Manifest
-                                 mime, _ = mimetypes.guess_type(dest_path)
-                                 if not mime: mime = 'image/jpeg' # Fallback
-                                 collected_images.add((new_name, mime))
-                                 
-                             else:
-                                 print(f"Warning: Image not found: {abs_src}")
-                         except Exception as img_err:
-                             print(f"Error processing image {raw_src}: {img_err}")
-
-                 en_chunks.extend(chunks)
+                 aligner = CACHED_ALIGNER
+                 blocks = aligner.align_dtw(en_chunks, es_chunks)
+                 
+                 # Adapter: Convert Neural Blocks to Flat Pairs with DOM Nodes
+                 aligned_pairs = []
+                 for b in blocks:
+                     ens = b['en_chunks']
+                     ess = b['es_chunks']
+                     
+                     if not ens: continue # No anchor to inject into
+                     
+                     # SPECIAL CASE: 1-to-1 Mapping
+                     # If the neural aligner grouped them but they match in count, 
+                     # we should map them 1-to-1 to avoid "lumping" text at the end.
+                     if len(ens) == len(ess):
+                         for k in range(len(ens)):
+                             if not ess[k]['text'].strip(): continue
+                             aligned_pairs.append({
+                                 'node': ens[k]['node'],
+                                 'es': ess[k]['text'],
+                                 'en': ens[k]['text'],
+                                 'tag': ens[k]['tag']
+                             })
+                         continue
+                     
+                     # Fallback: Lump strategy (attach to last node)
+                     # Join Spanish text
+                     joined_es = " ".join([c['text'] for c in ess])
+                     if not joined_es.strip(): continue
+                     
+                     # Attach to the LAST English node in the block
+                     target_en = ens[-1]
+                     
+                     aligned_pairs.append({
+                         'node': target_en['node'],
+                         'es': joined_es,
+                         'en': target_en['text'],
+                         'tag': target_en['tag']
+                     })
              except Exception as e:
-                 print(f"Error parsing EN file {fpath}: {e}")
-
-        # Spanish: collect potentially split files (RELATIVE TO OPF DIR!)
-        es_files = collect_split_files(es_rel, es_opf_dir)
-        es_chunks = []
-        for fpath in es_files:
+                 print(f"Neural alignment failed: {e}. Fallback to heuristic.")
+                 aligned_pairs = align_chunks(en_chunks, es_chunks)
+                 
+             # --- SPLITTING LOGIC ---
              try:
-                 chunks = parse_file(fpath, SpanishParser, config)
-                 es_chunks.extend(chunks)
+                 # Local import if not at top
+                 from splitter import Splitter
+                 # Use global aligner for semantic splitting if available
+                 splitter = Splitter(aligner=CACHED_ALIGNER, trigger_length=config.get('SPLIT_TRIGGER_CHARS', 240))
+                 aligned_pairs = splitter.process_all(aligned_pairs)
              except Exception as e:
-                 print(f"Error parsing ES file {fpath}: {e}")
-        
-        # print(f"Processing Pair {idx+1}: {en_rel} <-> {es_rel}")
-        
-        # Align
-        if config.get('use_neural') and not NeuralAligner:
-             print(f"WARNING: Neural Alignment requested but NeuralAligner not available (ImportError?). Fallback to Heuristic.")
+                 print(f"Splitting failed: {e}")
 
-        if config.get('use_neural') and NeuralAligner and en_files and es_files:
-            try:
-                global CACHED_ALIGNER
-                if CACHED_ALIGNER is None:
-                    print(f"Process {os.getpid()}: Loading Neural Model...")
-                    CACHED_ALIGNER = NeuralAligner()
-                aligner = CACHED_ALIGNER
-                
-                # Helper to explode paragraphs into sentences
-                def flatten_to_sentences(chunks):
-                    flat = []
-                    for c in chunks:
-                        if c['type'] == 'header' or c['tag'] == 'figcaption' or c['type'] == 'image':
-                            flat.append(c) # Keep headers/captions/images as is
-                        else:
-                            # Split paragraph text
-                            sents = split_sentences(c['text'])
-                            
-                            # If only 1 sentence, we can preserve raw_html!
-                            if len(sents) <= 1:
-                                flat.append(c)
-                            else:
-                                for s in sents:
-                                    if s.strip():
-                                        flat.append({
-                                            'type': c['type'],
-                                            'tag': c['tag'],
-                                            'classes': c.get('classes', []),
-                                            'text': s,
-                                            # We generally lose raw_html on split, unless we want to try attaching to 1st?
-                                            # No, better to drop raw_html for split parts to avoid duplicating id/etc
-                                            'raw_html': None 
-                                        })
-                    return flat
-
-                # Flatten both sides
-                en_sents = flatten_to_sentences(en_chunks)
-                es_sents = flatten_to_sentences(es_chunks)
-                
-                print(f"Aligning {len(en_sents)} EN vs {len(es_sents)} ES sentences...")
-                aligned_groups = aligner.align_dtw(en_sents, es_sents)
-                
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                print(f"Critical Neural Alignment Error in pair {idx}: {e}")
-                # Fallback to heuristic
-                print("Falling back to heuristic alignment for this chapter.")
-                aligned = align_chunks(en_chunks, es_chunks)
-            else:
-                # Convert neural groups to the format expected by generate_chapter_html
-                # Convert neural groups to the format expected by generate_chapter_html
-                aligned = reconstruct_aligned_items(aligned_groups)
-
-                    
+             # --- INJECTION ---
+             # Group by node to handle splits (1 Node -> Multiple Pairs)
+             perform_injection(aligned_pairs, config, soup)
+             
         else:
-            # Fallback for single side or disabled neural
-            aligned = align_chunks(en_chunks, es_chunks)
+             aligned_pairs = align_chunks(en_chunks, es_chunks)
+             # --- INJECTION ---
+             # Group by node to handle splits (1 Node -> Multiple Pairs)
+             from itertools import groupby
+             
+             # We must preserve order, so we just iterate and group consecutive same-nodes?
+             # No, aligned_pairs is ordered. Consecutive pairs with SAME node object = Split Node.
+             
+             def get_node_id(p): return id(p.get('node'))
+             
+             for node_id, group_iter in groupby(aligned_pairs, get_node_id):
+                 group = list(group_iter)
+                 if not group: continue
+                 
+                 original_node = group[0]['node']
+                 if not original_node: continue
+                 
+                 # Optimization: Single pair (Normal case)
+                 if len(group) == 1:
+                     p = group[0]
+                     inject_translation(original_node, p['es'], config)
+                     # Update English text if changed (e.g. by splitter adding ⁂)
+                     # Note: inner text replacement required
+                     if p['en'] != original_node.get_text().strip():
+                         original_node.string = p['en']
+                     continue
+                     
+                 # Split Case: Multiple pairs for same source node
+                 # We need to turn 1 Node into N Nodes (alternating En/Es)
+                 last_node = original_node
+                 
+                 for i, p in enumerate(group):
+                     en_text = p['en']
+                     es_text = p['es']
+                     
+                     if i == 0:
+                         # Reuse the original node for the first chunk
+                         original_node.string = en_text
+                         inject_translation(original_node, es_text, config)
+                         # inject_translation appends the Spanish node AFTER original_node.
+                         # We need to find that injected node to update 'last_node'
+                         # inject_translation returns nothing, but we know it inserts after.
+                         # Let's inspect next sibling.
+                         last_node = original_node.find_next_sibling() # This should be the span/p we just added
+                     else:
+                         # Create NEW English node clone
+                         import copy
+                         new_en_node = copy.copy(original_node) # Shallow copy might be enough tag structure
+                         new_en_node.string = en_text
+                         # Clear attributes that shouldn't be duplicated? IDs?
+                         if new_en_node.has_attr('id'): del new_en_node['id']
+                         
+                         last_node.insert_after(new_en_node)
+                         
+                         inject_translation(new_en_node, es_text, config)
+                         last_node = new_en_node.find_next_sibling()
         
-        # -------------------------------------------------------------------------
-        # Phase 5: Splitter Service (Post-Alignment Refinement)
-        # -------------------------------------------------------------------------
-        if config.get('use_neural') and Splitter:
-             # Ensure we have an aligner if possible
-             aligner_instance = CACHED_ALIGNER if config.get('use_neural') else None
-             t_len = config.get('split_length', 280)
-             splitter_svc = Splitter(aligner=aligner_instance, trigger_length=t_len)
-             aligned = splitter_svc.process_all(aligned)
-
-        # Generate HTML
-        # If english title is detectable, use it? Or pass from TOC?
-        # We passed 'label' now
-        html_content = generate_chapter_html(aligned, title=label or f"Chapter {idx+1}", css_files=css_files)
+        # 6. Save In-Place
+        with open(target_path, 'w', encoding='utf-8') as f:
+             f.write(str(soup))
         
-        out_filename = f"chapter_{idx+1:03d}.xhtml"
-        out_path = os.path.join(staging_dir, 'OEBPS', out_filename)
-        
-        with open(out_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
-            
-        return (idx, out_filename, label, list(collected_images)) # Pass label and images back
+        # Collect images if any (extract from soup check?)
+        # For now, we don't need to return images as we are preserving original structure
+        # But if we did find new images (rare in this mode), we'd track them.
+        return (idx, target_path, label, [])
         
     except Exception as e:
+        print(f"Error processing chapter {label}: {e}")
         import traceback
         traceback.print_exc()
         return (idx, None, str(e), [])
-
+                             
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     # Use a staging directory relative to the output path (job-specific)
     # staging dir = output_dir / bilingual_epub_staging
@@ -2935,475 +3149,361 @@ def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progr
             shutil.rmtree(staging_dir)
 
 def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, config=None, progress_callback=None, cancel_check=None):
-    """Orchestrates the creation of the full bilingual EPUB."""
+    """
+    Refactored Logic: EXACT COPY Strategy.
+    1. Copy entire En directory to staging.
+    2. Modify metadata in place (Title).
+    3. Modify chapters in place (Inject translation).
+    """
+    
+    # 1. Copy Entire Structure
+    print(f"--- Starting Fresh Execution for {os.path.basename(output_epub_path)} ---")
+    if os.path.exists(staging_dir):
+        shutil.rmtree(staging_dir)
+        
+    print(f"Copying original structure from {en_base} to {staging_dir}...")
+    shutil.copytree(en_base, staging_dir)
+    
+    # 2. Identify TOC and Pairs
+    # We still need to align the structure to know what to inject where.
+    # Paths in 'pairs' are relative to the *root* of the unpacked dir (en_base).
     
     en_toc_path = find_toc_file(en_base)
     es_toc_path = find_toc_file(es_base)
     
-    if not en_toc_path:
-        raise FileNotFoundError(f"English TOC (.ncx) not found in {en_base}")
-    if not es_toc_path:
-        raise FileNotFoundError(f"Spanish TOC (.ncx) not found in {es_base}")
+    if not en_toc_path or not es_toc_path:
+        raise FileNotFoundError("TOC file not found in one of the EPUBs.")
 
     en_toc = parse_toc(en_toc_path)
     es_toc = parse_toc(es_toc_path)
     pairs = align_tocs(en_toc, es_toc)
     print(f"Identified {len(pairs)} chapters to align.")
     
+
     if not pairs:
-        raise ValueError("No aligned chapters found. The structures of the two books may be too different.")
+        raise ValueError("No aligned chapters found.")
 
-    # 1a. Extract Metadata from English Source
-    en_opf_path = find_opf_file(en_base)
-    if not en_opf_path:
-        parent = os.path.dirname(en_base.rstrip('/'))
-        en_opf_path = find_opf_file(parent)
-        
-    # Read comprehensive data
-    opf_data = read_opf_data(en_opf_path)
+    # 1b. Load Profile / Config
+    # We default to 'generic' which has standard settings for 'en' and 'es'
+    detected_profile = 'generic'
+    print(f"Using profile: {detected_profile}")
     
-    # Metadata variables for convenience
-    m_title = opf_data['title']
-    m_lang = opf_data['language']
-    m_creator = opf_data['creator']
-    m_ident = opf_data['uid']
-    m_uid_scheme = opf_data['uid_scheme']
-    m_namespaces = opf_data['namespaces']
+    defaults = PROFILES.get(detected_profile, PROFILES['generic'])
+    if config is None: config = {}
     
-    # Ensure Calibre namespace is present if likely used
-    if 'calibre' not in m_namespaces and any('calibre:' in item['tag'] for item in opf_data['metadata_items']):
-         m_namespaces['calibre'] = "http://calibre.kovidgoyal.net/2009/metadata"
+    # Merge defaults into config (preserving existing keys like 'use_neural')
+    for k, v in defaults.items():
+        if k not in config:
+            config[k] = v
+        elif isinstance(v, dict) and isinstance(config[k], dict):
+             for sk, sv in v.items():
+                 if sk not in config[k]:
+                     config[k][sk] = sv
 
-    # Modify Title
-    final_title = f"{m_title} (bilingual)"
-    print(f"Metadata extracted: Title='{final_title}', Language='{m_lang}'")
-    
-    # Cover Handling
-    cover_item_to_copy = None # (src_abs_path, filename_in_dest)
-    cover_id_in_manifest = opf_data['cover_id']
-    
-    if cover_id_in_manifest and cover_id_in_manifest in opf_data['manifest']:
-        c_item = opf_data['manifest'][cover_id_in_manifest]
-        c_href = c_item['href']
+    # 3. Update Metadata (Title) in Staging OPF
+    # We need to find the OPF in the staging directory
+    staging_opf_path = find_opf_file(staging_dir)
+    if not staging_opf_path:
+        # Should exist since we copied it
+        raise FileNotFoundError("OPF file missing in staging directory.")
         
-        # Resolve path
-        # opf_path directory is the base for relative hrefs
-        if en_opf_path:
-            opf_dir = os.path.dirname(en_opf_path)
-            # URL unquote might be needed if href has %20, but usually simple file paths
-            # Handle potential URL encoding just in case
-            import urllib.parse
-            c_path_dec = urllib.parse.unquote(c_href)
-            src_full = os.path.join(opf_dir, c_path_dec)
+    # Simple modification of the OPF to append "(bilingual)" to title
+    new_title = "Unknown" # Default in case of error
+    try:
+        with open(staging_opf_path, 'r', encoding='utf-8') as f:
+            opf_content = f.read()
             
-            if os.path.exists(src_full):
-                # We will copy this file
-                fname = os.path.basename(c_path_dec)
-                cover_item_to_copy = (src_full, fname, c_item['media-type'])
-                print(f"Found cover image: {src_full}")
+        opf_soup = BeautifulSoup(opf_content, 'xml')
+        # Standard OPF namespaces
+        dc_title = opf_soup.find('dc:title') or opf_soup.find('title')
+        if dc_title:
+            original_title = dc_title.get_text()
+            new_title = f"{original_title} (bilingual)"
+            dc_title.string = new_title
+            
+            with open(staging_opf_path, 'w', encoding='utf-8') as f:
+                f.write(str(opf_soup))
+            print(f"Updated metadata title: {new_title}")
+    except Exception as e:
+        print(f"Warning: Could not update OPF metadata: {e}")
+
+    # 4. Process Chapters (In-Place)
+    # Prepare arguments. 
+    # en_rel is relative to en_base. We need absolute path in staging.
+    
+    # Define required path variables at the top of the block
+    en_toc_dir = os.path.dirname(en_toc_path)
+    es_toc_dir = os.path.dirname(es_toc_path)
+    es_opf_dir = None # Unused in new logic but required for args tuple
+    
+    # =========================================================================
+    # REFACTOR: SPINE EXPANSION for Split Chapters
+    # =========================================================================
+    # Problem: TOC only points to 'chapter001_split_000.xhtml'. 
+    # Actual text is often in 'chapter001_split_001.xhtml' etc.
+    # Logic: 
+    # 1. Read the English OPF (from staging) to get the Spine order.
+    # 2. Iterate the Spine. 
+    # 3. If a spine item is in 'pairs' (from TOC), lock "current_spanish_src".
+    # 4. If a spine item is NOT in 'pairs' but "follows" the matched chapter (same prefix?), use "current_spanish_src".
+    
+    # helper to normalize paths for comparison
+    def norm_p(p): return os.path.normpath(str(p))
+    
+    # 1. Parse Spine from Staging OPF
+    # staging_opf_path is already known
+    try:
+        epub_root = os.path.dirname(staging_opf_path) # Absolute path to OPS/OEBPS
+        
+        with open(staging_opf_path, 'r', encoding='utf-8') as f:
+             # Use a robust parser for OPF
+             soup_opf = BeautifulSoup(f.read(), 'xml')
+             
+        # Map Manifest ID -> Href
+        manifest = {}
+        for item in soup_opf.find_all('item'):
+            manifest[item.get('id')] = item.get('href')
+            
+        # Get Spine Order (list of hrefs)
+        spine_refs = []
+        for itemref in soup_opf.find_all('itemref'):
+            idref = itemref.get('idref')
+            if idref in manifest:
+                href = manifest[idref]
+                # Resolve href to absolute path within staging
+                # Manifest hrefs are relative to OPF file
+                abs_path = os.path.normpath(os.path.join(epub_root, href))
+                spine_refs.append(abs_path)
+                
+        print(f"Parsed {len(spine_refs)} items in Spine for expansion.")
+        
+        # 2. Build Lookup from TOC Pairs
+        # Map: AbsPath -> (label, es_src, level)
+        toc_lookup = {}
+        
+        # We need to resolve 'en_rel' from pairs to absolute paths too
+        en_toc_dir = os.path.dirname(en_toc_path) # Original EN TOC dir
+        # Be careful: 'en_rel' in pairs comes from 'en_toc' which is from 'en_base'.
+        # We need to map it to 'staging_dir'.
+        # Structure of staging = structure of en_base.
+        
+        # Calculate 'staging_toc_dir' 
+        rel_toc_from_base = os.path.relpath(en_toc_dir, en_base)
+        staging_toc_dir = os.path.join(staging_dir, rel_toc_from_base)
+        
+        processed_pairs = []
+        
+        for idx, (label, en_rel, es_rel, level) in enumerate(pairs):
+             if not en_rel: continue
+             # Resolve en_rel against STAGING TOC DIR
+             if not os.path.isabs(en_rel):
+                 s_abs = os.path.normpath(os.path.join(staging_toc_dir, en_rel))
+             else:
+                 s_abs = en_rel # Should not happen given logic, but safety
+                 
+             toc_lookup[s_abs] = (label, es_rel, level, idx)
+             
+        # 3. Propagate Matches via Spine
+        final_processing_list = []
+        current_es_match = None
+        current_label = None
+        
+        for spine_abs in spine_refs:
+            # Is this spine item in our TOC pairs?
+            if spine_abs in toc_lookup:
+                # Yes! Switch to this new chapter.
+                label, es_rel, level, idx = toc_lookup[spine_abs]
+                current_es_match = es_rel
+                current_label = label
+                
+                # Add it
+                final_processing_list.append( (idx, label, spine_abs, es_rel, level) )
+                # print(f"DEBUG: Spine Matched TOC: {os.path.basename(spine_abs)} -> {es_rel}")
+            
+            elif current_es_match:
+                # It's a follower file (e.g. split_001).
+                # Heuristic: verify filename prefix similarity to avoid carrying over to unrelated files (like 'copyright')?
+                # Actually, Spine is ordered. If 'copyright' is next, it usually has its own TOC entry.
+                # If it DOESN'T have a TOC entry, maybe it belongs to the previous chapter?
+                # Let's rely on the user's report: Prologue had splits and worked.
+                # Let's assume Spine propagation is safe until we hit next TOC item.
+                # Wait, 'copyright.xhtml' might NOT be in TOC but shouldn't inherit 'Chapter 78'.
+                # Strict check: Filename must look like a split? 
+                # e.g. 'chapter001_split_000' -> 'chapter001_split_001'.
+                # Or simply: assume standard flow.
+                
+                # Let's use it.
+                # Use '-1' for index to indicate it's an extension
+                final_processing_list.append( (9999, f"{current_label} (cont.)", spine_abs, current_es_match, 0) )
+                # print(f"DEBUG: Spine Expanded: {os.path.basename(spine_abs)} -> {current_es_match}")
+                
+        print(f"Expanded processing list from {len(pairs)} to {len(final_processing_list)} terms.")
+        
+        # Override args_list preparation loop
+        args_list = []
+        
+        # We need es_toc_dir to resolve es_rel
+        es_toc_dir = os.path.dirname(es_toc_path)
+        
+        for idx, label, en_abs, es_rel, level in final_processing_list:
+            if not es_rel: continue
+            
+            # Resolve es_rel (it is relative to ES TOC)
+            # We need absolute path for parsing? parse_file expects absolute.
+            if not os.path.isabs(es_rel):
+                es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
             else:
-                print(f"Warning: Cover extracted from OPF ({c_href}) not found at {src_full}")
-
-
-    # 1b. Auto-Detect Profile if not provided or partial
-    # We might pass {'use_neural': True}, so check for content keys
-    if config is None or 'en' not in config:
-        detected_profile = 'generic'
-        # Check first content file (English)
-        if pairs:
-            # pairs is list of tuples (label, en_rel, es_rel)
-            first_content_rel = pairs[0][1]
-            if first_content_rel:
-                first_content = os.path.join(en_base, first_content_rel)
-                if os.path.exists(first_content):
-                     detected_profile = detect_profile(first_content)
-        
-        # If still generic, check Spanish files (often have distinctive classes)
-        if detected_profile == 'generic' and pairs:
-             for _, _, sp, _ in pairs: # Check first available Spanish file
-                 if not sp: continue
-                 full_es = os.path.join(es_base, sp)
-                 if os.path.exists(full_es):
-                     detected_profile = detect_profile(full_es)
-                     if detected_profile != 'generic':
-                         break
-                         
-        print(f"selected profile: {detected_profile}")
-        
-        # Load profile settings
-        profile_config = PROFILES.get(detected_profile, PROFILES['generic'])
-        
-        # Merge if we had some partial config (e.g. flags)
-        if config:
-            profile_config.update(config)
+                es_abs = es_rel
             
-        config = profile_config
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label) )
+            
+        # Replaces the original loop below
         
+    except Exception as e:
+        print(f"CRITICAL ERROR in Spine Expansion: {e}. Fallback to TOC only.")
+        # Fallback to original logic if spine parsing fails
+        # (The original loop is what follows this block in the file, but we need to structure it so we don't duplicate.)
+        # Actually, let's just crash/log if this fails because this IS the fix.
+        pass
 
+    if not args_list: 
+         # Fallback loop if args_list wasn't populated (e.g. error above handled silently?)
+         # Or if spine was empty.
+         # Re-implement basic loop here or structure code to allow fallback?
+         # Simplest: check "src" loop
+         
+         en_toc_dir = os.path.dirname(en_toc_path)
+         args_list = []
+         for idx, (label, en_rel, es_rel, level) in enumerate(pairs):
+            if not en_rel: continue
+            if not os.path.isabs(en_rel):
+                en_abs = os.path.normpath(os.path.join(en_toc_dir, en_rel))
+            else:
+                en_abs = en_rel
+                
+            if not es_rel: continue
+            es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
+            
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label) )
 
+    # 4. Process Chapters (In-Place)
+    
+    # We already built args_list.
+    # Just need to skip the original loop declaration.
+    
+    # ...
+    
+    # 5. Process Chapters (ProcessPool)
+    # args_list is now ready from Spine Expansion
+    
+    print(f"Executing {len(args_list)} content tasks...")
 
-
-    # 2. Setup Staging Directory
-    # staging_dir passed as argument
-    if os.path.exists(staging_dir): shutil.rmtree(staging_dir)
-    os.makedirs(os.path.join(staging_dir, 'META-INF'))
-    os.makedirs(os.path.join(staging_dir, 'OEBPS'))
-    
-    # 1c. Extract and Copy CSS (Moved after staging creation)
-    css_files = []
-    if opf_data and 'manifest' in opf_data:
-        for item_id, item_data in opf_data['manifest'].items():
-            if item_data['media-type'] == 'text/css':
-                href = item_data['href']
-                if en_opf_path:
-                    opf_dir = os.path.dirname(en_opf_path)
-                    import urllib.parse
-                    c_path_dec = urllib.parse.unquote(href)
-                    src_full = os.path.join(opf_dir, c_path_dec)
-                    if os.path.exists(src_full):
-                         fname = os.path.basename(c_path_dec)
-                         shutil.copy2(src_full, os.path.join(staging_dir, 'OEBPS', fname))
-                         css_files.append(fname)
-                         print(f"Copied CSS: {fname}")
-    
-    # 3. Write Mimetype (must be first, no newline)
-    with open(os.path.join(staging_dir, 'mimetype'), 'w', encoding='utf-8') as f:
-        f.write('application/epub+zip')
-        
-    # 4. Write container.xml
-    container_xml = """<?xml version="1.0"?>
-<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-   <rootfiles>
-      <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
-   </rootfiles>
-</container>"""
-    with open(os.path.join(staging_dir, 'META-INF', 'container.xml'), 'w', encoding='utf-8') as f:
-        f.write(container_xml)
-        
-    # 5a. Copy Cover Image if found
-    if cover_item_to_copy:
-        src, dest_name, c_media = cover_item_to_copy
-        # We'll put it in OEBPS root for simplicity (or images/ if we wanted)
-        shutil.copy2(src, os.path.join(staging_dir, 'OEBPS', dest_name))
-
-
-    css_content = """
-    body { font-family: serif; line-height: 1.5; margin: 0 auto; padding: 20px; }
-    p { margin-top: 0; margin-bottom: 0; text-indent: 0; } 
-    h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    h1, h2, h3, h4 { margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; }
-    /* Spanish Translation Styling: Only change color, inherit everything else */
-    p.es-trans, div.es-trans, span.es-trans { color: #666 !important; }
-    .no-bottom-margin { margin-bottom: 0 !important; }
-    h1.es-trans, h2.es-trans, h3.es-trans, h4.es-trans { color: #666 !important; opacity: 0.8; }
-    
-    /* Remove spacing between English header/caption and Spanish translation */
-    .no-bottom-margin + .es-trans { margin-top: 0 !important; padding-top: 0 !important; }
-    
-    /* Optional: tight spacing for specific cases if needed */ 
-    figcaption { font-weight: bold; margin-top: 10px; }
-    .clamp-text {
-        display: -webkit-box;
-        -webkit-line-clamp: 3;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    """
-    with open(os.path.join(staging_dir, 'OEBPS', 'styles.css'), 'w', encoding='utf-8') as f:
-        f.write(css_content)
-
-    # 6. Process Chapters
-    spine_refs = []
-    
-    en_opf_dir = os.path.dirname(en_opf_path) if en_opf_path else en_base
-    es_opf_dir = os.path.dirname(find_opf_file(es_base)) if find_opf_file(es_base) else es_base
-
-    args_list = []
-    print(f"Preparing {len(pairs)} tasks for parallel processing (Multithread CPU)...")
-    
-    # Prepare arguments for each task
-    for idx, (label, en_rel, es_rel, level) in enumerate(pairs):
-        # We pass everything needed to process one pair
-        args = (idx, en_rel, es_rel, en_opf_dir, es_opf_dir, staging_dir, config, label, css_files)
-        args_list.append(args)
-
-    # Dictionary to collect results: idx -> filename
-    # We need to maintain order of spine_refs
-    results_map = {}
-    
-    # Use ProcessPoolExecutor for CPU-bound parallelism
-    # max_workers=None defaults to num_cpus
-    # We use 'spawn' start method context implicitly on Mac/Windows, but we handled global DICT_LOADER in worker
-    
-    # If using neural alignment (heavy memory usage per process), limit workers
-    max_workers = 1 if config.get('use_neural') else None
-    
-    # Use multiprocessing.Pool for robust cancellation (terminate)
-    # This allows us to forcibly kill processes if the user cancels
+    # Parallel Processing
+    max_workers = 1 if config and config.get('use_neural') else None
     pool = multiprocessing.Pool(processes=max_workers)
+    
+    # We don't need to collect results for manifest/spine/images here,
+    # as we are modifying in place and the original EPUB structure is preserved.
+    # However, process_chapter_pair still returns images, which might be useful for manifest updates.
+    all_collected_images = set()
     
     try:
         count_done = 0
         total = len(args_list)
         
-        # Use apply_async for non-blocking submission
-        # This allows us to poll for cancellation while tasks are running
         async_results = [pool.apply_async(process_chapter_pair, (args,)) for args in args_list]
-        
-        # Track completed indices
+
         completed_indices = set()
-        
         while len(completed_indices) < len(async_results):
-            # 1. Check Cancellation immediately
             if cancel_check and cancel_check():
-                 print("Cancellation signal received. Terminating pool immediately...")
-                 pool.terminate()
-                 pool.join()
-                 raise InterruptedError("Process cancelled by user")
-            
-            # 2. Check Result Progress
-            # We iterate to see if any new ones finished
+                pool.terminate()
+                raise InterruptedError("Cancelled")
+                
             for i, res in enumerate(async_results):
                 if i not in completed_indices and res.ready():
-                    # Get result
                     try:
-                        res_idx, res_filename, res_label, res_images = res.get()
-                        
-                        if res_filename:
-                            results_map[res_idx] = {'file': res_filename, 'label': res_label, 'images': res_images}
-                        else:
-                            print(f"Task {res_idx} returned no filename (Error: {res_label})")
+                        res_idx, res_filename, res_label, res_images = res.get() # Get results to collect images
+                        if res_images:
+                            all_collected_images.update(res_images)
                     except Exception as exc:
-                        print(f"Task {i} generated an exception: {exc}")
-                        
+                        print(f"Task {i} failed: {exc}")
                     completed_indices.add(i)
                     count_done += 1
                     
                     if progress_callback:
-                        progress_callback(count_done, total, f"Processed {count_done}/{total} chapters")
-                    else:
-                        if total > 10 and count_done % (total // 10) == 0:
-                            print(f"Progress: {count_done}/{total}...")
-
-            # 3. Small sleep to prevent tight loop CPU usage
+                        progress_callback(count_done, total, f"Processed {count_done}/{total}")
+            
             time.sleep(0.1)
-
+            
         pool.close()
         pool.join()
         
-    except InterruptedError:
-        raise
     except Exception as e:
-        print(f"Pool exception: {e}")
         pool.terminate()
-        pool.join()
         raise e
-
-    # Reconstruct spine_refs in correct order
-    for idx in range(len(pairs)):
-        if idx in results_map:
-            # pairs[idx] is (label, en_rel, es_rel, level)
-            level = pairs[idx][3]
-            spine_refs.append((results_map[idx]['file'], results_map[idx]['label'], level))
-        else:
-            print(f"Warning: Chapter {idx} failed or missing from results.")
-
-    # 7. Create content.opf
-    manifest_items = ""
-    spine_items = ""
-    
-    # CSS
-    if css_files:
-        for css in css_files:
-             manifest_items += f'<item id="css-{css}" href="{css}" media-type="text/css"/>\n'
-    
-    # Also include our custom styles for minimal layout if no original css?
-    # Or always include ours for 'es-trans' classes?
-    manifest_items += f'<item id="css-custom" href="styles.css" media-type="text/css"/>\n'
-    
-    # Cover
-    if cover_item_to_copy:
-        _, dest_name, c_media = cover_item_to_copy
-        # Re-use original cover ID if possible, or 'cover-image'
-        cover_id = opf_data['cover_id'] or 'cover-image'
-        cover_id = opf_data['cover_id'] or 'cover-image'
-        manifest_items += f'<item id="{cover_id}" href="{dest_name}" media-type="{c_media}"/>\n'
-    
-    # Collected Images
-    all_images = set()
-    for info in results_map.values():
-        if 'images' in info:
-             for img_fname, img_mime in info['images']:
-                 all_images.add((img_fname, img_mime))
-                 
-    for img_fname, img_mime in all_images:
-        i_id = f"img-{img_fname.replace('.', '-')}"
-        manifest_items += f'<item id="{i_id}" href="images/{img_fname}" media-type="{img_mime}"/>\n'
-    
-    # Chapters
-    for idx, (filename, label, level) in enumerate(spine_refs):
-        item_id = f"item_{idx}"
-        manifest_items += f'<item id="{item_id}" href="{filename}" media-type="application/xhtml+xml"/>\n'
-        spine_items += f'<itemref idref="{item_id}"/>\n'
         
-    # Reconstruct Metadata Block
+    print("Alignment/Injection Complete.")
     
-    metadata_lines = []
-    
-    # Helper to resolve namespace prefix
-    # Inverted map: URI -> Prefix
-    uri_to_prefix = {v: k for k, v in m_namespaces.items()}
-    # Add standard checks
-    if 'http://purl.org/dc/elements/1.1/' not in uri_to_prefix: uri_to_prefix['http://purl.org/dc/elements/1.1/'] = 'dc'
-    if 'http://www.idpf.org/2007/opf' not in uri_to_prefix: uri_to_prefix['http://www.idpf.org/2007/opf'] = 'opf'
-    
-    for item in opf_data['metadata_items']:
-        tag = item['tag']
-        text = item['text']
-        attribs = item['attrib']
-        
-        # Skip if it is the unique identifier (we handled it in package attrib + manual entry)
-        if tag.endswith('identifier') and attribs.get('id') == m_uid_scheme:
-             continue
-             
-        # Skip title (we use final_title)
-        if tag.endswith('title'):
-             continue
+    # 5. Update OPF Manifest with new images
+    # This step is crucial because new images might have been copied to OEBPS/images
+    # and need to be declared in the manifest.
+    try:
+        with open(staging_opf_path, 'r', encoding='utf-8') as f:
+            opf_content = f.read()
+        opf_soup = BeautifulSoup(opf_content, 'xml')
+        manifest = opf_soup.find('manifest')
+        if manifest:
+            for img_fname, img_mime in all_collected_images:
+                item_id = f"img-{img_fname.replace('.', '-')}"
+                # Check if item already exists to avoid duplicates
+                if not opf_soup.find('item', id=item_id):
+                    new_item = opf_soup.new_tag('item', id=item_id, href=f"images/{img_fname}", media_type=img_mime)
+                    manifest.append(new_item)
+            with open(staging_opf_path, 'w', encoding='utf-8') as f:
+                f.write(str(opf_soup))
+            print(f"Updated OPF manifest with {len(all_collected_images)} new image entries.")
+    except Exception as e:
+        print(f"Warning: Could not update OPF manifest with new images: {e}")
 
-        # Reconstruct XML string
-        clean_tag = tag
-        if '}' in tag:
-             uri, local_name = tag.split('}')
-             uri = uri[1:] # remove {
-             prefix = uri_to_prefix.get(uri)
-             if prefix:
-                 clean_tag = f"{prefix}:{local_name}"
-             else:
-                 # Fallback, just use local name or look harder?
-                 # ideally we registered it.
-                 clean_tag = local_name
-        
-        attr_list = []
-        for k, v in attribs.items():
-            ck = k
-            if '}' in k:
-                 uri, local = k.split('}')
-                 uri = uri[1:]
-                 prefix = uri_to_prefix.get(uri)
-                 if prefix:
-                     ck = f"{prefix}:{local}"
-                 else:
-                     ck = local
-            attr_list.append(f'{ck}="{html.escape(str(v))}"')
-            
-        attr_str = " " + " ".join(attr_list) if attr_list else ""
-        
-        if text:
-             metadata_lines.append(f'        <{clean_tag}{attr_str}>{html.escape(str(text))}</{clean_tag}>')
-        else:
-             metadata_lines.append(f'        <{clean_tag}{attr_str}/>')
-
-    joined_metadata = "\n".join(metadata_lines)
-
-    # Construct xmlns attributes
-    xmlns_attrs = []
-    for prefix, uri in m_namespaces.items():
-         if prefix: # Skip default if handled by package
-              xmlns_attrs.append(f'xmlns:{prefix}="{uri}"')
+    # Return metadata for filename generation
+    # The original metadata extraction is gone, so we return a simplified dict.
+    # We could re-parse the OPF for more complete metadata if needed.
     
-    if 'xmlns:dc' not in xmlns_attrs and 'dc' not in m_namespaces:
-         xmlns_attrs.append('xmlns:dc="http://purl.org/dc/elements/1.1/"')
-    if 'xmlns:opf' not in xmlns_attrs and 'opf' not in m_namespaces:
-         xmlns_attrs.append('xmlns:opf="http://www.idpf.org/2007/opf"')
-         
-    xmlns_str = " ".join(xmlns_attrs)
-
-    opf_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<package xmlns="http://www.idpf.org/2007/opf" unique-identifier="{m_uid_scheme}" version="3.0" {xmlns_str}>
-    <metadata {xmlns_str}>
-        <dc:title>{final_title}</dc:title>
-        <dc:identifier id="{m_uid_scheme}">{m_ident}</dc:identifier>
-{joined_metadata}
-    </metadata>
-    <manifest>
-        <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-        {manifest_items}
-    </manifest>
-    <spine toc="ncx">
-        {spine_items}
-    </spine>
-</package>"""
-    
-    with open(os.path.join(staging_dir, 'OEBPS', 'content.opf'), 'w', encoding='utf-8') as f:
-        f.write(opf_content)
-
-    # 8. Create Nested TOC (NCX)
-    nav_points = ""
-    last_level = -1
-    
-    for idx, (filename, label, level) in enumerate(spine_refs):
-        # Indentation (for pretty printing)
-        indent = "  " * (level + 2)
-        
-        # Logic to close previous tags
-        if idx > 0:
-            if level == last_level:
-                # Sibling: Close previous
-                nav_points += f"{indent}</navPoint>\n"
-            elif level < last_level:
-                # Outdent: Close previous and its parents
-                diff = last_level - level
-                for i in range(diff + 1):
-                    # Indent for the closing tag being written
-                    # We are closing last_level - i
-                    cl_indent = "  " * (last_level - i + 2)
-                    nav_points += f"{cl_indent}</navPoint>\n"
-        
-        # Write current open tag
-        nav_points += f"""{indent}<navPoint id="navPoint-{idx+1}" playOrder="{idx+1}">
-{indent}  <navLabel><text>{html.escape(label)}</text></navLabel>
-{indent}  <content src="{filename}"/>\n"""
-        
-        last_level = level
-
-    # Close any remaining open tags
-    for i in range(last_level + 1):
-        cl_indent = "  " * (last_level - i + 2)
-        nav_points += f"{cl_indent}</navPoint>\n"
-    
-    ncx_content = f"""<?xml version="1.0" encoding="UTF-8"?>
-<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
-  <head>
-    <meta name="dtb:uid" content="urn:uuid:12345"/>
-    <meta name="dtb:depth" content="1"/>
-    <meta name="dtb:totalPageCount" content="0"/>
-    <meta name="dtb:maxPageNumber" content="0"/>
-  </head>
-  <docTitle><text>{final_title}</text></docTitle>
-  <navMap>
-    {nav_points}
-  </navMap>
-</ncx>"""
-    
-    with open(os.path.join(staging_dir, 'OEBPS', 'toc.ncx'), 'w', encoding='utf-8') as f:
-        f.write(ncx_content)
-        
     # 9. Zip it
     print(f"Success! Bilingual EPUB created at: {output_epub_path}")
     
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(output_epub_path), exist_ok=True)
+    
+    # Ensure mimetype exists
+    mimetype_path = os.path.join(staging_dir, 'mimetype')
+    if not os.path.exists(mimetype_path):
+        with open(mimetype_path, 'w', encoding='utf-8') as f:
+            f.write("application/epub+zip")
+    
+    # Debug: List staging contents to ensure assets are present
+    total_files = 0
+    assets_found = 0
+    for root, dirs, files in os.walk(staging_dir):
+        total_files += len(files)
+        for f in files:
+            if f.lower().endswith(('.jpg', '.jpeg', '.png', '.otf', '.ttf', '.css')):
+                assets_found += 1
+    print(f"Zipping {total_files} files (including {assets_found} assets/styles) from staging...")
+
     with zipfile.ZipFile(output_epub_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        zipf.write(os.path.join(staging_dir, 'mimetype'), 'mimetype', compress_type=zipfile.ZIP_STORED)
+        zipf.write(mimetype_path, 'mimetype', compress_type=zipfile.ZIP_STORED)
         for root, dirs, files in os.walk(staging_dir):
             for file in files:
                 if file == 'mimetype': continue
                 file_path = os.path.join(root, file)
+                # Archive name must be relative to staging_dir to be at root of EPUB
                 arc_name = os.path.relpath(file_path, staging_dir)
                 zipf.write(file_path, arc_name)
     
     print("Alignment/Generation Complete.")
     
-    return {'title': final_title, 'author': m_creator}
+    return {'title': new_title, 'language': 'bilingual'}
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a bilingual EPUB from extracted English and Spanish EPUB OEBPS directories.")

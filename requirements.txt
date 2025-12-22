@@ -2,3 +2,5 @@ Flask==3.0.0
 sentence-transformers
 numpy
 scipy
+sentence-transformers
+numpy

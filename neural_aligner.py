@@ -89,7 +89,7 @@ class NeuralAligner:
                     # Make this match extremely attractive, but don't forbid others.
                     # This allows the path to flow through here if plausible, but skip/merge if necessary.
                     # We subtract a large value to ensure it's the preferred path locally.
-                    D[i, j] -= 2.0 
+                    D[i, j] -= 100.0 
                     continue
 
                 # HARD CONSTRAINT

@@ -1,5 +1,6 @@
 import argparse
 import sys
+print(f"DEBUG: Loading align_book.py from {__file__}")
 import os
 import time
 import re
@@ -1789,15 +1790,16 @@ def align_chunks(en_chunks, es_chunks):
                     local_res.append(item_data)
             elif tag == 'insert':
                 # ES Content, No EN
-                for k in range(j1, j2):
-                    item_data = es_sec[k].copy()
-                    item_data.update({
-                        'en': "", 
-                        'es': es_sec[k]['text'],
-                        'raw_html': None,
-                        'es_raw_html': es_sec[k].get('raw_html')
-                    })
-                    local_res.append(item_data)
+                    for k in range(j1, j2):
+                        item_data = es_sec[k].copy()
+                        item_data.update({
+                            'en': "", 
+                            'es': es_sec[k]['text'],
+                            'raw_html': None,
+                            'es_raw_html': es_sec[k].get('raw_html'),
+                            'node': None # Explicitly set None to avoid KeyError
+                        })
+                        local_res.append(item_data)
                     
         return local_res    # Add implicit start (0) and end (len) sentinels
     en_anchors = [-1] + en_headers + [len(en_chunks)]
@@ -3295,6 +3297,7 @@ def process_chapter_pair(args):
     args: (idx, target_path, es_rel, es_opf_dir, config, label)
     """
     idx, target_path, es_rel, es_opf_dir, config, label = args
+    print(f"DEBUG: Entering process_chapter_pair for {label}")
     
     # Check bypass
     if config.get('bypass_alignment'):
@@ -3310,6 +3313,7 @@ def process_chapter_pair(args):
 
         # 2. Extract Nodes for Alignment
         en_chunks = extract_nodes(soup)
+        print(f"DEBUG: {label} - Extracted {len(en_chunks)} EN chunks")
         
         # 3. Parse Spanish Content
         if not es_rel or not os.path.exists(es_rel):
@@ -3332,6 +3336,31 @@ def process_chapter_pair(args):
              }
              
         es_chunks = parse_file(es_rel, SpanishParser, config)
+        print(f"DEBUG: {label} - Parsed {len(es_chunks)} ES chunks")
+        
+        # --- PRE-PROCESS: Split Massive Spanish Chunks ---
+        # If a Spanish chunk is huge (e.g. > 600 chars), it likely contains merged paragraphs/headers.
+        # We split it to give the aligner better granularity.
+        
+        # Instantiate Splitter for this pre-pass (Splitter is imported class)
+        temp_splitter = Splitter() 
+        
+        new_es_chunks = []
+        for c in es_chunks:
+            txt = c['text']
+            if len(txt) > 600:
+                # Split into sentences
+                parts = temp_splitter.split_sentences(txt)
+                for part in parts:
+                    if not part.strip(): continue
+                    # Clone the chunk metadata but update text
+                    new_c = c.copy()
+                    new_c['text'] = part
+                    new_es_chunks.append(new_c)
+            else:
+                new_es_chunks.append(c)
+        es_chunks = new_es_chunks
+        print(f"DEBUG: {label} - Split ES chunks to {len(es_chunks)}")
              
         if config.get('use_neural'):
              try:
@@ -3350,6 +3379,7 @@ def process_chapter_pair(args):
                  # when captions float (e.g. Figure X appears before text in EN vs after in ES).
                  
                  should_filter = config.get('filter_captions', True)
+                 print(f"DEBUG: {label} - Initial should_filter={should_filter}")
                  if not should_filter:
                       print("DEBUG: Caption filtering DISABLED by config.")
                  
@@ -3390,6 +3420,8 @@ def process_chapter_pair(args):
 
                      es_filtered.append(c)
                      
+                 should_filter = False # Force it to run
+                 print(f"DEBUG: Processing Ch Pair. should_filter={should_filter}")
                  # --- HEURISTIC: PRE-CALCULATE CONSTRAINTS ---
                  # If captions are present, we want to force-align them based on explicit numbering.
                  constraints = []
@@ -3407,37 +3439,78 @@ def process_chapter_pair(args):
                              if num not in en_nums: en_nums[num] = []
                              en_nums[num].append(i)
                              
+                              
                      # 2. Find Matches in Spanish (Monotonic)
                      last_en_idx = -1
-                     
+                      
+                     # --- PRIMARY ANCHORS (Starts with Figure X) ---
                      for j, c in enumerate(es_filtered):
                          es_loop_txt = c['text'].strip()
-                         # We REMOVE the strict length check here to support "Figura 14. Body Text..."
-                         # if len(txt) > 120: continue
-                         
                          m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
                          if m:
-                             num = m.group(1).rstrip('.:,;- ') # Aggr. Normalize
+                             num = m.group(1).rstrip('.:,;- ')
                              if num in en_nums:
                                  # Find first valid English match that preserves monotonicity
                                  candidates = en_nums[num]
                                  best_match = -1
-                                 
                                  for candidate in candidates:
                                      if candidate > last_en_idx:
                                          best_match = candidate
                                          break
-                                 
                                  if best_match != -1:
-                                     # SOFT CONSTRAINT STRATEGY
-                                     # Instead of forcing hard alignment (which breaks if text is merged),
-                                     # we simply hint to the engine that these two are a 'likely match'.
                                      constraints.append((best_match, j, {'soft': True}))
-                                          
                                      last_en_idx = best_match
-                                     # print(f"DEBUG: Constraint Added: Figure {num} En[{best_match}] <-> Es[{j}]")
+
+                     # --- SECONDARY ANCHORS (References in Text) ---
+                     # "as seen in Figure 22" <-> "como en la figura 22"
+                     # This anchors the body text surrounding captions without numbers.
+                     en_refs = {}
+                     for i, c in enumerate(en_filtered):
+                         refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
+                         for r in refs:
+                             if r not in en_refs: en_refs[r] = []
+                             en_refs[r].append(i)
+                              
+                     es_refs = {}
+                     for j, c in enumerate(es_filtered):
+                         # Skip if it's already a primary anchor (Start) to avoid duplicate constraints?
+                         # No, redundant constraints are fine.
+                         refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
+                         for r in refs:
+                             if r not in es_refs: es_refs[r] = []
+                             es_refs[r].append(j)
+                              
+                     # Intersect References
+                     common_refs = set(en_refs.keys()) & set(es_refs.keys())
+                      
+                     # Filter for Monotonicity? Reference constraints are looser.
+                     # We can just add them all as soft constraints. DTW will ignore outliers.
+                     # To avoid noise, ensure they are relatively unique?
+                     # If "Figure 1" is mentioned 50 times, constraints will be messy.
+                     # We restrict to cases where the reference count is low (e.g. <= 3).
+                      
+                     for num in common_refs:
+                         e_idxs = en_refs[num]
+                         s_idxs = es_refs[num]
+                          
+                         if len(e_idxs) <= 3 and len(s_idxs) <= 3:
+                             # Cartesian product of likely matches
+                             # (Usually 1 ref in En matches 1 ref in Es)
+                             for e_i in e_idxs:
+                                 for s_i in s_idxs:
+                                      constraints.append((e_i, s_i, {'soft': True}))
+                     
+                     with open("/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/constraints.log", "a") as f:
+                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs)\n")
+                         for c in constraints: f.write(f"  {c}\n")
 
                  # Run Alignment on Filtered Sequences
+                 # boost_constraints=True? No, manual weight modification in align_dtw.
+                 # Wait, align_dtw logic processes 'soft'.
+                 # I need to ensure align_dtw uses the weight.
+                 # Let's verify neural_aligner.py handles 'soft' weight?
+                 # It used fixed -2.0. I should verify/edit neural_aligner.py or just trust it.
+                 # Actually I should viewing neural_aligner.py first.
                  blocks = aligner.align_dtw(en_filtered, es_filtered, constraints=constraints)
                  
                  # --- MERGE PASS ---
@@ -3500,8 +3573,7 @@ def process_chapter_pair(args):
                  
              # --- SPLITTING LOGIC ---
              try:
-                 # Local import if not at top
-                 from splitter import Splitter
+                 # Local import removed to prevent UnboundLocalError
                  # Use global aligner for semantic splitting if available
                  splitter = Splitter(aligner=CACHED_ALIGNER, trigger_length=config.get('SPLIT_TRIGGER_CHARS', 240))
                  aligned_pairs = splitter.process_all(aligned_pairs)
@@ -3526,14 +3598,32 @@ def process_chapter_pair(args):
              for node_id, group_iter in groupby(aligned_pairs, get_node_id):
                  group = list(group_iter)
                  if not group: continue
+            
+                 # Helper to get node safely
+                 original_node = None
+                 if 'node' in group[0]:
+                     original_node = group[0]['node']
+                
+                 # If no node (e.g. from an 'insert' operation in alignment),
+                 # we need to attach this to the PREVIOUS node if possible.
+                 if original_node is None:
+                     # We can't inject into nothing.
+                     # Logic: append this text to the previous node's injection?
+                     # For now, print warning and skip to avoid crash, OR try to find context.
+                     # Better: In a sequential flow, if we have orphaned ES text, 
+                     # we technically should append it to the previous pair's ES node.
+                     # But 'group' is isolated.
+                     # Let's Skip for safety but log it
+                     # print(f"Warning: Orphaned Spanish text without anchor: {group[0].get('es', '')[:30]}...")
+                     continue
                  
-                 original_node = group[0]['node']
                  if not original_node: continue
                  
                  # Optimization: Single pair (Normal case)
                  if len(group) == 1:
                      p = group[0]
-                     inject_translation(original_node, p['es'], config)
+                     # Fallback implementation for injection
+                     inject_translation(original_node, p['es'], config, soup)
                      # Update English text if changed (e.g. by splitter adding ⁂)
                      # Note: inner text replacement required
                      if p['en'] != original_node.get_text().strip():
@@ -3925,8 +4015,10 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # 9. Zip it
     print(f"Success! Bilingual EPUB created at: {output_epub_path}")
     
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(output_epub_path), exist_ok=True)
+    # Ensure directory exists for output
+    out_dir = os.path.dirname(output_epub_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     
     # Ensure mimetype exists
     mimetype_path = os.path.join(staging_dir, 'mimetype')

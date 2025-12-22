@@ -1460,14 +1460,28 @@ def inject_translation(en_node, es_text, config, soup):
     if 'id' in new_tag.attrs:
         del new_tag.attrs['id']
         
-    # 2. Add Span for Styling
+    # 2. Check for Internal Wrapper (e.g. <p class="CAP"> inside figcaption)
+    # If the English node has a single child that is a structural tag, we should clone it.
+    inner_wrapper = None
+    
+    # Simple check: direct children
+    # We ignore nav strings
+    children = [c for c in en_node.children if c.name]
+    if len(children) == 1 and children[0].name in ['p', 'div', 'span']:
+        # Clone the wrapper
+        inner_wrapper = soup.new_tag(children[0].name)
+        inner_wrapper.attrs = children[0].attrs.copy()
+        if 'id' in inner_wrapper.attrs: del inner_wrapper.attrs['id']
+        new_tag.append(inner_wrapper)
+    
+    # 3. Add Span for Styling
     # User Request: "add a span to put grey color in text"
     # Check config for classes if needed
     span_class = "es-translation"
     
     span = soup.new_tag("span")
     span['class'] = span_class
-    span['style'] = "color: grey;" # Explicit as requested
+    span['style'] = "color: grey !important;" # Explicit as requested
     
     # Parse es_text as HTML to preserve tags like <b>, <i>, etc.
     # We use the same parser as the main soup
@@ -1478,7 +1492,10 @@ def inject_translation(en_node, es_text, config, soup):
     else:
         span.string = es_text
     
-    new_tag.append(span)
+    if inner_wrapper:
+        inner_wrapper.append(span)
+    else:
+        new_tag.append(span)
     
     # 2.5 Style Overrides for Spacing
     # Prevent double margins (En bottom + Es top) causing huge gaps.

@@ -1468,7 +1468,15 @@ def inject_translation(en_node, es_text, config, soup):
     span = soup.new_tag("span")
     span['class'] = span_class
     span['style'] = "color: grey;" # Explicit as requested
-    span.string = es_text
+    
+    # Parse es_text as HTML to preserve tags like <b>, <i>, etc.
+    # We use the same parser as the main soup
+    inner_content = BeautifulSoup(es_text, 'html.parser')
+    # Append content directly (BeautifulSoup will handle the move)
+    if inner_content:
+        span.append(inner_content)
+    else:
+        span.string = es_text
     
     new_tag.append(span)
     
@@ -4128,6 +4136,26 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     if not os.path.exists(mimetype_path):
         with open(mimetype_path, 'w', encoding='utf-8') as f:
             f.write("application/epub+zip")
+
+    # Ensure META-INF/container.xml exists
+    meta_inf_dir = os.path.join(staging_dir, 'META-INF')
+    os.makedirs(meta_inf_dir, exist_ok=True)
+    container_xml_path = os.path.join(meta_inf_dir, 'container.xml')
+    
+    if not os.path.exists(container_xml_path):
+        # Calculate relative path to OPF
+        opf_rel_path = os.path.relpath(staging_opf_path, staging_dir).replace('\\', '/')
+        
+        container_content = f"""<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+    <rootfiles>
+        <rootfile full-path="{opf_rel_path}" media-type="application/oebps-package+xml"/>
+    </rootfiles>
+</container>"""
+        
+        with open(container_xml_path, 'w', encoding='utf-8') as f:
+            f.write(container_content)
+        print(f"Generated missing META-INF/container.xml pointing to {opf_rel_path}")
     
     # Debug: List staging contents to ensure assets are present
     total_files = 0

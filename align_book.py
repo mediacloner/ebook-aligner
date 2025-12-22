@@ -290,7 +290,7 @@ def normalize_label(label):
     if 'acerca' in label and 'autor' in label: return 'about_author'
     if 'sobre' in label and 'autor' in label: return 'about_author'
     
-    part_match = re.search(r'\b(?:part|parte)\s+(.+)', label)
+    part_match = re.search(r'\b(?:part|parte|libro|book)\s+(.+)', label)
     if part_match:
 
         num_str = part_match.group(1).strip().upper()
@@ -327,6 +327,191 @@ def normalize_label(label):
         return ('chapter', parsed_num)
             
     return label 
+
+def split_sentences_helper(text):
+    """
+    Splits text into sentences using simple regex.
+    """
+    if not text:
+        return []
+    # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start
+    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
+    parts = re.split(pattern, text)
+    sentences = []
+    current_sent = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            current_sent += part
+        else:
+            current_sent += part
+            sentences.append(current_sent.strip())
+            current_sent = ""
+    if current_sent and current_sent.strip():
+        sentences.append(current_sent.strip())
+    return sentences
+
+def distribute_spanish(aligner, en_chunks, es_text):
+    """
+    Distributes Spanish text across multiple English chunks using semantic similarity.
+    Returns a list of strings (one per en_chunk).
+    """
+    import numpy as np
+    from scipy.spatial.distance import cosine
+    
+    # 0. Pre-checks
+    if not es_text.strip():
+        return [""] * len(en_chunks)
+    if len(en_chunks) == 1:
+        return [es_text]
+        
+    en_texts = [c['text'] for c in en_chunks]
+    es_sents = split_sentences_helper(es_text)
+    
+    if not es_sents:
+        return [""] * len(en_chunks)
+        
+    # 1. Embeddings
+    en_embs = aligner.embed_chunks([{'text': t} for t in en_texts])
+    es_embs = aligner.embed_chunks([{'text': t} for t in es_sents])
+    
+    results = []
+    es_idx = 0
+    
+    # 2. Greedy Distribution
+    for i, en_text in enumerate(en_texts):
+        # Last chunk gets remainder
+        if i == len(en_texts) - 1:
+            remainder = " ".join(es_sents[es_idx:])
+            results.append(remainder)
+            break
+            
+        if es_idx >= len(es_sents):
+            results.append("")
+            continue
+            
+        en_vec = en_embs[i]
+        en_len = len(en_text)
+        
+        best_cut = es_idx + 1
+        best_score = float('inf')
+        
+        current_es_str = ""
+        max_lookahead = min(len(es_sents) - es_idx, 20)
+        
+        # Look ahead to find best accumulation matching the current english chunk
+        for k in range(max_lookahead):
+            idx = es_idx + k
+            sent = es_sents[idx]
+            current_es_str += (" " + sent) if current_es_str else sent
+            
+            # Length Ratio Guard (looser than Splitter)
+            ratio = len(current_es_str) / (en_len + 1)
+            # If ratio is too small, keep adding. If too big, stop?
+            # English might be 50 chars ("Figure 35") and Spanish 200 chars ("La Figura 35 muestra...")
+            # So ratio can be high.
+            # But "The idea is..." (short) vs "Se trata..." (short).
+            # Let's rely mainly on cosine.
+            
+            # Vector Aggregation
+            relevant_vecs = es_embs[es_idx : idx+1]
+            if not isinstance(relevant_vecs, np.ndarray):
+                relevant_vecs = np.vstack(relevant_vecs)
+            cand_vec = np.mean(relevant_vecs, axis=0)
+            
+            dist = cosine(en_vec, cand_vec)
+            
+            # Bias slightly towards ratio ~ 1.0 - 1.5?
+            # Add penalty for extreme ratios
+            length_penalty = 0
+            if ratio < 0.2: length_penalty = 0.5
+            if ratio > 3.0: length_penalty = 0.5
+            
+            final_score = dist + length_penalty
+            
+            if final_score < best_score:
+                best_score = final_score
+                best_cut = idx + 1
+                
+        # Commit best cut
+        part = " ".join(es_sents[es_idx:best_cut])
+        results.append(part)
+        es_idx = best_cut
+        
+    return results
+
+def merge_bleeding_blocks(aligner, blocks):
+    """
+    Detects if the end of block N bleeds into the start of block N+1.
+    If similarity(en_chunks[-1].last_sentence, es_chunks[0].first_sentence) is high,
+    merge the blocks and flag for forced redistribution.
+    """
+    if not blocks: return []
+    
+    merged = []
+    skip_next = False
+    
+    import numpy as np
+    from scipy.spatial.distance import cosine
+    
+    for i in range(len(blocks)):
+        if skip_next:
+            skip_next = False
+            continue
+            
+        current_block = blocks[i]
+        
+        # Determine if we can check next block
+        if i + 1 >= len(blocks):
+            merged.append(current_block)
+            continue
+            
+        next_block = blocks[i+1]
+        
+        # Check candidates
+        if not current_block['en_chunks'] or not next_block['es_chunks']:
+            merged.append(current_block)
+            continue
+            
+        last_en_chunk = current_block['en_chunks'][-1]
+        first_es_chunk = next_block['es_chunks'][0]
+        
+        # Extract "sentences" (simplistic split for check)
+        en_text = last_en_chunk['text'].strip()
+        es_text = first_es_chunk['text'].strip()
+        
+        # Heuristic: verify short snippets match
+        en_sents = re.split(r'[.?!]\s+', en_text)
+        es_sents = re.split(r'[.?!]\s+', es_text)
+        
+        candidate_en = en_sents[-1] if en_sents else en_text
+        candidate_es = es_sents[0] if es_sents else es_text
+        
+        # Compute Sim
+        try:
+            emb_en = aligner.embed_chunks([{'text': candidate_en}])[0]
+            emb_es = aligner.embed_chunks([{'text': candidate_es}])[0]
+            sim = 1 - cosine(emb_en, emb_es)
+            
+            # Threshold from investigation: 0.6148
+            if sim > 0.6:
+                print(f"Merge Triggered: '{candidate_en[:20]}...' vs '{candidate_es[:20]}...' (Sim: {sim:.4f})")
+                
+                # Merge
+                new_block = {
+                    'en_chunks': current_block['en_chunks'] + next_block['en_chunks'],
+                    'es_chunks': current_block['es_chunks'] + next_block['es_chunks'],
+                    'force_distribution': True
+                }
+                merged.append(new_block)
+                skip_next = True
+            else:
+                merged.append(current_block)
+                
+        except Exception as e:
+            print(f"Merge check failed: {e}")
+            merged.append(current_block)
+            
+    return merged 
 
 def align_tocs(en_toc, es_toc):
     """
@@ -1160,6 +1345,8 @@ def extract_nodes(soup):
         chunk_type = 'std'
         if tag.startswith('h'):
             chunk_type = 'header'
+        elif re.match(r'^(Figure|Table|Box|Fig\.)\s*\d+\s*[:\.]', text, re.IGNORECASE):
+            chunk_type = 'caption'
             
         chunks.append({
             'text': text,
@@ -3083,7 +3270,29 @@ def process_chapter_pair(args):
                      CACHED_ALIGNER = NeuralAligner()
                  
                  aligner = CACHED_ALIGNER
-                 blocks = aligner.align_dtw(en_chunks, es_chunks)
+                 
+                 # --- CAPTION FILTERING ---
+                 # Filter out captions from the alignment input to prevent strict monotonic constraint failures 
+                 # when captions float (e.g. Figure X appears before text in EN vs after in ES).
+                 
+                 en_filtered = [c for c in en_chunks if c['type'] != 'caption' and c['type'] != 'image']
+                 
+                 # Post-process ES chunks to detect text-based captions (redundant safety)
+                 es_filtered = []
+                 for c in es_chunks:
+                     if c['type'] == 'image': continue
+                     if c['type'] == 'caption': continue
+                     
+                     txt = c['text'].strip()
+                     if re.match(r'^(Figura|Figure|Tabla|Table|Cuadro|Grafico)\s*\d+', txt, re.IGNORECASE):
+                         continue
+                     es_filtered.append(c)
+                     
+                 # Run Alignment on Filtered Sequences
+                 blocks = aligner.align_dtw(en_filtered, es_filtered)
+                 
+                 # --- MERGE PASS ---
+                 blocks = merge_bleeding_blocks(aligner, blocks)
                  
                  # Adapter: Convert Neural Blocks to Flat Pairs with DOM Nodes
                  aligned_pairs = []
@@ -3093,10 +3302,8 @@ def process_chapter_pair(args):
                      
                      if not ens: continue # No anchor to inject into
                      
-                     # SPECIAL CASE: 1-to-1 Mapping
-                     # If the neural aligner grouped them but they match in count, 
-                     # we should map them 1-to-1 to avoid "lumping" text at the end.
-                     if len(ens) == len(ess):
+                     # 1:1 Mapping
+                     if len(ens) == len(ess) and not b.get('force_distribution'):
                          for k in range(len(ens)):
                              if not ess[k]['text'].strip(): continue
                              aligned_pairs.append({
@@ -3107,6 +3314,23 @@ def process_chapter_pair(args):
                              })
                          continue
                      
+                     # N:1 or N:M (where N > M) - Distribute Logic
+                     if len(ens) >= len(ess):
+                         joined_es = " ".join([c['text'] for c in ess])
+                         
+                         # Use our new distribution helper
+                         distributed_es = distribute_spanish(aligner, ens, joined_es)
+                         
+                         for k, es_part in enumerate(distributed_es):
+                             if not es_part.strip() and not ens[k]['text'].strip(): continue
+                             aligned_pairs.append({
+                                 'node': ens[k]['node'],
+                                 'es': es_part,
+                                 'en': ens[k]['text'],
+                                 'tag': ens[k]['tag']
+                             })
+                         continue
+
                      # Fallback: Lump strategy (attach to last node)
                      # Join Spanish text
                      joined_es = " ".join([c['text'] for c in ess])

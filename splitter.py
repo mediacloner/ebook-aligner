@@ -58,18 +58,25 @@ class Splitter:
         # but only split at logical sentence boundaries.
         
         en_chunks_text = []
+        en_chunks_tails = []
         current_chunk = ""
+        current_tail = ""
         
         for sent in en_sents:
             if len(current_chunk) + len(sent) > self.trigger_length and len(current_chunk) > 50:
                 # Close current chunk
                 en_chunks_text.append(current_chunk.strip())
+                en_chunks_tails.append(current_tail)
+                
                 current_chunk = sent
+                current_tail = sent
             else:
                 current_chunk += (" " + sent) if current_chunk else sent
+                current_tail = sent
         
         if current_chunk:
             en_chunks_text.append(current_chunk.strip())
+            en_chunks_tails.append(current_tail)
             
         if len(en_chunks_text) == 1:
             return original_pair
@@ -95,6 +102,9 @@ class Splitter:
              # Simpler: Accumulate ES sentences until they "fill" the first EN chunk semantically.
              
              en_embs = self.aligner.embed_chunks([{'text': t} for t in en_chunks_text])
+             # Also embed tails for boundary refinement
+             en_tail_embs = self.aligner.embed_chunks([{'text': t} for t in en_chunks_tails])
+             
              es_embs = self.aligner.embed_chunks([{'text': t} for t in es_sents])
              
              import numpy as np
@@ -151,6 +161,17 @@ class Splitter:
                      cand_vec = np.mean(relevant_vecs, axis=0)
                      
                      dist = cosine(en_vec, cand_vec)
+                     
+                     # --- TAIL BONUS ---
+                     # Check if the cut point allows the last ES sentence to match the last EN sentence
+                     # idx is the index of the last included ES sentence
+                     es_tail_vec = es_embs[idx]
+                     en_tail_vec = en_tail_embs[i]
+                     tail_sim = 1 - cosine(en_tail_vec, es_tail_vec)
+                     
+                     if tail_sim > 0.6:
+                         # Apply bonus (reduce distance)
+                         dist -= 0.15
                      
                      if dist < best_score:
                          best_score = dist

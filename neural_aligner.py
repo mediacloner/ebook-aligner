@@ -38,10 +38,11 @@ class NeuralAligner:
         # cosine distance = 1 - cosine similarity
         return cdist(embs1, embs2, metric='cosine')
 
-    def align_dtw(self, en_chunks, es_chunks):
+    def align_dtw(self, en_chunks, es_chunks, constraints=None):
         """
         Aligns chunks using Dynamic Time Warping on their embeddings.
         Returns a list of matched pairs/groups.
+        constraints: optional list of (en_idx, es_idx) tuples that MUST match.
         """
         if not en_chunks or not es_chunks:
             return []
@@ -55,6 +56,51 @@ class NeuralAligner:
         logger.info("Computing distance matrix...")
         # distance matrix
         D = cdist(en_embs, es_embs, metric='cosine')
+        
+        # Apply Hard Constraints
+        if constraints:
+            logger.info(f"Applying {len(constraints)} hard constraints...")
+            # We enforce constraints by making the cost of violating them infinite
+            # and the cost of the constrained match 0 (or very low neg).
+            # Strategy: For each (i, j) in constraints:
+            # 1. Set D[i, j] = 0
+            # 2. Set entire row i to infinity (except j)
+            # 3. Set entire col j to infinity (except i)
+            
+            # Use a large number for infinity
+            INF_COST = 1e6
+            
+            for item in constraints:
+                # Support (i, j), (i, j, options)
+                if len(item) == 2:
+                    i, j = item
+                    options = {}
+                else:
+                    i, j, options = item
+                
+                if i >= D.shape[0] or j >= D.shape[1]: continue
+                
+                # Check for 'soft' option
+                is_soft = options.get('soft', False)
+                allow_col_merge = options.get('allow_col_merge', False)
+                
+                if is_soft:
+                    # SOFT CONSTRAINT (Gravity Well)
+                    # Make this match extremely attractive, but don't forbid others.
+                    # This allows the path to flow through here if plausible, but skip/merge if necessary.
+                    # We subtract a large value to ensure it's the preferred path locally.
+                    D[i, j] -= 2.0 
+                    continue
+
+                # HARD CONSTRAINT
+                # Mask out row (Force En[i] to match Es[j])
+                D[i, :] = INF_COST
+                
+                # Mask out col (Force Es[j] to match En[i])
+                if not allow_col_merge:
+                    D[:, j] = INF_COST
+                
+                D[i, j] = 0.0
 
         # Simple DTW implementation
         # Accumulate cost matrix

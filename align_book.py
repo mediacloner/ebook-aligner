@@ -42,6 +42,7 @@ SPLIT_TOLERANCE = 0.20     # 20% +/- deviation allowed
 # Configuration Profiles
 PROFILES = {
     'generic': {
+        'filter_captions': False, # KEEP CAPTIONS (User requested generic-only, so enabled globally)
         'en': {
             'header_tags': ['h1', 'h2', 'h3'],
             'header_classes': ['CN', 'CN-Only', 'CT'], 
@@ -72,9 +73,8 @@ PROFILES = {
 
 def detect_profile(file_path):
     """Detects likely profile based on content signatures."""
-    # Always default to generic now that we have merged capabilities
+    # Always default to generic as requested by user
     print(f"Auto-detection: Using 'generic' profile for {os.path.basename(file_path)}")
-    return 'generic'
     return 'generic'
 
 def extract_title_from_html(file_path):
@@ -1489,8 +1489,8 @@ def inject_translation(en_node, es_text, config, soup):
          # Headers: tighten top completely. They usually have large line-height anyway.
          new_tag['style'] = new_tag_style + " margin-top: 0 !important; padding-top: 0 !important;"
     else:
-         # Paragraphs: maintain small visual separation
-         new_tag['style'] = new_tag_style + " margin-top: 0.5em !important;"
+         # Paragraphs: maintain small visual separation -> NO, user wants 0 margin
+         new_tag['style'] = new_tag_style + " margin-top: 0 !important;"
 
     # 3. Insert after original
     en_node.insert_after(new_tag)
@@ -1528,7 +1528,9 @@ def perform_injection(aligned_pairs, config, soup):
         group = list(group_iter)
         if not group: continue
         
-        original_node = group[0]['node']
+        if len(group) == 0: continue
+        
+        original_node = group[0].get('node')
         if not original_node: continue
         
         # Optimization: Single pair (Normal case)
@@ -1558,7 +1560,7 @@ def perform_injection(aligned_pairs, config, soup):
                 if len(group) > 1 and es_node:
                     # Reduce bottom margin of this Spanish block to show it continues
                     s = es_node.get('style', '')
-                    es_node['style'] = s + "; margin-bottom: 0.5em !important;"
+                    es_node['style'] = s + "; margin-bottom: 0 !important;"
 
                 last_node = original_node.find_next_sibling()
                 # Fallback if no sibling was added (e.g., empty es_text)
@@ -1586,7 +1588,7 @@ def perform_injection(aligned_pairs, config, soup):
                 # If not the last part, tight bottom margin too
                 if i < len(group) - 1 and es_node:
                      s = es_node.get('style', '')
-                     es_node['style'] = s + "; margin-bottom: 0.5em !important;"
+                     es_node['style'] = s + "; margin-bottom: 0 !important;"
 
                 next_sib = new_en_node.find_next_sibling()
                 last_node = next_sib if next_sib else new_en_node
@@ -1683,7 +1685,8 @@ def align_chunks(en_chunks, es_chunks):
                         'en': t_en, 
                         'es': t_es,
                         'raw_html': use_raw,
-                        'es_raw_html': itm_es.get('raw_html') if itm_es else None
+                        'es_raw_html': itm_es.get('raw_html') if itm_es else None,
+                        'node': itm_en['node'] if itm_en else None
                     })
              return local_res
 
@@ -1724,7 +1727,8 @@ def align_chunks(en_chunks, es_chunks):
                         'en': en_text,
                         'es': es_text,
                         'raw_html': en_item.get('raw_html'), # Preserve raw
-                        'es_raw_html': es_item.get('raw_html') # Preserve ES raw
+                        'es_raw_html': es_item.get('raw_html'), # Preserve ES raw
+                        'node': en_item['node']
                     })
                     # Remove 'text' key to avoid confusion? Or keep it?
                     # Keep everything else (src, alt, etc)
@@ -1743,7 +1747,7 @@ def align_chunks(en_chunks, es_chunks):
                              # Preserve raw/dict if no split
                              v_en_chunks.append(c)
                         else:
-                            for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', []), 'raw_html': None})
+                            for s in sents: v_en_chunks.append({'tag': c['tag'], 'type': 'std', 'text': s, 'classes': c.get('classes', []), 'raw_html': None, 'node': c['node']})
                     else:
                         v_en_chunks.append(c)
 
@@ -1779,7 +1783,8 @@ def align_chunks(en_chunks, es_chunks):
                     item_data = en_sec[k].copy()
                     item_data.update({
                         'en': en_sec[k]['text'],
-                        'es': ""
+                        'es': "",
+                        'node': en_sec[k]['node']
                     })
                     local_res.append(item_data)
             elif tag == 'insert':
@@ -1831,7 +1836,8 @@ def align_chunks(en_chunks, es_chunks):
                  'classes': h_en.get('classes', []),
                  'en': h_en['text'],
                  'es': h_es['text'],
-                 'type': 'header'
+                 'type': 'header',
+                 'node': h_en['node']
              })
              
     # Handle any remaining chunks after the last header
@@ -3343,21 +3349,96 @@ def process_chapter_pair(args):
                  # Filter out captions from the alignment input to prevent strict monotonic constraint failures 
                  # when captions float (e.g. Figure X appears before text in EN vs after in ES).
                  
-                 en_filtered = [c for c in en_chunks if c['type'] != 'caption' and c['type'] != 'image']
+                 should_filter = config.get('filter_captions', True)
+                 if not should_filter:
+                      print("DEBUG: Caption filtering DISABLED by config.")
+                 
+                 en_filtered = []
+                 for c in en_chunks:
+                     if c['type'] == 'image': continue # Images always filtered from text alignment
+                     
+                     txt = c['text'].strip()
+                     if should_filter:
+                         if c['type'] == 'caption': continue
+                         # Regex Check
+                         if re.match(r'^(Figura|Figure|Tabla|Table|Cuadro|Grafico)\s*\d+', txt, re.IGNORECASE):
+                             continue
+                             
+                     # Separator Check (Prevent Desync)
+                     # Filter out scene breaks like * * * or ----- to prevent alignment shifts
+                     if len(txt) < 20 and re.match(r'^[\s\*\-\u2013\u2014_]{3,}$', txt):
+                         continue
+
+                     en_filtered.append(c)
                  
                  # Post-process ES chunks to detect text-based captions (redundant safety)
                  es_filtered = []
                  for c in es_chunks:
                      if c['type'] == 'image': continue
-                     if c['type'] == 'caption': continue
                      
                      txt = c['text'].strip()
-                     if re.match(r'^(Figura|Figure|Tabla|Table|Cuadro|Grafico)\s*\d+', txt, re.IGNORECASE):
+                     
+                     if should_filter:
+                         if c['type'] == 'caption': continue
+                         
+                         if re.match(r'^(Figura|Figure|Tabla|Table|Cuadro|Grafico)\s*\d+', txt, re.IGNORECASE):
+                             continue
+                             
+                     # Separator Check (Prevent Desync)
+                     if len(txt) < 20 and re.match(r'^[\s\*\-\u2013\u2014_]{3,}$', txt):
                          continue
+
                      es_filtered.append(c)
                      
+                 # --- HEURISTIC: PRE-CALCULATE CONSTRAINTS ---
+                 # If captions are present, we want to force-align them based on explicit numbering.
+                 constraints = []
+                 if not should_filter:
+                     # 1. Map English Numbers -> Indices
+                     en_nums = {} # Num -> [list of indices]
+                     for i, c in enumerate(en_filtered):
+                         txt = c['text'].strip()
+                         # Safety: Captions shouldn't be huge paragraphs
+                         if len(txt) > 120: continue 
+
+                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', txt, re.IGNORECASE)
+                         if m:
+                             num = m.group(1).rstrip('.:,;- ') # Aggr. Normalize
+                             if num not in en_nums: en_nums[num] = []
+                             en_nums[num].append(i)
+                             
+                     # 2. Find Matches in Spanish (Monotonic)
+                     last_en_idx = -1
+                     
+                     for j, c in enumerate(es_filtered):
+                         es_loop_txt = c['text'].strip()
+                         # We REMOVE the strict length check here to support "Figura 14. Body Text..."
+                         # if len(txt) > 120: continue
+                         
+                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
+                         if m:
+                             num = m.group(1).rstrip('.:,;- ') # Aggr. Normalize
+                             if num in en_nums:
+                                 # Find first valid English match that preserves monotonicity
+                                 candidates = en_nums[num]
+                                 best_match = -1
+                                 
+                                 for candidate in candidates:
+                                     if candidate > last_en_idx:
+                                         best_match = candidate
+                                         break
+                                 
+                                 if best_match != -1:
+                                     # SOFT CONSTRAINT STRATEGY
+                                     # Instead of forcing hard alignment (which breaks if text is merged),
+                                     # we simply hint to the engine that these two are a 'likely match'.
+                                     constraints.append((best_match, j, {'soft': True}))
+                                          
+                                     last_en_idx = best_match
+                                     # print(f"DEBUG: Constraint Added: Figure {num} En[{best_match}] <-> Es[{j}]")
+
                  # Run Alignment on Filtered Sequences
-                 blocks = aligner.align_dtw(en_filtered, es_filtered)
+                 blocks = aligner.align_dtw(en_filtered, es_filtered, constraints=constraints)
                  
                  # --- MERGE PASS ---
                  blocks = merge_bleeding_blocks(aligner, blocks)
@@ -3557,7 +3638,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
 
     # 1b. Load Profile / Config
     # We default to 'generic' which has standard settings for 'en' and 'es'
-    detected_profile = 'generic'
+    # Use output filename for detection since input path might be temp
+    detected_profile = detect_profile(output_epub_path)
     print(f"Using profile: {detected_profile}")
     
     defaults = PROFILES.get(detected_profile, PROFILES['generic'])

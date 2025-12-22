@@ -169,9 +169,9 @@ class Splitter:
                      en_tail_vec = en_tail_embs[i]
                      tail_sim = 1 - cosine(en_tail_vec, es_tail_vec)
                      
-                     if tail_sim > 0.6:
+                     if tail_sim > 0.4:
                          # Apply bonus (reduce distance)
-                         dist -= 0.15
+                         dist -= 0.25
                      
                      if dist < best_score:
                          best_score = dist

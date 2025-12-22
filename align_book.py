@@ -439,6 +439,28 @@ def distribute_spanish(aligner, en_chunks, es_text):
         
     return results
 
+def save_cleaned_opf(soup, path):
+    """
+    Saves the OPF soup to path, stripping 'opf:' prefixes from metadata tags
+    to ensure compatibility with readers expecting standard namespaces.
+    """
+    content = str(soup)
+    
+    # Strip opf: prefix from metadata and meta tags
+    # We do simple string replacement as regex might overlap if not careful, 
+    # but exact tags are predictable from BS4 xml output.
+    
+    # Replace open tags
+    content = content.replace('<opf:metadata', '<metadata')
+    content = content.replace('<opf:meta', '<meta')
+    
+    # Replace close tags
+    content = content.replace('</opf:metadata>', '</metadata>')
+    content = content.replace('</opf:meta>', '</meta>')
+    
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(content)
+
 def merge_bleeding_blocks(aligner, blocks):
     """
     Detects if the end of block N bleeds into the start of block N+1.
@@ -608,6 +630,52 @@ def align_tocs(en_toc, es_toc):
     # Sort anchors by English index to establish a skeleton
     anchors.sort(key=lambda x: x[0]['idx'])
     
+    # --- FILTER ANCHORS FOR MONOTONICITY (LIS) ---
+    # We need to find the Longest Increasing Subsequence of Spanish indices.
+    # Anchors that violate the sequence are likely mismatches (e.g. Front Note <-> Back Note).
+    
+    if anchors:
+        es_indices = [x[1]['idx'] for x in anchors]
+        
+        # Standard LIS algorithm O(N log N) or O(N^2) - N is small here
+        # We need to retrieve the actual items, not just length.
+        
+        # Simple O(N^2) approach for reconstruction
+        n = len(es_indices)
+        # dp[i] = (length, predecessor_index)
+        dp = [(1, -1)] * n
+        
+        for i in range(1, n):
+            for j in range(i):
+                if es_indices[j] < es_indices[i]:
+                    if dp[j][0] + 1 > dp[i][0]:
+                        dp[i] = (dp[j][0] + 1, j)
+                        
+        # Find max length
+        max_len_idx = -1
+        max_len = 0
+        for i in range(n):
+            if dp[i][0] > max_len:
+                max_len = dp[i][0]
+                max_len_idx = i
+                
+        # Reconstruct path
+        lis_indices = []
+        curr = max_len_idx
+        while curr != -1:
+            lis_indices.append(curr)
+            curr = dp[curr][1]
+            
+        lis_indices.reverse()
+        
+        # Filter anchors
+        valid_anchors = [anchors[i] for i in lis_indices]
+        
+        if len(valid_anchors) < len(anchors):
+            print(f"Refined Anchors via LIS: {len(anchors)} -> {len(valid_anchors)} (Removed outliers)")
+            
+        anchors = valid_anchors
+
     final_pairs = []
     
     # 2. Fill Gaps
@@ -3525,8 +3593,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             new_title = f"{original_title} (bilingual)"
             dc_title.string = new_title
             
-            with open(staging_opf_path, 'w', encoding='utf-8') as f:
-                f.write(str(opf_soup))
+            save_cleaned_opf(opf_soup, staging_opf_path)
             print(f"Updated metadata title: {new_title}")
     except Exception as e:
         print(f"Warning: Could not update OPF metadata: {e}")
@@ -3763,8 +3830,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 if not opf_soup.find('item', id=item_id):
                     new_item = opf_soup.new_tag('item', id=item_id, href=f"images/{img_fname}", media_type=img_mime)
                     manifest.append(new_item)
-            with open(staging_opf_path, 'w', encoding='utf-8') as f:
-                f.write(str(opf_soup))
+            
+            save_cleaned_opf(opf_soup, staging_opf_path)
             print(f"Updated OPF manifest with {len(all_collected_images)} new image entries.")
     except Exception as e:
         print(f"Warning: Could not update OPF manifest with new images: {e}")

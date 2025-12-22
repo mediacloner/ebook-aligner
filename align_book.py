@@ -1175,7 +1175,18 @@ def extract_nodes(soup):
 def inject_translation(en_node, es_text, config, soup):
     if not en_node or not es_text:
         return
-
+    
+    # 0. Pre-check: Extract Images from English Node?
+    # User Request: Order should be EN -> ES -> IMG
+    # Currently it is EN(with img) -> ES.
+    # We detected if en_node has images, extract them, and append them AFTER the translation.
+    
+    extracted_images = []
+    images = en_node.find_all(['img', 'svg'])
+    if images:
+        for img in images:
+            extracted_images.append(img.extract()) # Remove from EN
+            
     # 1. Exact Clone of the Wrapper (p, div, h1, etc.)
     # We create a new tag with the same name
     new_tag = soup.new_tag(en_node.name)
@@ -1198,10 +1209,61 @@ def inject_translation(en_node, es_text, config, soup):
     
     new_tag.append(span)
     
+    # 2.5 Style Overrides for Spacing
+    # Prevent double margins (En bottom + Es top) causing huge gaps.
+    # Strategy: 
+    # - Remove bottom margin from English node
+    # - Add small top margin to Spanish node
+    # - Spanish node keeps original bottom margin (spacing to next pair)
+    
+    # Update English Node styles
+    en_style = en_node.get('style', '')
+    if en_style: en_style += ";"
+    
+    # Specific handling for Headers to be very tight
+    if en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+         en_node['style'] = en_style + " margin-bottom: 0 !important; padding-bottom: 0 !important;"
+    else:
+         en_node['style'] = en_style + " margin-bottom: 0 !important;"
+    
+    # Update Spanish Node styles
+    new_tag_style = new_tag.get('style', '')
+    if new_tag_style: new_tag_style += ";"
+    
+    if en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+         # Headers: tighten top completely. They usually have large line-height anyway.
+         new_tag['style'] = new_tag_style + " margin-top: 0 !important; padding-top: 0 !important;"
+    else:
+         # Paragraphs: maintain small visual separation
+         new_tag['style'] = new_tag_style + " margin-top: 0.5em !important;"
+
     # 3. Insert after original
     en_node.insert_after(new_tag)
     
-    # Note: Returning nothing as we modified in-place, but caller expects nothing.
+    # 4. Append Extracted Images (if any)
+    if extracted_images:
+        # We wrap them in a similar container to preserve layout (e.g. centering)
+        # But we strip text-specific styles potentially?
+        # Safe bet: Clone the wrapper again.
+        img_container = soup.new_tag(en_node.name)
+        img_container.attrs = en_node.attrs.copy()
+        
+        # Remove ID
+        if 'id' in img_container.attrs: del img_container.attrs['id']
+        
+        # Reset margins for image container?
+        # It should probably have top margin (spacing from ES) and original bottom margin.
+        img_style = img_container.get('style', '')
+        if img_style: img_style += ";"
+        img_container['style'] = img_style + " margin-top: 1em !important;"
+        
+        for img in extracted_images:
+            img_container.append(img)
+            
+        # Insert AFTER the Spanish node
+        new_tag.insert_after(img_container)
+
+    return new_tag
 
 def perform_injection(aligned_pairs, config, soup):
     from itertools import groupby
@@ -1235,7 +1297,14 @@ def perform_injection(aligned_pairs, config, soup):
             if i == 0:
                 # Reuse the original node for the first chunk
                 original_node.string = en_text
-                inject_translation(original_node, es_text, config, soup)
+                es_node = inject_translation(original_node, es_text, config, soup)
+                
+                # If this is a split group, and there is a next part:
+                if len(group) > 1 and es_node:
+                    # Reduce bottom margin of this Spanish block to show it continues
+                    s = es_node.get('style', '')
+                    es_node['style'] = s + "; margin-bottom: 0.5em !important;"
+
                 last_node = original_node.find_next_sibling()
                 # Fallback if no sibling was added (e.g., empty es_text)
                 if last_node is None:
@@ -1247,12 +1316,23 @@ def perform_injection(aligned_pairs, config, soup):
                 new_en_node.string = en_text
                 if new_en_node.has_attr('id'): del new_en_node['id']
                 
+                # Split Continuation Style: 
+                # Remove Top Margin from English part to pull it up to previous Span
+                s = new_en_node.get('style', '')
+                new_en_node['style'] = s + "; margin-top: 0 !important;"
+                
                 # Safety: If last_node is None, fall back to original_node
                 if last_node is None:
                     last_node = original_node
                     
                 last_node.insert_after(new_en_node)
-                inject_translation(new_en_node, es_text, config, soup)
+                es_node = inject_translation(new_en_node, es_text, config, soup)
+                
+                # If not the last part, tight bottom margin too
+                if i < len(group) - 1 and es_node:
+                     s = es_node.get('style', '')
+                     es_node['style'] = s + "; margin-bottom: 0.5em !important;"
+
                 next_sib = new_en_node.find_next_sibling()
                 last_node = next_sib if next_sib else new_en_node
 

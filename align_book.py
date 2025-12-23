@@ -734,6 +734,104 @@ def align_tocs(en_toc, es_toc):
         
     return final_pairs
 
+def align_by_spine(en_base, es_base, en_toc_path, es_toc_path):
+    """
+    Fallback alignment using OPF spine order when TOC matching fails.
+    Filters out front/back matter and pairs content chapters by position.
+    Returns list of (label, en_src, es_src, level).
+    """
+    print("Attempting spine-based alignment...")
+    
+    # Find OPF files
+    en_opf = find_opf_file(en_base)
+    es_opf = find_opf_file(es_base)
+    
+    if not en_opf or not es_opf:
+        print("WARNING: Could not find OPF files for spine-based alignment")
+        return []
+    
+    def get_spine_items(opf_path):
+        """Extract spine items from OPF file."""
+        try:
+            with open(opf_path, 'r', encoding='utf-8') as f:
+                soup = BeautifulSoup(f.read(), 'xml')
+            
+            # Build manifest id -> href map
+            manifest = {}
+            for item in soup.find_all('item'):
+                item_id = item.get('id')
+                href = item.get('href')
+                if item_id and href:
+                    manifest[item_id] = href
+            
+            # Get spine order
+            spine = []
+            for itemref in soup.find_all('itemref'):
+                idref = itemref.get('idref')
+                if idref and idref in manifest:
+                    spine.append(manifest[idref])
+            
+            return spine
+        except Exception as e:
+            print(f"Error reading OPF spine: {e}")
+            return []
+    
+    def is_excluded_page(filename):
+        """Heuristic to detect pages that should NOT be aligned (true front/back matter)."""
+        lower = filename.lower()
+        # Strict exclusion patterns - only truly non-alignable pages
+        excluded = [
+            'cover', 'cubierta', 'cvi_',  # Cover pages
+            'copyright', 'creditos', 'derechos', 'cop_',  # Copyright
+            'toc_', 'nav', '_toc', 'indice', 'content.xhtml',  # Navigation
+            'promo', 'sinopsis', 'about', 'bio', 'autor', 'adc_',  # Back matter
+            'acknowledgment', 'agradecimiento', 'ack_',  # Acknowledgments (usually at end)
+            'notes', 'notas', 'bibliography', 'bibliografia',  # References
+        ]
+        for p in excluded:
+            if p in lower:
+                return True
+        return False
+    
+    en_spine = get_spine_items(en_opf)
+    es_spine = get_spine_items(es_opf)
+    
+    print(f"EN spine items: {len(en_spine)}")
+    print(f"ES spine items: {len(es_spine)}")
+    
+    # Filter to alignable content (everything except strict exclusions)
+    en_content = [f for f in en_spine if not is_excluded_page(f)]
+    es_content = [f for f in es_spine if not is_excluded_page(f)]
+    
+    print(f"EN content chapters: {len(en_content)}")
+    print(f"ES content chapters: {len(es_content)}")
+    
+    # Pair by position
+    pairs = []
+    min_len = min(len(en_content), len(es_content))
+    
+    for i in range(min_len):
+        en_src = en_content[i]
+        es_src = es_content[i]
+        # Use EN filename as label, or extract from path
+        label = os.path.splitext(os.path.basename(en_src))[0]
+        pairs.append((label, en_src, es_src, 0))
+    
+    # Handle remaining EN chapters (no ES translation)
+    for i in range(min_len, len(en_content)):
+        en_src = en_content[i]
+        label = os.path.splitext(os.path.basename(en_src))[0]
+        pairs.append((label, en_src, None, 0))
+    
+    # Handle remaining ES chapters (extra Spanish content)
+    for i in range(min_len, len(es_content)):
+        es_src = es_content[i]
+        label = os.path.splitext(os.path.basename(es_src))[0]
+        pairs.append((label, None, es_src, 0))
+    
+    print(f"Spine-based alignment: {len(pairs)} chapter pairs")
+    return pairs
+
 def extract_chapter_number(filename):
     """
     Extracts the first significant number from a filename.
@@ -3853,7 +3951,7 @@ def process_chapter_pair(args):
                      if i == 0:
                          # Reuse the original node for the first chunk
                          original_node.string = en_text
-                         inject_translation(original_node, es_text, config)
+                         inject_translation(original_node, es_text, config, soup)
                          # inject_translation appends the Spanish node AFTER original_node.
                          # We need to find that injected node to update 'last_node'
                          # inject_translation returns nothing, but we know it inserts after.
@@ -3869,7 +3967,7 @@ def process_chapter_pair(args):
                          
                          last_node.insert_after(new_en_node)
                          
-                         inject_translation(new_en_node, es_text, config)
+                         inject_translation(new_en_node, es_text, config, soup)
                          last_node = new_en_node.find_next_sibling()
         
         # 6. Save In-Place
@@ -3934,6 +4032,15 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     pairs = align_tocs(en_toc, es_toc)
     print(f"Identified {len(pairs)} chapters to align.")
     
+    # Fallback: Detect if TOC alignment failed (most EN chapters have no ES match)
+    if pairs:
+        unmatched_count = sum(1 for item in pairs if len(item) >= 3 and item[1] and not item[2])
+        total_en = sum(1 for item in pairs if len(item) >= 2 and item[1])
+        
+        if total_en > 0 and (unmatched_count / total_en) > 0.7:
+            print(f"WARNING: TOC alignment poor ({unmatched_count}/{total_en} unmatched, {100*unmatched_count/total_en:.0f}%). Falling back to spine-based alignment.")
+            pairs = align_by_spine(en_base, es_base, en_toc_path, es_toc_path)
+            print(f"Spine-based fallback found {len(pairs)} chapter pairs.")
 
     if not pairs:
         raise ValueError("No aligned chapters found.")

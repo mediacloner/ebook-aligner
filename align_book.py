@@ -3515,6 +3515,67 @@ def is_navigation_page(soup, threshold=0.5):
     return False
 
 
+def is_part_title_page(en_chunks):
+    """
+    Detect if page contains only headers (part/chapter title pages).
+    These pages should not receive full chapter translations.
+    
+    Returns True if page has <= 5 chunks and all are headers (not std paragraphs).
+    """
+    if len(en_chunks) > 5:  # More than 5 chunks = not a title page
+        return False
+    
+    if len(en_chunks) == 0:
+        return False
+    
+    for chunk in en_chunks:
+        # If ANY chunk is regular text paragraph, it's not a title page
+        chunk_type = chunk.get('type', 'std')
+        chunk_tag = chunk.get('tag', 'p')
+        
+        # Headers have type='header' or tag in h1-h6
+        is_header = chunk_type == 'header' or chunk_tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+        
+        if not is_header:
+            return False
+    
+    return True
+
+
+def filter_to_matching_headers(en_chunks, es_chunks):
+    """
+    Filter ES chunks to only header-type chunks matching EN structure.
+    Used for part title pages to prevent content bleeding.
+    
+    Returns: List of ES chunks containing only headers, matched to EN count.
+    """
+    # Spanish title classes that indicate headers
+    title_classes = ['titulo', 'titulo1', 'titulo2', 'capitulo', 'chapter-title', 'part-title']
+    
+    # Only keep ES chunks that are headers
+    es_headers = []
+    for c in es_chunks:
+        chunk_type = c.get('type', 'std')
+        chunk_tag = c.get('tag', 'p')
+        chunk_classes = c.get('classes', [])
+        
+        # Check if it's a header by type, tag, or CSS class
+        is_header = chunk_type == 'header' or chunk_tag in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+        
+        # Also check for Spanish title classes
+        if not is_header and chunk_classes:
+            for cls in chunk_classes:
+                if any(tc in cls.lower() for tc in title_classes):
+                    is_header = True
+                    break
+        
+        if is_header:
+            es_headers.append(c)
+    
+    # Return up to same count as EN chunks (one header per EN header)
+    return es_headers[:len(en_chunks)]
+
+
 def process_chapter_pair(args):
 
     """
@@ -3589,6 +3650,14 @@ def process_chapter_pair(args):
              
         es_chunks = parse_file(es_rel, SpanishParser, config)
         print(f"DEBUG: {label} - Parsed {len(es_chunks)} ES chunks")
+        
+        # --- PART TITLE PAGE DETECTION ---
+        # If EN page has only headers (part/chapter title page), filter ES to matching headers only.
+        # This prevents full chapter content from bleeding into title pages.
+        if is_part_title_page(en_chunks):
+            print(f"DEBUG: {label} - Detected as PART TITLE PAGE, filtering ES to headers only")
+            es_chunks = filter_to_matching_headers(en_chunks, es_chunks)
+            print(f"DEBUG: {label} - Filtered ES to {len(es_chunks)} header chunks")
         
         # --- PRE-PROCESS: Split Massive Spanish Chunks ---
         # If a Spanish chunk is huge (e.g. > 600 chars), it likely contains merged paragraphs/headers.

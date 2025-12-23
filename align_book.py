@@ -1817,12 +1817,20 @@ def perform_injection(aligned_pairs, config, soup):
         # Optimization: Single pair (Normal case)
         if len(group) == 1:
             p = group[0]
+            # Skip injection for chunks marked to skip alignment (e.g. standalone numeric headers)
+            if p.get('skip_alignment'):
+                continue
             # Pass English text to update if needed (merged headers)
             inject_translation(original_node, p['es'], config, soup, en_text=p['en'])
             continue
             
         # Split Case: Multiple pairs for same source node
         # We need to turn 1 Node into N Nodes (alternating En/Es)
+        
+        # Skip if marked to skip alignment
+        if any(p.get('skip_alignment') for p in group):
+            continue
+        
         last_node = original_node
         
         for i, p in enumerate(group):

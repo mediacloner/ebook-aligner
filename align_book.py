@@ -3669,7 +3669,10 @@ def process_chapter_pair(args):
                              # (Usually 1 ref in En matches 1 ref in Es)
                              for e_i in e_idxs:
                                  for s_i in s_idxs:
-                                      constraints.append((e_i, s_i, {'soft': True}))
+                                      # Make constraint HARD when reference is unique (1:1 match)
+                                      # This prevents DTW from misaligning paragraphs that discuss same figure
+                                      is_unique = len(e_idxs) == 1 and len(s_idxs) == 1
+                                      constraints.append((e_i, s_i, {'soft': not is_unique, 'allow_col_merge': True}))
                      
                      with open("/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/constraints.log", "a") as f:
                          f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs)\n")
@@ -3682,7 +3685,39 @@ def process_chapter_pair(args):
                  # Let's verify neural_aligner.py handles 'soft' weight?
                  # It used fixed -2.0. I should verify/edit neural_aligner.py or just trust it.
                  # Actually I should viewing neural_aligner.py first.
-                 blocks = aligner.align_dtw(en_filtered, es_filtered, constraints=constraints)
+                 
+                 # --- POSITIONAL ALIGNMENT OPTIMIZATION ---
+                 # When EN and ES have EQUAL chunk counts, use positional (1:1) alignment
+                 # instead of DTW. This prevents misalignment in technical text where
+                 # multiple paragraphs share similar vocabulary (e.g. "figure 38", "encoder").
+                 use_positional = False
+                 if len(en_filtered) == len(es_filtered) and len(en_filtered) > 0:
+                     # Additional check: verify structural similarity using type fingerprints
+                     # to ensure we're not falsely applying positional to mismatched structures
+                     type_match = True
+                     for i in range(len(en_filtered)):
+                         en_type = en_filtered[i].get('type', 'std')
+                         es_type = es_filtered[i].get('type', 'std')
+                         # Allow std<->std and caption<->caption
+                         if en_type != es_type:
+                             type_match = False
+                             break
+                     if type_match:
+                         use_positional = True
+                         print(f"DEBUG: {label} - Using POSITIONAL alignment (equal counts: {len(en_filtered)})")
+                 
+                 if use_positional:
+                     # Build blocks positionally: each en[i] matches es[i]
+                     blocks = []
+                     for i in range(len(en_filtered)):
+                         blocks.append({
+                             'en_indices': [i],
+                             'es_indices': [i],
+                             'en_chunks': [en_filtered[i]],
+                             'es_chunks': [es_filtered[i]]
+                         })
+                 else:
+                     blocks = aligner.align_dtw(en_filtered, es_filtered, constraints=constraints)
                  
                  # --- MERGE PASS ---
                  blocks = merge_bleeding_blocks(aligner, blocks)

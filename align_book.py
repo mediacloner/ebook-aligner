@@ -52,7 +52,9 @@ PROFILES = {
             'ignore_tags': [],
             'ignore_classes': [],
             'SPLIT_TRIGGER_CHARS': 240,
-            'image_tag': 'img'
+            'image_tag': 'img',
+            'merge_headers': True,
+            'header_merge_targets': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
         },
         'es': {
             'header_tags': ['h1', 'h2', 'h3', 'p', 'div'],
@@ -1576,7 +1578,48 @@ def extract_nodes(soup):
         
     return chunks
 
-def inject_translation(en_node, es_text, config, soup):
+def merge_consecutive_headers(chunks):
+    """
+    Merges consecutive header chunks into the first one, removing the subsequent nodes from the DOM.
+    Useful when source splits 'Number' and 'Title' into separate H tags.
+    """
+    if not chunks: return []
+    merged = []
+    
+    current_header = None
+    
+    for c in chunks:
+        is_header = c.get('type') == 'header'
+        # Treat images as standard or special? 
+        # If image comes between headers, it breaks the merge? Yes.
+        
+        if is_header:
+            if current_header:
+                 # Merge with previous
+                 # Join text
+                 sep = " " 
+                 current_header['text'] += sep + c['text']
+                 # We assume the user wants 1 visible header.
+                 # We must remove the second node from DOM to avoid duplication.
+                 if c.get('node'):
+                     # Decompose removes it from the tree entirely.
+                     c['node'].decompose() 
+                     # Set node to None in chunk just in case
+                     c['node'] = None
+            else:
+                current_header = c
+        else:
+            if current_header:
+                merged.append(current_header)
+                current_header = None
+            merged.append(c)
+            
+    if current_header:
+        merged.append(current_header)
+        
+    return merged
+
+def inject_translation(en_node, es_text, config, soup, en_text=None):
     if not en_node or not es_text:
         return
     
@@ -1590,7 +1633,46 @@ def inject_translation(en_node, es_text, config, soup):
     if images:
         for img in images:
             extracted_images.append(img.extract()) # Remove from EN
+    
+    # Update English text if provided (e.g. from header merge)
+    # This must happen AFTER image extraction but BEFORE translation injection
+    if en_text:
+        en_node.string = en_text
+
+    # --- INLINE HEADER HANDLING ---
+    # For headers (h1-h6), render both languages on the same line:
+    # "5 The Best Way to Start a New Habit        5 La mejor manera de comenzar un nuevo hábito"
+    is_header = en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
+    
+    if is_header:
+        # Inline mode: Append Spanish to the same header element
+        # Separator: Use <br> for new line (User request)
+        separator = soup.new_tag("br")
+        
+        # Create span for Spanish styling
+        span = soup.new_tag("span")
+        span['class'] = "es-translation"
+        span['style'] = "color: grey !important;"
+        
+        # Parse es_text as HTML to preserve formatting tags
+        inner_content = BeautifulSoup(es_text, 'html.parser')
+        if inner_content:
+            span.append(inner_content)
+        else:
+            span.string = es_text
+        
+        # Append separator and Spanish span to the existing header
+        en_node.append(separator)
+        en_node.append(span)
+        
+        # Re-append extracted images if any
+        if extracted_images:
+            for img in extracted_images:
+                en_node.append(img)
+        
+        return en_node  # Return the modified node
             
+    # --- BLOCK MODE (for paragraphs and other elements) ---
     # 1. Exact Clone of the Wrapper (p, div, h1, etc.)
     # We create a new tag with the same name
     new_tag = soup.new_tag(en_node.name)
@@ -1648,23 +1730,12 @@ def inject_translation(en_node, es_text, config, soup):
     # Update English Node styles
     en_style = en_node.get('style', '')
     if en_style: en_style += ";"
-    
-    # Specific handling for Headers to be very tight
-    if en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-         en_node['style'] = en_style + " margin-bottom: 0 !important; padding-bottom: 0 !important;"
-    else:
-         en_node['style'] = en_style + " margin-bottom: 0 !important;"
+    en_node['style'] = en_style + " margin-bottom: 0 !important;"
     
     # Update Spanish Node styles
     new_tag_style = new_tag.get('style', '')
     if new_tag_style: new_tag_style += ";"
-    
-    if en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
-         # Headers: tighten top completely. They usually have large line-height anyway.
-         new_tag['style'] = new_tag_style + " margin-top: 0 !important; padding-top: 0 !important;"
-    else:
-         # Paragraphs: maintain small visual separation -> NO, user wants 0 margin
-         new_tag['style'] = new_tag_style + " margin-top: 0 !important;"
+    new_tag['style'] = new_tag_style + " margin-top: 0 !important;"
 
     # 3. Insert after original
     en_node.insert_after(new_tag)
@@ -1710,11 +1781,8 @@ def perform_injection(aligned_pairs, config, soup):
         # Optimization: Single pair (Normal case)
         if len(group) == 1:
             p = group[0]
-            inject_translation(original_node, p['es'], config, soup)
-            # Update English text if changed (e.g. by splitter adding ⁂)
-            # Note: inner text replacement required
-            if p['en'] != original_node.get_text().strip():
-                original_node.string = p['en']
+            # Pass English text to update if needed (merged headers)
+            inject_translation(original_node, p['es'], config, soup, en_text=p['en'])
             continue
             
         # Split Case: Multiple pairs for same source node
@@ -1727,6 +1795,7 @@ def perform_injection(aligned_pairs, config, soup):
             
             if i == 0:
                 # Reuse the original node for the first chunk
+                # Explicitly set text too
                 original_node.string = en_text
                 es_node = inject_translation(original_node, es_text, config, soup)
                 
@@ -1757,6 +1826,7 @@ def perform_injection(aligned_pairs, config, soup):
                     last_node = original_node
                     
                 last_node.insert_after(new_en_node)
+                # Pass None for en_text since we just set it
                 es_node = inject_translation(new_en_node, es_text, config, soup)
                 
                 # If not the last part, tight bottom margin too
@@ -2047,9 +2117,54 @@ def align_chunks(en_chunks, es_chunks):
     # Since Es Chunk matches En Body, it aligns with En Body.
     # Result: En Caption (empty ES). En Body (Es Caption + Es Body).
     
+    final_aligned = fix_split_headers(final_aligned)
     final_aligned = fix_merged_captions(final_aligned)
         
     return final_aligned
+
+def fix_split_headers(aligned_items):
+    """
+    Detects cases where English headers are split (e.g. Number, then Title) 
+    but Spanish header is single (Number + Title).
+    Splits the Spanish text to align with both English parts.
+    """
+    import re
+    # Safely iterate with modification? We are modifying in place, but not adding/removing items from list.
+    for i in range(len(aligned_items) - 1):
+        item_a = aligned_items[i]
+        item_b = aligned_items[i+1]
+        
+        # Check pattern: 
+        # A: Header with ES content (likely merged match)
+        # B: Header (EN only) with NO ES content (orphan)
+        # Verify A is not empty EN
+        if item_a.get('type') == 'header' and item_a.get('es') and item_a.get('en') and \
+           item_b.get('type') == 'header' and not item_b.get('es') and item_b.get('en'):
+               
+            en_a = item_a.get('en', '').strip()
+            es_text = item_a.get('es', '').strip()
+            
+            # Heuristic: Exact Number Match at Start
+            # Only if En_a is short (likely a number or prefix)
+            if len(en_a) < 10 or en_a.lower().startswith('chapter') or en_a.lower().startswith('part'):
+                try:
+                    pattern = r'^(' + re.escape(en_a) + r')([\.\:\s]+)(.*)$'
+                    match = re.search(pattern, es_text, re.IGNORECASE)
+                    
+                    if match:
+                         part1 = match.group(1) # "5"
+                         # part2 is remainder
+                         part2 = match.group(3).strip() 
+                         
+                         if part2:
+                             # Assign
+                             item_a['es'] = part1 
+                             item_b['es'] = part2
+                             print(f"Fixed Split Header: '{es_text}' -> '{part1}' | '{part2}'")
+                except Exception:
+                    pass
+                 
+    return aligned_items
 
 def fix_merged_captions(aligned_items):
     """
@@ -3649,6 +3764,15 @@ def process_chapter_pair(args):
         if is_navigation_page(soup):
             print(f"DEBUG: {label} - Detected as navigation page, skipping alignment")
             return (idx, target_path, label, [])
+            
+        # --- PRE-PROCESS: Merge Consecutive Headers (Fixed for Atomic Habits) ---
+        # Atomic Habits splits Chapter Num and Title into separate h2 tags.
+        # But Spanish has them in one p tag.
+        # Merging English headers simplifies alignment and layout.
+        en_conf = config.get('en', {})
+        if en_conf.get('merge_headers'):
+             en_chunks = merge_consecutive_headers(en_chunks)
+             print(f"DEBUG: {label} - Merged headers, count is now {len(en_chunks)}")
 
 
         # --- PRE-PROCESS: Split Massive English Chunks ---

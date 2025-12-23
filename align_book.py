@@ -3385,7 +3385,40 @@ def unzip_epub(epub_path, extract_to):
     # return extract_to
 
 
+def is_navigation_page(soup, threshold=0.5):
+    """
+    Detect if a page is primarily a navigation/index page (TOC, list of chapters, etc.).
+    Returns True if the ratio of navigation links to text content is high.
+    
+    Args:
+        soup: BeautifulSoup parsed HTML
+        threshold: Ratio threshold - if link-heavy paragraphs / total paragraphs > threshold, it's navigation
+    """
+    # Count elements with links that point to internal content
+    links = soup.find_all('a', href=True)
+    internal_links = [a for a in links if not a.get('href', '').startswith(('http://', 'https://', 'mailto:'))]
+    
+    # Count text paragraphs (non-link content)
+    paragraphs = soup.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+    
+    # If there are many internal links, check if it's a navigation page
+    if len(internal_links) > 20:  # Arbitrary threshold - TOC has many links
+        # Check if most paragraphs just contain links
+        link_heavy_paras = 0
+        for p in paragraphs:
+            p_text = p.get_text(strip=True)
+            links_in_p = p.find_all('a')
+            if links_in_p and len(p_text) < 100:  # Short text with links = likely TOC entry
+                link_heavy_paras += 1
+        
+        if paragraphs and link_heavy_paras / len(paragraphs) > threshold:
+            return True
+    
+    return False
+
+
 def process_chapter_pair(args):
+
     """
     Worker function to process a single chapter pair IN-PLACE.
     args: (idx, target_path, es_rel, es_opf_dir, config, label)
@@ -3409,6 +3442,12 @@ def process_chapter_pair(args):
         # 2. Extract Nodes for Alignment
         en_chunks = extract_nodes(soup)
         print(f"DEBUG: {label} - Extracted {len(en_chunks)} EN chunks")
+
+        # Check if this is a navigation page (TOC, index, etc.) - skip alignment
+        if is_navigation_page(soup):
+            print(f"DEBUG: {label} - Detected as navigation page, skipping alignment")
+            return (idx, target_path, label, [])
+
 
         # --- PRE-PROCESS: Split Massive English Chunks ---
         # Same rationale as Spanish: Granularity mismatch causes alignment drifts/merges.

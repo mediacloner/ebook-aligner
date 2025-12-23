@@ -3815,15 +3815,13 @@ def process_chapter_pair(args):
         
         # --- PRE-PROCESS: Skip Alignment for Standalone Numeric Headers ---
         # Dungeon Crawler Carl and similar books have decorative numeric headers (e.g. "<h1>4</h1>")
-        # followed by images. These shouldn't force Spanish content alignment.
+        # while Spanish uses images. These shouldn't force Spanish content alignment.
         for i, chunk in enumerate(en_chunks):
             if chunk.get('type') == 'header' and is_standalone_numeric_header(chunk.get('text', '')):
-                # Check if next chunk is an image
-                has_image_after = (i + 1 < len(en_chunks) and 
-                                  en_chunks[i + 1].get('type') == 'image')
-                if has_image_after:
-                    chunk['skip_alignment'] = True
-                    print(f"DEBUG: {label} - Marking standalone header '{chunk['text']}' to skip alignment (followed by image)")
+                # Mark for skipping - Spanish version uses images for chapter headers
+                chunk['skip_alignment'] = True
+                print(f"DEBUG: {label} - Marking standalone header '{chunk['text']}' to skip alignment")
+
 
 
         # --- PRE-PROCESS: Split Massive English Chunks ---

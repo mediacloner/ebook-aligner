@@ -336,7 +336,7 @@ def split_sentences_helper(text):
     if not text:
         return []
     # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start
-    pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
+    pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
     parts = re.split(pattern, text)
     sentences = []
     current_sent = ""
@@ -2990,15 +2990,21 @@ def apply_common_styles(en_html, es_text):
 
     # 1. Check for Full Wrapping Tags
     # Matches <tag>content</tag> with no other tags at top level
-    # Updated to allow attributes and whitespace
-    # Matches: <tag attr>content</tag>
-    full_wrap_pattern = re.compile(r'^\s*<(i|b|strong|em|small)(?:\s+[^>]*)?>(.*?)</\1>\s*$', re.DOTALL | re.IGNORECASE)
+    # Updated to allow attributes, whitespace, and trailing punctuation (e.g., <i>text</i>.)
+    # Matches: <tag attr>content</tag>trailing
+    full_wrap_pattern = re.compile(r'^\s*<(i|b|strong|em|small)(?:\s+[^>]*)?>(.+?)</\1>(\s*[.!?;:,]*)?\s*$', re.DOTALL | re.IGNORECASE)
     match = full_wrap_pattern.match(en_html)
     if match:
         tag = match.group(1).lower() # Normalize tag name
+        trailing = match.group(3) or ""  # Capture trailing punctuation
         # We wrap the entire Spanish text in the CLEAN tag (no attributes)
         # This preserves the style (italics/bold) but strips specific classes/colors
-        return f"<{tag}>{es_text}</{tag}>"
+        # Only add trailing punctuation if Spanish doesn't already end with similar punctuation
+        es_stripped = es_text.rstrip()
+        if trailing.strip() and es_stripped and es_stripped[-1] in '.!?;:,':
+            # Spanish already ends with punctuation, don't duplicate
+            trailing = ""
+        return f"<{tag}>{es_text}</{tag}>{trailing}"
 
     # 2. Check for Dialogue Pattern
     # Pattern: <small>SPEAKER:</small> <i>Dialogue</i>
@@ -3681,20 +3687,24 @@ def process_chapter_pair(args):
                              })
                          continue
 
-                     # Fallback: Lump strategy (attach to last node)
-                     # Join Spanish text
+                     # M > N Case: More Spanish chunks than English
+                     # Instead of lumping, use semantic distribution to properly pair them
                      joined_es = " ".join([c['text'] for c in ess])
                      if not joined_es.strip(): continue
                      
-                     # Attach to the LAST English node in the block
-                     target_en = ens[-1]
+                     # Use distribute_spanish to semantically match ES text to EN nodes
+                     distributed_es = distribute_spanish(aligner, ens, joined_es)
                      
-                     aligned_pairs.append({
-                         'node': target_en['node'],
-                         'es': joined_es,
-                         'en': target_en['text'],
-                         'tag': target_en['tag']
-                     })
+                     for k, es_part in enumerate(distributed_es):
+                         if not es_part.strip() and not ens[k]['text'].strip(): continue
+                         aligned_pairs.append({
+                             'node': ens[k]['node'],
+                             'es': es_part,
+                             'en': ens[k]['text'],
+                             'tag': ens[k]['tag'],
+                             'raw_html': ens[k].get('raw_html'),
+                             'classes': ens[k].get('classes', [])
+                         })
              except Exception as e:
                  print(f"Neural alignment failed: {e}. Fallback to heuristic.")
                  aligned_pairs = align_chunks(en_chunks, es_chunks)

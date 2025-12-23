@@ -19,7 +19,7 @@ class Splitter:
             return []
         
         # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start
-        pattern = r'([.!?]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
+        pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
         
         parts = re.split(pattern, text)
         sentences = []

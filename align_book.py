@@ -326,8 +326,45 @@ def normalize_label(label):
     parsed_num = parse_written_number(clean_label)
     if parsed_num:
         return ('chapter', parsed_num)
+    
+    # --- TIME-BASED CHAPTER LABELS ---
+    # For books like "Normal People" with labels like:
+    # EN: "Six Weeks Later (September 2012)" or "January 2011"
+    # ES: "Seis semanas más tarde" or "Enero de 2011"
+    
+    # Month mapping (EN and ES to month number)
+    month_map = {
+        # English
+        'january': 1, 'february': 2, 'march': 3, 'april': 4,
+        'may': 5, 'june': 6, 'july': 7, 'august': 8,
+        'september': 9, 'october': 10, 'november': 11, 'december': 12,
+        # Spanish
+        'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+        'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+        'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+    }
+    
+    # Try to extract "(MONTH YEAR)" pattern from label
+    date_in_parens = re.search(r'\(([^)]+)\)', label)
+    if date_in_parens:
+        date_str = date_in_parens.group(1).lower().strip()
+        # Try "MONTH (DE)? YEAR" pattern
+        date_match = re.search(r'(\w+)(?:\s+de)?\s+(\d{4})', date_str)
+        if date_match:
+            month_word = date_match.group(1)
+            year = int(date_match.group(2))
+            if month_word in month_map:
+                return ('date-chapter', month_map[month_word], year)
+    
+    # Try "MONTH (DE)? YEAR" pattern directly (e.g., "January 2011", "Enero de 2011")
+    date_match = re.search(r'^(\w+)(?:\s+de)?\s+(\d{4})$', label.strip())
+    if date_match:
+        month_word = date_match.group(1)
+        year = int(date_match.group(2))
+        if month_word in month_map:
+            return ('date-chapter', month_map[month_word], year)
             
-    return label 
+    return label
 
 def split_sentences_helper(text):
     """
@@ -711,12 +748,12 @@ def align_tocs(en_toc, es_toc):
             # English item
             en_src = gap_en[k]['item']['src'] if k < len(gap_en) else None
             en_lbl = gap_en[k]['item']['label'] if k < len(gap_en) else None
-            en_lvl = gap_en[k]['item']['level'] if k < len(gap_en) else 0
+            en_lvl = gap_en[k]['item'].get('level', 0) if k < len(gap_en) else 0
             
             # Spanish item
             es_src = gap_es[k]['item']['src'] if k < len(gap_es) else None
             es_lbl = gap_es[k]['item']['label'] if k < len(gap_es) else None
-            es_lvl = gap_es[k]['item']['level'] if k < len(gap_es) else 0
+            es_lvl = gap_es[k]['item'].get('level', 0) if k < len(gap_es) else 0
             
             # Use English label/level if available, else Spanish
             label = en_lbl if en_lbl else es_lbl
@@ -1519,7 +1556,13 @@ def extract_nodes(soup):
         chunk_type = 'std'
         if tag.startswith('h'):
             chunk_type = 'header'
-        elif re.match(r'^(Figure|Table|Box|Fig\.)\s*\d+\s*[:\.]', text, re.IGNORECASE):
+        # Detect captions via CSS class (figure/figura) OR text patterns
+        elif any(c in ['figure', 'figura', 'figura1', 'caption'] for c in classes):
+            chunk_type = 'caption'
+        elif re.match(r'^(?:Figure|Figura|Table|Tabla|Box|Map|Mapa|Fig\.?)\s*\d+\s*[:\.\s]', text, re.IGNORECASE):
+            chunk_type = 'caption'
+        # Numbered captions starting with just "N." (e.g. "3. A speculative reconstruction...")
+        elif re.match(r'^\d+\.\s+\S', text) and len(text) < 500:
             chunk_type = 'caption'
             
         chunks.append({
@@ -3754,12 +3797,19 @@ def process_chapter_pair(args):
                          # Safety: Captions shouldn't be huge paragraphs, unless explicit caption type
                          if len(txt) > 300 and c.get('type') != 'caption': continue 
 
-                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', txt, re.IGNORECASE)
+                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*([\d\.\-]+)', txt, re.IGNORECASE)
                          if m:
                              num = m.group(1).rstrip('.:,;- ') # Aggr. Normalize
                              if num not in en_nums: en_nums[num] = []
                              en_nums[num].append(i)
-                             
+                         # Also match numbered captions like "3. A speculative reconstruction..."
+                         # when chunk is already classified as 'caption' (from class="figure")
+                         elif c.get('type') == 'caption':
+                             m2 = re.match(r'^(\d+)\.\s+\S', txt)
+                             if m2:
+                                 num = m2.group(1)
+                                 if num not in en_nums: en_nums[num] = []
+                                 en_nums[num].append(i)
                               
                      # 2. Find Matches in Spanish (Monotonic)
                      last_en_idx = -1
@@ -3769,7 +3819,7 @@ def process_chapter_pair(args):
                          es_loop_txt = c['text'].strip()
                          # Safety:
                          if len(es_loop_txt) > 300 and c.get('type') != 'caption': continue
-                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
+                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
                          if m:
                              num = m.group(1).rstrip('.:,;- ')
                              if num in en_nums:
@@ -3799,10 +3849,10 @@ def process_chapter_pair(args):
                      en_refs = {}
                      for i, c in enumerate(en_filtered):
                          # Skip Definition Chunks (Anchors)
-                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
+                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
                              print(f"DEBUG: Skipping EN Ref Source (Definition): {c['text'][:30]}...")
                              continue
-                         refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
+                         refs = re.findall(r'(?:figure|figura|map|mapa|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
                          for r in refs:
                              if r not in en_refs: en_refs[r] = []
                              en_refs[r].append(i)
@@ -3810,10 +3860,10 @@ def process_chapter_pair(args):
                      es_refs = {}
                      for j, c in enumerate(es_filtered):
                          # Skip Definition Chunks (Anchors)
-                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
+                         if re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*\d+', c['text'].strip(), re.IGNORECASE):
                              print(f"DEBUG: Skipping ES Ref Source (Definition): {c['text'][:30]}...")
                              continue
-                         refs = re.findall(r'(?:figure|figura|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
+                         refs = re.findall(r'(?:figure|figura|map|mapa|fig\.?)\s*(\d+)', c['text'], re.IGNORECASE)
                          for r in refs:
                              if r not in es_refs: es_refs[r] = []
                              es_refs[r].append(j)

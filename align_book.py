@@ -1619,6 +1619,42 @@ def merge_consecutive_headers(chunks):
         
     return merged
 
+def is_standalone_numeric_header(text):
+    """
+    Detects if a header contains only a number or minimal chapter marker.
+    Examples that return True: "4", "Chapter 4", "4.", "IV", "CHAPTER 4"
+    Examples that return False: "4: The Beginning", "Chapter 4: Introduction"
+    """
+    if not text:
+        return False
+    
+    text = text.strip()
+    
+    # Pattern 1: Just a number (arabic or roman)
+    # "4", "42", "IV", "XII"
+    if text.isdigit():
+        return True
+    
+    # Check for roman numerals
+    if all(c in 'IVXLCDM' for c in text.upper()) and len(text) <= 10:
+        return True
+    
+    # Pattern 2: Optional "Chapter/Part/Section" + number + optional punctuation
+    # "Chapter 4", "CHAPTER 4", "Part IV", "4."
+    import re
+    pattern = r'^(?:chapter|part|section|ch\.?|pt\.?)\s*(?:\d+|[ivxlcdm]+)[\.:\s]*$'
+    if re.match(pattern, text, re.IGNORECASE):
+        return True
+    
+    # Pattern 3: Just number with punctuation
+    # "4.", "4:", "42."
+    pattern = r'^\d+[\.:\s]*$'
+    if re.match(pattern, text):
+        return True
+    
+    return False
+
+
 def inject_translation(en_node, es_text, config, soup, en_text=None):
     if not en_node or not es_text:
         return
@@ -1909,6 +1945,9 @@ def align_chunks(en_chunks, es_chunks):
 
 
     def align_section(en_sec, es_sec, depth=0):
+        # Filter out chunks marked to skip alignment (e.g. standalone numeric headers)
+        en_sec = [c for c in en_sec if not c.get('skip_alignment')]
+        
         if not en_sec and not es_sec: return []
         
         if depth > 1:
@@ -3773,6 +3812,18 @@ def process_chapter_pair(args):
         if en_conf.get('merge_headers'):
              en_chunks = merge_consecutive_headers(en_chunks)
              print(f"DEBUG: {label} - Merged headers, count is now {len(en_chunks)}")
+        
+        # --- PRE-PROCESS: Skip Alignment for Standalone Numeric Headers ---
+        # Dungeon Crawler Carl and similar books have decorative numeric headers (e.g. "<h1>4</h1>")
+        # followed by images. These shouldn't force Spanish content alignment.
+        for i, chunk in enumerate(en_chunks):
+            if chunk.get('type') == 'header' and is_standalone_numeric_header(chunk.get('text', '')):
+                # Check if next chunk is an image
+                has_image_after = (i + 1 < len(en_chunks) and 
+                                  en_chunks[i + 1].get('type') == 'image')
+                if has_image_after:
+                    chunk['skip_alignment'] = True
+                    print(f"DEBUG: {label} - Marking standalone header '{chunk['text']}' to skip alignment (followed by image)")
 
 
         # --- PRE-PROCESS: Split Massive English Chunks ---

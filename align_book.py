@@ -726,49 +726,72 @@ def align_tocs(en_toc, es_toc):
     
     # 2. Fill Gaps
     last_en_idx = -1
-    last_es_idx = -1
-    
     # Add a sentinel anchor at the end to handle trailing items
     # CAUTION: If we used N-to-1 mapping, we can't assume 1-to-1 gaps.
     # But the gap fill logic simply zips what's between anchors.
-    # If consecutive anchors map [En1->Es1, En2->Es1], the gap between En1 and En2 is empty.
-    # The gap between Es1 and Es1 is empty. Loop runs 0 times. Correct.
+    # If consecutive anchors map [En1->Es1, En2->Es1], the gap between En1 and En2 is empty.    
+    # --- Phase 2: Fill Gaps Between Anchors ---
+    # Gaps are unmatched EN/ES items between consecutive anchors.
+    # We pair them linearly (zip-like) BUT with strict duplicate prevention.
+    final_pairs = []
+    last_en_idx = -1
+    last_es_idx = -1
     
-    sentinel_en = {'idx': len(en_items)}
-    sentinel_es = {'idx': len(es_items)}
+    # CRITICAL: Track ALL used ES sources to prevent duplication
+    used_es_sources = set()
+    
+    # Pre-populate with anchor ES sources
+    for anchor_en, anchor_es in anchors:
+        # Only add if it's a real item, not a sentinel
+        if 'src' in anchor_es['item']:
+            used_es_sources.add(anchor_es['item']['src'])
+    
+    sentinel_en = {'idx': len(en_items), 'item': {'label': 'SENTINEL_EN', 'src': None, 'level': 0}}
+    sentinel_es = {'idx': len(es_items), 'item': {'label': 'SENTINEL_ES', 'src': None, 'level': 0}}
     anchors.append((sentinel_en, sentinel_es))
-    
+
     for anchor_en, anchor_es in anchors:
         current_en_idx = anchor_en['idx']
         current_es_idx = anchor_es['idx']
         
-        # Identification of Gap Items
-        # Note: We must NOT exclude items just because they were matched in Strategy C?
-        # Actually, if they are matched, they are anchors. Anchors are processed in the loop body.
-        # So "not in en_matched" is correct for finding UNMATCHED gap items.
+        gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_assigned]
+        gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_assigned]
         
-        gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_matched]
-        gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_matched]
-        
-        # Linear Alignment of Gap (Zip Longest)
-        limit = max(len(gap_en), len(gap_es))
-        for k in range(limit):
-            # English item
-            en_src = gap_en[k]['item']['src'] if k < len(gap_en) else None
-            en_lbl = gap_en[k]['item']['label'] if k < len(gap_en) else None
-            en_lvl = gap_en[k]['item'].get('level', 0) if k < len(gap_en) else 0
+        # STRICT PAIRING: Only pair if we have BOTH EN and ES, and ES is NOT already used
+        for k in range(min(len(gap_en), len(gap_es))):
+            en_item = gap_en[k]
+            es_item = gap_es[k]
             
-            # Spanish item
-            es_src = gap_es[k]['item']['src'] if k < len(gap_es) else None
-            es_lbl = gap_es[k]['item']['label'] if k < len(gap_es) else None
-            es_lvl = gap_es[k]['item'].get('level', 0) if k < len(gap_es) else 0
+            en_src = en_item['item']['src']
+            es_src = es_item['item']['src']
             
-            # Use English label/level if available, else Spanish
-            label = en_lbl if en_lbl else es_lbl
-            level = en_lvl if en_lbl else es_lvl
+            # DUPLICATE CHECK
+            if es_src in used_es_sources:
+                # This ES source was already used (by an anchor or earlier gap item)
+                # Leave EN unmatched rather than duplicate
+                final_pairs.append((en_item['item']['label'], en_src, None, en_item['item'].get('level', 0)))
+                continue
             
+            # Valid 1-to-1 pairing
+            used_es_sources.add(es_src)
+            label = en_item['item']['label']
+            level = en_item['item'].get('level', 0)
             final_pairs.append((label, en_src, es_src, level))
-            
+        
+        # Handle EXCESS English chapters (more EN than ES in gap)
+        for k in range(min(len(gap_en), len(gap_es)), len(gap_en)):
+            en_item = gap_en[k]
+            final_pairs.append((en_item['item']['label'], en_item['item']['src'], None, en_item['item'].get('level', 0)))
+        
+        # Handle EXCESS Spanish chapters (more ES than EN in gap)
+        # These are orphaned Spanish content - we can't align them
+        for k in range(min(len(gap_en), len(gap_es)), len(gap_es)):
+            es_item = gap_es[k]
+            es_src = es_item['item']['src']
+            if es_src not in used_es_sources:
+                used_es_sources.add(es_src)
+                final_pairs.append((es_item['item']['label'], None, es_src, es_item['item'].get('level', 0)))
+             
         # Add the Anchor itself (if not sentinel)
         if current_en_idx < len(en_items) and current_es_idx < len(es_items):
              level = anchor_en['item'].get('level', 0)

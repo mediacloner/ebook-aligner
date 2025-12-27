@@ -316,6 +316,75 @@
           </div>
         </div>
 
+        <!-- Advanced Features (Phase 4) -->
+        <div class="config-section">
+          <h3>🔧 Advanced Features</h3>
+
+          <div class="option-group">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="elementTypeFormatting"
+                style="width: auto; cursor: pointer"
+              />
+              <span>Smart Element Formatting</span>
+            </label>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
+              Inline text stays inline, lists/tables stack vertically
+            </p>
+          </div>
+
+          <div class="option-group">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="preserveLineBreaks"
+                style="width: auto; cursor: pointer"
+              />
+              <span>Poetry/Code Mode</span>
+            </label>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
+              Align line-by-line for formatted content
+            </p>
+          </div>
+
+          <div class="option-group">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="usePlaceholder"
+                checked
+                style="width: auto; cursor: pointer"
+              />
+              <span>Protect Complex Elements</span>
+            </label>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
+              Preserve SVG, Math, Code blocks during alignment
+            </p>
+          </div>
+        </div>
+
         <div class="actions">
           <button class="action-btn btn-secondary" id="cancelBtn">Back</button>
           <button class="action-btn btn-primary" id="saveBtn">
@@ -332,6 +401,10 @@
         enColor: "#000000",
         esColor: "#666666",
         styleMode: "class",
+        // Phase 4 Advanced Features
+        elementTypeFormatting: false,
+        preserveLineBreaks: false,
+        usePlaceholder: true,
       };
 
       const PRESETS = {
@@ -432,6 +505,16 @@
 
         document.getElementById("styleMode").value = bilingualConfig.styleMode;
 
+        // Phase 4 Advanced Features
+        document.getElementById("elementTypeFormatting").checked =
+          bilingualConfig.elementTypeFormatting || false;
+        document.getElementById("preserveLineBreaks").checked =
+          bilingualConfig.preserveLineBreaks || false;
+        document.getElementById("usePlaceholder").checked =
+          bilingualConfig.usePlaceholder !== undefined
+            ? bilingualConfig.usePlaceholder
+            : true;
+
         // Update active preset
         document
           .querySelectorAll(".preset-btn")
@@ -448,6 +531,15 @@
         bilingualConfig.enColor = document.getElementById("enColor").value;
         bilingualConfig.esColor = document.getElementById("esColor").value;
         bilingualConfig.styleMode = document.getElementById("styleMode").value;
+
+        // Phase 4 Advanced Features
+        bilingualConfig.elementTypeFormatting = document.getElementById(
+          "elementTypeFormatting"
+        ).checked;
+        bilingualConfig.preserveLineBreaks =
+          document.getElementById("preserveLineBreaks").checked;
+        bilingualConfig.usePlaceholder =
+          document.getElementById("usePlaceholder").checked;
 
         localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
       }

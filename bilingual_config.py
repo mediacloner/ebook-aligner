@@ -57,9 +57,10 @@ class BilingualConfig:
     # Translation class (for backward compatibility)
     translation_class: str = "es-trans"
     
-    # Advanced options
+    # Advanced options (Phase 4)
     preserve_line_breaks: bool = False  # Enable line-break-aware alignment
     element_type_formatting: bool = False  # Use element-specific formatting
+    use_placeholder_system: bool = True  # Reserve complex elements (SVG, Math, Code)
     
     # Filter captions (existing functionality)
     filter_captions: bool = True

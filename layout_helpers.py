@@ -154,6 +154,11 @@ def inject_layout_mode(soup, en_node, es_content, config):
     
     mode = bilingual_config.layout_mode
     
+    # Check if element-type-specific formatting is enabled
+    if bilingual_config.element_type_formatting:
+        return inject_type_aware(soup, en_node, es_content, config, mode)
+    
+    # Standard layout mode routing
     if mode == LayoutMode.SPANISH_ONLY:
         return inject_spanish_only(soup, en_node, es_content, config)
     elif mode == LayoutMode.ABOVE:
@@ -162,6 +167,87 @@ def inject_layout_mode(soup, en_node, es_content, config):
         return inject_side_by_side(soup, en_node, es_content, config)
     else:  # LayoutMode.BELOW (default)
         return inject_below(soup, en_node, es_content, config)
+
+
+def inject_type_aware(soup, en_node, es_content, config, layout_mode):
+    """
+    Apply element-type-specific formatting strategies.
+    
+    Different element types benefit from different bilingual presentation:
+    - Inline elements (em, strong, code): Stay inline with space separator
+    - List/Table elements (li, td, th): Vertical stacking with <br>
+    - Block elements: Standard layout mode behavior
+    """
+    INLINE_TAGS = {'em', 'strong', 'a', 'span', 'code', 'kbd', 'abbr', 'cite', 'q'}
+    LIST_TABLE_TAGS = {'li', 'dt', 'dd', 'td', 'th', 'caption'}
+    
+    elem_name = en_node.name if en_node.name else 'div'
+    
+    # Inline elements: append with space separator
+    if elem_name.lower() in INLINE_TAGS:
+        return inject_inline_with_space(soup, en_node, es_content, config)
+    
+    # List/Table elements: use <br> for clean stacking
+    elif elem_name.lower() in LIST_TABLE_TAGS:
+        return inject_with_br_separator(soup, en_node, es_content, config)
+    
+    # Block elements: use configured layout mode
+    else:
+        # Use standard layout mode injection
+        from bilingual_config import LayoutMode
+        if layout_mode == LayoutMode.SPANISH_ONLY:
+            return inject_spanish_only(soup, en_node, es_content, config)
+        elif layout_mode == LayoutMode.ABOVE:
+            return inject_above(soup, en_node, es_content, config)
+        elif layout_mode == LayoutMode.SIDE_BY_SIDE:
+            return inject_side_by_side(soup, en_node, es_content, config)
+        else:
+            return inject_below(soup, en_node, es_content, config)
+
+
+def inject_inline_with_space(soup, en_node, es_content, config):
+    """Inject Spanish inline with space separator (for em, strong, code, etc.)."""
+    # Create a span for the Spanish content
+    es_span = soup.new_tag('span')
+    apply_styling(es_span, config, is_translation=True)
+    
+    # Parse and add content
+    if isinstance(es_content, str):
+        es_parsed = BeautifulSoup(es_content, 'html.parser')
+        es_span.append(es_parsed)
+    else:
+        es_span.append(es_content)
+    
+    # Insert space and Spanish span after English
+    space = soup.new_string(' ')
+    en_node.insert_after(space)
+    space.insert_after(es_span)
+    
+    return es_span
+
+
+def inject_with_br_separator(soup, en_node, es_content, config):
+    """Inject Spanish with <br> separator (for li, td, th, etc.)."""
+    # Create line break
+    br = soup.new_tag('br')
+    
+    # Create Spanish span
+    es_span = soup.new_tag('span')
+    apply_styling(es_span, config, is_translation=True)
+    
+    # Parse and add content
+    if isinstance(es_content, str):
+        es_parsed = BeautifulSoup(es_content, 'html.parser')
+        es_span.append(es_parsed)
+    else:
+        es_span.append(es_content)
+    
+    # Append <br> and Spanish to the English node directly
+    en_node.append(br)
+    en_node.append(es_span)
+    
+    return es_span
+
 
 
 def inject_spanish_only(soup, en_node, es_content, config):

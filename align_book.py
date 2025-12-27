@@ -4698,15 +4698,70 @@ if __name__ == "__main__":
     
     parser.add_argument('--split-length', type=int, default=280, help='Character threshold to trigger paragraph splitting (default: 280)')
     
+    # Bilingual layout and styling options
+    parser.add_argument('--layout-mode', type=str, default='below',
+                       choices=['below', 'above', 'side', 'only'],
+                       help='Translation layout mode: below (default), above, side (side-by-side), only (Spanish only)')
+    parser.add_argument('--style-mode', type=str, default='class',
+                       choices=['class', 'inline', 'hybrid'],
+                       help='Styling approach: class (CSS classes), inline (inline styles), hybrid (both)')
+    parser.add_argument('--column-gap', type=int, default=10,
+                       help='Column gap percentage for side-by-side layout (5-30, default: 10)')
+    parser.add_argument('--left-column', type=str, default='english',
+                       choices=['english', 'spanish'],
+                       help='Language for left column in side-by-side mode (default: english)')
+    parser.add_argument('--original-color', type=str, default=None,
+                       help='Color for original English text (e.g., #000000 or black)')
+    parser.add_argument('--translation-color', type=str, default=None,
+                       help='Color for Spanish translation (e.g., #555555 or grey)')
+    parser.add_argument('--preset', type=str, default=None,
+                       choices=['default', 'side_by_side', 'color_coded', 'spanish_first', 'spanish_only', 'learner_mode'],
+                       help='Use a preset configuration (overrides individual settings)')
+    
     args = parser.parse_args()
+
+    # Import bilingual configuration
+    from bilingual_config import BilingualConfig, LayoutMode, StyleMode, get_preset
+    
+    # Create bilingual config from args or preset
+    if args.preset:
+        bilingual_config = get_preset(args.preset)
+        print(f"Using preset: {args.preset}")
+    else:
+        bilingual_config = BilingualConfig(
+            layout_mode=LayoutMode.from_string(args.layout_mode),
+            column_gap_percentage=args.column_gap,
+            left_column_language=args.left_column,
+            style_mode=StyleMode[args.style_mode.upper()],
+            original_color=args.original_color,
+            translation_color=args.translation_color,
+        )
+    
+    # Validate configuration
+    try:
+        bilingual_config.validate()
+    except ValueError as e:
+        print(f"Configuration error: {e}")
+        sys.exit(1)
 
     # Pass config
     config = {
         'use_neural': args.local_ai,
-        'split_length': args.split_length
+        'split_length': args.split_length,
+        'bilingual': bilingual_config,
     }
     
     if args.local_ai:
         print("Using Local Neural Alignment (LaBSE)...")
+    
+    print(f"\nLayout configuration:")
+    print(f"  Mode: {bilingual_config.layout_mode.value}")
+    if bilingual_config.layout_mode == LayoutMode.SIDE_BY_SIDE:
+        print(f"  Side-by-side: {bilingual_config.left_column_language} on left, {bilingual_config.column_gap_percentage}% gap")
+    print(f"  Style: {bilingual_config.style_mode.value}")
+    if bilingual_config.original_color:
+        print(f"  English color: {bilingual_config.original_color}")
+    if bilingual_config.translation_color:
+        print(f"  Spanish color: {bilingual_config.translation_color}")
     
     create_bilingual_epub(args.en, args.es, args.output, config)

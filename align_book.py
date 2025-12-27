@@ -4700,16 +4700,24 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         # We need es_toc_dir to resolve es_rel
         es_toc_dir = os.path.dirname(es_toc_path)
         
+        # CRITICAL: Track Spanish files to prevent reuse
+        es_files_processed = set()
+        
         for idx, label, en_abs, es_rel, level in final_processing_list:
             if not es_rel: continue
             
             # Resolve es_rel (it is relative to ES TOC)
-            # We need absolute path for parsing? parse_file expects absolute.
             if not os.path.isabs(es_rel):
                 es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
             else:
                 es_abs = es_rel
             
+            # DUPLICATE CHECK: Skip if this Spanish file already processed
+            if es_abs in es_files_processed:
+                print(f"WARNING: Skipping duplicate Spanish file '{es_rel}' for '{label}' to prevent content reuse")
+                continue
+            
+            es_files_processed.add(es_abs)
             args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label) )
             
         # Replaces the original loop below

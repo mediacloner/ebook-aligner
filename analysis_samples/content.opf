@@ -1,0 +1,396 @@
+<?xml version="1.0"  encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="uuid_id">
+  <metadata xmlns:opf="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:calibre="http://calibre.kovidgoyal.net/2009/metadata">
+    <dc:title>Alchemised</dc:title>
+    <dc:creator opf:role="aut" opf:file-as="SenLinYu">SenLinYu</dc:creator>
+    <dc:contributor opf:role="bkp">calibre (8.6.0) [https://calibre-ebook.com]</dc:contributor>
+    <dc:publisher>Penguin Random House UK</dc:publisher>
+    <dc:date>2025-09-29T00:00:00+00:00</dc:date>
+    <dc:identifier id="uuid_id" opf:scheme="uuid">aa05f89d-de5e-4fee-8739-b003cb17092f</dc:identifier>
+    <dc:language>en</dc:language>
+    <dc:identifier opf:scheme="calibre">aa05f89d-de5e-4fee-8739-b003cb17092f</dc:identifier>
+    <meta name="calibre:timestamp" content="2025-09-23T01:19:29.757866+00:00"/>
+    <meta name="calibre:title_sort" content="Alchemised"/>
+    <meta name="cover" content="cover"/>
+  </metadata>
+  <manifest>
+    <item id="titlepage" href="titlepage.xhtml" media-type="application/xhtml+xml"/>
+    <item id="brand_page.xhtml" href="EPUB/xhtml/brand_page.xhtml" media-type="application/xhtml+xml"/>
+    <item id="about_the_author.xhtml" href="EPUB/xhtml/about_the_author.xhtml" media-type="application/xhtml+xml"/>
+    <item id="title.xhtml" href="EPUB/xhtml/title.xhtml" media-type="application/xhtml+xml"/>
+    <item id="dedication.xhtml" href="EPUB/xhtml/dedication.xhtml" media-type="application/xhtml+xml"/>
+    <item id="authors_note.xhtml" href="EPUB/xhtml/authors_note.xhtml" media-type="application/xhtml+xml"/>
+    <item id="part001.xhtml" href="EPUB/xhtml/part001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="prologue.xhtml" href="EPUB/xhtml/prologue.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter001.xhtml2" href="EPUB/xhtml/chapter001_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter001.xhtml1" href="EPUB/xhtml/chapter001_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter002.xhtml2" href="EPUB/xhtml/chapter002_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter002.xhtml1" href="EPUB/xhtml/chapter002_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter003.xhtml2" href="EPUB/xhtml/chapter003_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter003.xhtml1" href="EPUB/xhtml/chapter003_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter004.xhtml2" href="EPUB/xhtml/chapter004_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter004.xhtml1" href="EPUB/xhtml/chapter004_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter005.xhtml2" href="EPUB/xhtml/chapter005_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter005.xhtml1" href="EPUB/xhtml/chapter005_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter006.xhtml2" href="EPUB/xhtml/chapter006_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter006.xhtml1" href="EPUB/xhtml/chapter006_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter007.xhtml2" href="EPUB/xhtml/chapter007_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter007.xhtml1" href="EPUB/xhtml/chapter007_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter008.xhtml2" href="EPUB/xhtml/chapter008_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter008.xhtml1" href="EPUB/xhtml/chapter008_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter009.xhtml2" href="EPUB/xhtml/chapter009_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter009.xhtml1" href="EPUB/xhtml/chapter009_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter010.xhtml2" href="EPUB/xhtml/chapter010_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter010.xhtml1" href="EPUB/xhtml/chapter010_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter011.xhtml2" href="EPUB/xhtml/chapter011_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter011.xhtml1" href="EPUB/xhtml/chapter011_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter012.xhtml2" href="EPUB/xhtml/chapter012_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter012.xhtml1" href="EPUB/xhtml/chapter012_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter013.xhtml2" href="EPUB/xhtml/chapter013_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter013.xhtml1" href="EPUB/xhtml/chapter013_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter014.xhtml2" href="EPUB/xhtml/chapter014_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter014.xhtml1" href="EPUB/xhtml/chapter014_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter015.xhtml2" href="EPUB/xhtml/chapter015_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter015.xhtml1" href="EPUB/xhtml/chapter015_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter016.xhtml2" href="EPUB/xhtml/chapter016_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter016.xhtml1" href="EPUB/xhtml/chapter016_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter017.xhtml2" href="EPUB/xhtml/chapter017_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter017.xhtml1" href="EPUB/xhtml/chapter017_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter018.xhtml2" href="EPUB/xhtml/chapter018_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter018.xhtml1" href="EPUB/xhtml/chapter018_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter019.xhtml2" href="EPUB/xhtml/chapter019_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter019.xhtml1" href="EPUB/xhtml/chapter019_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter020.xhtml2" href="EPUB/xhtml/chapter020_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter020.xhtml1" href="EPUB/xhtml/chapter020_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter021.xhtml2" href="EPUB/xhtml/chapter021_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter021.xhtml1" href="EPUB/xhtml/chapter021_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="part002.xhtml" href="EPUB/xhtml/part002.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter022.xhtml2" href="EPUB/xhtml/chapter022_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter022.xhtml1" href="EPUB/xhtml/chapter022_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter023.xhtml2" href="EPUB/xhtml/chapter023_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter023.xhtml1" href="EPUB/xhtml/chapter023_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter024.xhtml2" href="EPUB/xhtml/chapter024_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter024.xhtml1" href="EPUB/xhtml/chapter024_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter025.xhtml2" href="EPUB/xhtml/chapter025_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter025.xhtml1" href="EPUB/xhtml/chapter025_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter026.xhtml2" href="EPUB/xhtml/chapter026_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter026.xhtml1" href="EPUB/xhtml/chapter026_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter027.xhtml2" href="EPUB/xhtml/chapter027_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter027.xhtml1" href="EPUB/xhtml/chapter027_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter028.xhtml2" href="EPUB/xhtml/chapter028_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter028.xhtml1" href="EPUB/xhtml/chapter028_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter029.xhtml2" href="EPUB/xhtml/chapter029_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter029.xhtml1" href="EPUB/xhtml/chapter029_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter030.xhtml2" href="EPUB/xhtml/chapter030_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter030.xhtml1" href="EPUB/xhtml/chapter030_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter031.xhtml2" href="EPUB/xhtml/chapter031_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter031.xhtml1" href="EPUB/xhtml/chapter031_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter032.xhtml2" href="EPUB/xhtml/chapter032_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter032.xhtml1" href="EPUB/xhtml/chapter032_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter033.xhtml2" href="EPUB/xhtml/chapter033_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter033.xhtml1" href="EPUB/xhtml/chapter033_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter034.xhtml2" href="EPUB/xhtml/chapter034_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter034.xhtml1" href="EPUB/xhtml/chapter034_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter035.xhtml2" href="EPUB/xhtml/chapter035_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter035.xhtml1" href="EPUB/xhtml/chapter035_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter036.xhtml2" href="EPUB/xhtml/chapter036_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter036.xhtml1" href="EPUB/xhtml/chapter036_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter037.xhtml2" href="EPUB/xhtml/chapter037_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter037.xhtml1" href="EPUB/xhtml/chapter037_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter038.xhtml2" href="EPUB/xhtml/chapter038_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter038.xhtml1" href="EPUB/xhtml/chapter038_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter039.xhtml2" href="EPUB/xhtml/chapter039_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter039.xhtml1" href="EPUB/xhtml/chapter039_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter040.xhtml2" href="EPUB/xhtml/chapter040_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter040.xhtml1" href="EPUB/xhtml/chapter040_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter041.xhtml2" href="EPUB/xhtml/chapter041_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter041.xhtml1" href="EPUB/xhtml/chapter041_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter042.xhtml2" href="EPUB/xhtml/chapter042_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter042.xhtml1" href="EPUB/xhtml/chapter042_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter043.xhtml2" href="EPUB/xhtml/chapter043_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter043.xhtml1" href="EPUB/xhtml/chapter043_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter044.xhtml2" href="EPUB/xhtml/chapter044_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter044.xhtml1" href="EPUB/xhtml/chapter044_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter045.xhtml2" href="EPUB/xhtml/chapter045_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter045.xhtml1" href="EPUB/xhtml/chapter045_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter046.xhtml2" href="EPUB/xhtml/chapter046_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter046.xhtml1" href="EPUB/xhtml/chapter046_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter047.xhtml2" href="EPUB/xhtml/chapter047_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter047.xhtml1" href="EPUB/xhtml/chapter047_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter048.xhtml2" href="EPUB/xhtml/chapter048_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter048.xhtml1" href="EPUB/xhtml/chapter048_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter049.xhtml2" href="EPUB/xhtml/chapter049_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter049.xhtml1" href="EPUB/xhtml/chapter049_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter050.xhtml2" href="EPUB/xhtml/chapter050_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter050.xhtml1" href="EPUB/xhtml/chapter050_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter051.xhtml2" href="EPUB/xhtml/chapter051_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter051.xhtml1" href="EPUB/xhtml/chapter051_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter052.xhtml2" href="EPUB/xhtml/chapter052_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter052.xhtml1" href="EPUB/xhtml/chapter052_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter053.xhtml2" href="EPUB/xhtml/chapter053_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter053.xhtml1" href="EPUB/xhtml/chapter053_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter054.xhtml2" href="EPUB/xhtml/chapter054_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter054.xhtml1" href="EPUB/xhtml/chapter054_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter055.xhtml2" href="EPUB/xhtml/chapter055_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter055.xhtml1" href="EPUB/xhtml/chapter055_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter056.xhtml2" href="EPUB/xhtml/chapter056_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter056.xhtml1" href="EPUB/xhtml/chapter056_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter057.xhtml2" href="EPUB/xhtml/chapter057_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter057.xhtml1" href="EPUB/xhtml/chapter057_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter058.xhtml2" href="EPUB/xhtml/chapter058_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter058.xhtml1" href="EPUB/xhtml/chapter058_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter059.xhtml2" href="EPUB/xhtml/chapter059_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter059.xhtml1" href="EPUB/xhtml/chapter059_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter060.xhtml2" href="EPUB/xhtml/chapter060_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter060.xhtml1" href="EPUB/xhtml/chapter060_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter061.xhtml2" href="EPUB/xhtml/chapter061_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter061.xhtml1" href="EPUB/xhtml/chapter061_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter062.xhtml2" href="EPUB/xhtml/chapter062_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter062.xhtml1" href="EPUB/xhtml/chapter062_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter063.xhtml2" href="EPUB/xhtml/chapter063_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter063.xhtml1" href="EPUB/xhtml/chapter063_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter064.xhtml2" href="EPUB/xhtml/chapter064_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter064.xhtml1" href="EPUB/xhtml/chapter064_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter065.xhtml2" href="EPUB/xhtml/chapter065_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter065.xhtml1" href="EPUB/xhtml/chapter065_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="part003.xhtml" href="EPUB/xhtml/part003.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter066.xhtml2" href="EPUB/xhtml/chapter066_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter066.xhtml1" href="EPUB/xhtml/chapter066_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter067.xhtml2" href="EPUB/xhtml/chapter067_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter067.xhtml1" href="EPUB/xhtml/chapter067_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter068.xhtml2" href="EPUB/xhtml/chapter068_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter068.xhtml1" href="EPUB/xhtml/chapter068_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter069.xhtml2" href="EPUB/xhtml/chapter069_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter069.xhtml1" href="EPUB/xhtml/chapter069_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter070.xhtml2" href="EPUB/xhtml/chapter070_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter070.xhtml1" href="EPUB/xhtml/chapter070_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter071.xhtml2" href="EPUB/xhtml/chapter071_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter071.xhtml1" href="EPUB/xhtml/chapter071_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter072.xhtml2" href="EPUB/xhtml/chapter072_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter072.xhtml1" href="EPUB/xhtml/chapter072_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter073.xhtml2" href="EPUB/xhtml/chapter073_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter073.xhtml1" href="EPUB/xhtml/chapter073_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter074.xhtml2" href="EPUB/xhtml/chapter074_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter074.xhtml1" href="EPUB/xhtml/chapter074_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter075.xhtml2" href="EPUB/xhtml/chapter075_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter075.xhtml1" href="EPUB/xhtml/chapter075_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter076.xhtml2" href="EPUB/xhtml/chapter076_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter076.xhtml1" href="EPUB/xhtml/chapter076_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter077.xhtml2" href="EPUB/xhtml/chapter077_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter077.xhtml1" href="EPUB/xhtml/chapter077_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter078.xhtml2" href="EPUB/xhtml/chapter078_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="chapter078.xhtml1" href="EPUB/xhtml/chapter078_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="epilogue.xhtml2" href="EPUB/xhtml/epilogue_split_000.xhtml" media-type="application/xhtml+xml"/>
+    <item id="epilogue.xhtml1" href="EPUB/xhtml/epilogue_split_001.xhtml" media-type="application/xhtml+xml"/>
+    <item id="content_notes.xhtml" href="EPUB/xhtml/content_notes.xhtml" media-type="application/xhtml+xml"/>
+    <item id="acknowledgements.xhtml" href="EPUB/xhtml/acknowledgements.xhtml" media-type="application/xhtml+xml"/>
+    <item id="follow_penguin.xhtml" href="EPUB/xhtml/follow_penguin.xhtml" media-type="application/xhtml+xml"/>
+    <item id="copyright.xhtml" href="EPUB/xhtml/copyright.xhtml" media-type="application/xhtml+xml"/>
+    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="page_css" href="page_styles.css" media-type="text/css"/>
+    <item id="css" href="stylesheet.css" media-type="text/css"/>
+    <item id="cover" href="cover.jpeg" media-type="image/jpeg"/>
+    <item id="p001.png" href="EPUB/images/p001.png" media-type="image/png"/>
+    <item id="p005.png" href="EPUB/images/p005.png" media-type="image/png"/>
+    <item id="p006.png" href="EPUB/images/p006.png" media-type="image/png"/>
+    <item id="p036.png" href="EPUB/images/p036.png" media-type="image/png"/>
+    <item id="p063.png" href="EPUB/images/p063.png" media-type="image/png"/>
+    <item id="p1024.png" href="EPUB/images/p1024.png" media-type="image/png"/>
+    <item id="p103.png" href="EPUB/images/p103.png" media-type="image/png"/>
+    <item id="p165.png" href="EPUB/images/p165.png" media-type="image/png"/>
+    <item id="p198.png" href="EPUB/images/p198.png" media-type="image/png"/>
+    <item id="p203.png" href="EPUB/images/p203.png" media-type="image/png"/>
+    <item id="p223.png" href="EPUB/images/p223.png" media-type="image/png"/>
+    <item id="p245.png" href="EPUB/images/p245.png" media-type="image/png"/>
+    <item id="p279.png" href="EPUB/images/p279.png" media-type="image/png"/>
+    <item id="p339.png" href="EPUB/images/p339.png" media-type="image/png"/>
+    <item id="p455.png" href="EPUB/images/p455.png" media-type="image/png"/>
+    <item id="p509.png" href="EPUB/images/p509.png" media-type="image/png"/>
+    <item id="p855.png" href="EPUB/images/p855.png" media-type="image/png"/>
+    <item id="piii.png" href="EPUB/images/piii.png" media-type="image/png"/>
+    <item id="follow_penguin_logo.png" href="EPUB/xhtml/prh_core_assets/images/follow_penguin_logo.png" media-type="image/png"/>
+    <item id="logo_large.png" href="EPUB/xhtml/prh_core_assets/images/logo_large.png" media-type="image/png"/>
+    <item id="prh_uk_logo.jpg" href="EPUB/xhtml/prh_core_assets/images/prh_uk_logo.jpg" media-type="image/jpeg"/>
+    <item id="title_page_logo.png" href="EPUB/xhtml/prh_core_assets/images/title_page_logo.png" media-type="image/png"/>
+    <item id="avantgarde-bold.otf" href="EPUB/xhtml/prh_core_assets/fonts/avantgarde-bold.otf" media-type="application/vnd.ms-opentype"/>
+    <item id="avantgarde-regular.otf" href="EPUB/xhtml/prh_core_assets/fonts/avantgarde-regular.otf" media-type="application/vnd.ms-opentype"/>
+  </manifest>
+  <spine toc="ncx">
+    <itemref idref="titlepage"/>
+    <itemref idref="brand_page.xhtml"/>
+    <itemref idref="about_the_author.xhtml"/>
+    <itemref idref="title.xhtml"/>
+    <itemref idref="dedication.xhtml"/>
+    <itemref idref="authors_note.xhtml"/>
+    <itemref idref="part001.xhtml"/>
+    <itemref idref="prologue.xhtml"/>
+    <itemref idref="chapter001.xhtml2"/>
+    <itemref idref="chapter001.xhtml1"/>
+    <itemref idref="chapter002.xhtml2"/>
+    <itemref idref="chapter002.xhtml1"/>
+    <itemref idref="chapter003.xhtml2"/>
+    <itemref idref="chapter003.xhtml1"/>
+    <itemref idref="chapter004.xhtml2"/>
+    <itemref idref="chapter004.xhtml1"/>
+    <itemref idref="chapter005.xhtml2"/>
+    <itemref idref="chapter005.xhtml1"/>
+    <itemref idref="chapter006.xhtml2"/>
+    <itemref idref="chapter006.xhtml1"/>
+    <itemref idref="chapter007.xhtml2"/>
+    <itemref idref="chapter007.xhtml1"/>
+    <itemref idref="chapter008.xhtml2"/>
+    <itemref idref="chapter008.xhtml1"/>
+    <itemref idref="chapter009.xhtml2"/>
+    <itemref idref="chapter009.xhtml1"/>
+    <itemref idref="chapter010.xhtml2"/>
+    <itemref idref="chapter010.xhtml1"/>
+    <itemref idref="chapter011.xhtml2"/>
+    <itemref idref="chapter011.xhtml1"/>
+    <itemref idref="chapter012.xhtml2"/>
+    <itemref idref="chapter012.xhtml1"/>
+    <itemref idref="chapter013.xhtml2"/>
+    <itemref idref="chapter013.xhtml1"/>
+    <itemref idref="chapter014.xhtml2"/>
+    <itemref idref="chapter014.xhtml1"/>
+    <itemref idref="chapter015.xhtml2"/>
+    <itemref idref="chapter015.xhtml1"/>
+    <itemref idref="chapter016.xhtml2"/>
+    <itemref idref="chapter016.xhtml1"/>
+    <itemref idref="chapter017.xhtml2"/>
+    <itemref idref="chapter017.xhtml1"/>
+    <itemref idref="chapter018.xhtml2"/>
+    <itemref idref="chapter018.xhtml1"/>
+    <itemref idref="chapter019.xhtml2"/>
+    <itemref idref="chapter019.xhtml1"/>
+    <itemref idref="chapter020.xhtml2"/>
+    <itemref idref="chapter020.xhtml1"/>
+    <itemref idref="chapter021.xhtml2"/>
+    <itemref idref="chapter021.xhtml1"/>
+    <itemref idref="part002.xhtml"/>
+    <itemref idref="chapter022.xhtml2"/>
+    <itemref idref="chapter022.xhtml1"/>
+    <itemref idref="chapter023.xhtml2"/>
+    <itemref idref="chapter023.xhtml1"/>
+    <itemref idref="chapter024.xhtml2"/>
+    <itemref idref="chapter024.xhtml1"/>
+    <itemref idref="chapter025.xhtml2"/>
+    <itemref idref="chapter025.xhtml1"/>
+    <itemref idref="chapter026.xhtml2"/>
+    <itemref idref="chapter026.xhtml1"/>
+    <itemref idref="chapter027.xhtml2"/>
+    <itemref idref="chapter027.xhtml1"/>
+    <itemref idref="chapter028.xhtml2"/>
+    <itemref idref="chapter028.xhtml1"/>
+    <itemref idref="chapter029.xhtml2"/>
+    <itemref idref="chapter029.xhtml1"/>
+    <itemref idref="chapter030.xhtml2"/>
+    <itemref idref="chapter030.xhtml1"/>
+    <itemref idref="chapter031.xhtml2"/>
+    <itemref idref="chapter031.xhtml1"/>
+    <itemref idref="chapter032.xhtml2"/>
+    <itemref idref="chapter032.xhtml1"/>
+    <itemref idref="chapter033.xhtml2"/>
+    <itemref idref="chapter033.xhtml1"/>
+    <itemref idref="chapter034.xhtml2"/>
+    <itemref idref="chapter034.xhtml1"/>
+    <itemref idref="chapter035.xhtml2"/>
+    <itemref idref="chapter035.xhtml1"/>
+    <itemref idref="chapter036.xhtml2"/>
+    <itemref idref="chapter036.xhtml1"/>
+    <itemref idref="chapter037.xhtml2"/>
+    <itemref idref="chapter037.xhtml1"/>
+    <itemref idref="chapter038.xhtml2"/>
+    <itemref idref="chapter038.xhtml1"/>
+    <itemref idref="chapter039.xhtml2"/>
+    <itemref idref="chapter039.xhtml1"/>
+    <itemref idref="chapter040.xhtml2"/>
+    <itemref idref="chapter040.xhtml1"/>
+    <itemref idref="chapter041.xhtml2"/>
+    <itemref idref="chapter041.xhtml1"/>
+    <itemref idref="chapter042.xhtml2"/>
+    <itemref idref="chapter042.xhtml1"/>
+    <itemref idref="chapter043.xhtml2"/>
+    <itemref idref="chapter043.xhtml1"/>
+    <itemref idref="chapter044.xhtml2"/>
+    <itemref idref="chapter044.xhtml1"/>
+    <itemref idref="chapter045.xhtml2"/>
+    <itemref idref="chapter045.xhtml1"/>
+    <itemref idref="chapter046.xhtml2"/>
+    <itemref idref="chapter046.xhtml1"/>
+    <itemref idref="chapter047.xhtml2"/>
+    <itemref idref="chapter047.xhtml1"/>
+    <itemref idref="chapter048.xhtml2"/>
+    <itemref idref="chapter048.xhtml1"/>
+    <itemref idref="chapter049.xhtml2"/>
+    <itemref idref="chapter049.xhtml1"/>
+    <itemref idref="chapter050.xhtml2"/>
+    <itemref idref="chapter050.xhtml1"/>
+    <itemref idref="chapter051.xhtml2"/>
+    <itemref idref="chapter051.xhtml1"/>
+    <itemref idref="chapter052.xhtml2"/>
+    <itemref idref="chapter052.xhtml1"/>
+    <itemref idref="chapter053.xhtml2"/>
+    <itemref idref="chapter053.xhtml1"/>
+    <itemref idref="chapter054.xhtml2"/>
+    <itemref idref="chapter054.xhtml1"/>
+    <itemref idref="chapter055.xhtml2"/>
+    <itemref idref="chapter055.xhtml1"/>
+    <itemref idref="chapter056.xhtml2"/>
+    <itemref idref="chapter056.xhtml1"/>
+    <itemref idref="chapter057.xhtml2"/>
+    <itemref idref="chapter057.xhtml1"/>
+    <itemref idref="chapter058.xhtml2"/>
+    <itemref idref="chapter058.xhtml1"/>
+    <itemref idref="chapter059.xhtml2"/>
+    <itemref idref="chapter059.xhtml1"/>
+    <itemref idref="chapter060.xhtml2"/>
+    <itemref idref="chapter060.xhtml1"/>
+    <itemref idref="chapter061.xhtml2"/>
+    <itemref idref="chapter061.xhtml1"/>
+    <itemref idref="chapter062.xhtml2"/>
+    <itemref idref="chapter062.xhtml1"/>
+    <itemref idref="chapter063.xhtml2"/>
+    <itemref idref="chapter063.xhtml1"/>
+    <itemref idref="chapter064.xhtml2"/>
+    <itemref idref="chapter064.xhtml1"/>
+    <itemref idref="chapter065.xhtml2"/>
+    <itemref idref="chapter065.xhtml1"/>
+    <itemref idref="part003.xhtml"/>
+    <itemref idref="chapter066.xhtml2"/>
+    <itemref idref="chapter066.xhtml1"/>
+    <itemref idref="chapter067.xhtml2"/>
+    <itemref idref="chapter067.xhtml1"/>
+    <itemref idref="chapter068.xhtml2"/>
+    <itemref idref="chapter068.xhtml1"/>
+    <itemref idref="chapter069.xhtml2"/>
+    <itemref idref="chapter069.xhtml1"/>
+    <itemref idref="chapter070.xhtml2"/>
+    <itemref idref="chapter070.xhtml1"/>
+    <itemref idref="chapter071.xhtml2"/>
+    <itemref idref="chapter071.xhtml1"/>
+    <itemref idref="chapter072.xhtml2"/>
+    <itemref idref="chapter072.xhtml1"/>
+    <itemref idref="chapter073.xhtml2"/>
+    <itemref idref="chapter073.xhtml1"/>
+    <itemref idref="chapter074.xhtml2"/>
+    <itemref idref="chapter074.xhtml1"/>
+    <itemref idref="chapter075.xhtml2"/>
+    <itemref idref="chapter075.xhtml1"/>
+    <itemref idref="chapter076.xhtml2"/>
+    <itemref idref="chapter076.xhtml1"/>
+    <itemref idref="chapter077.xhtml2"/>
+    <itemref idref="chapter077.xhtml1"/>
+    <itemref idref="chapter078.xhtml2"/>
+    <itemref idref="chapter078.xhtml1"/>
+    <itemref idref="epilogue.xhtml2"/>
+    <itemref idref="epilogue.xhtml1"/>
+    <itemref idref="content_notes.xhtml"/>
+    <itemref idref="acknowledgements.xhtml"/>
+    <itemref idref="follow_penguin.xhtml"/>
+    <itemref idref="copyright.xhtml"/>
+  </spine>
+  <guide>
+    <reference type="text" href="EPUB/xhtml/brand_page.xhtml#brand_page" title="Begin Reading"/>
+    <reference type="cover" href="titlepage.xhtml" title="Cover"/>
+  </guide>
+</package>

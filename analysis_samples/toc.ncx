@@ -1,0 +1,555 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="eng">
+  <head>
+    <meta name="dtb:uid" content="aa05f89d-de5e-4fee-8739-b003cb17092f"/>
+    <meta name="dtb:depth" content="3"/>
+    <meta name="dtb:generator" content="calibre (8.6.0)"/>
+    <meta name="dtb:totalPageCount" content="0"/>
+    <meta name="dtb:maxPageNumber" content="0"/>
+  </head>
+  <docTitle>
+    <text>Alchemised</text>
+  </docTitle>
+  <navMap>
+    <navPoint id="usiCXQcgvTHCET4gvwlwef5" playOrder="1" class="chapter">
+      <navLabel>
+        <text>COVER</text>
+      </navLabel>
+      <content src="titlepage.xhtml"/>
+    </navPoint>
+    <navPoint id="uhEVCpLQhPUHCURLHXyzJm9" playOrder="2" class="chapter">
+      <navLabel>
+        <text>ABOUT THE AUTHOR</text>
+      </navLabel>
+      <content src="EPUB/xhtml/about_the_author.xhtml"/>
+    </navPoint>
+    <navPoint id="uwaBrGtNzMIbgqirmBRhVQF" playOrder="3" class="chapter">
+      <navLabel>
+        <text>TITLE PAGE</text>
+      </navLabel>
+      <content src="EPUB/xhtml/title.xhtml"/>
+    </navPoint>
+    <navPoint id="uRRcZTTV4YYoKAfgGfzBlu6" playOrder="4" class="chapter">
+      <navLabel>
+        <text>DEDICATION</text>
+      </navLabel>
+      <content src="EPUB/xhtml/dedication.xhtml"/>
+    </navPoint>
+    <navPoint id="uDHNKKXFRQlJa3iTFwIG8O9" playOrder="5" class="chapter">
+      <navLabel>
+        <text>PART ONE</text>
+      </navLabel>
+      <content src="EPUB/xhtml/part001.xhtml"/>
+      <navPoint id="uczWb6ejJcEdKobVKy6PQEB" playOrder="6" class="chapter">
+        <navLabel>
+          <text>PROLOGUE</text>
+        </navLabel>
+        <content src="EPUB/xhtml/prologue.xhtml"/>
+      </navPoint>
+      <navPoint id="ubAruYo46euLSEtlPkqEda9" playOrder="7" class="chapter">
+        <navLabel>
+          <text>CHAPTER 1</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter001_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uSGiXIJyyva7Pgw6NaFyCzE" playOrder="8" class="chapter">
+        <navLabel>
+          <text>CHAPTER 2</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter002_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uAnjSFbTWmurbxrTCR5QDN8" playOrder="9" class="chapter">
+        <navLabel>
+          <text>CHAPTER 3</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter003_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ub3l38p3QTWrInA9MBNhKxG" playOrder="10" class="chapter">
+        <navLabel>
+          <text>CHAPTER 4</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter004_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ucJ6iDlL4CKvcfWMshDMuMC" playOrder="11" class="chapter">
+        <navLabel>
+          <text>CHAPTER 5</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter005_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uVPFdypB5db84urn4RWM3cA" playOrder="12" class="chapter">
+        <navLabel>
+          <text>CHAPTER 6</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter006_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="u65vHXARrSKCxJ4SOR4Je3B" playOrder="13" class="chapter">
+        <navLabel>
+          <text>CHAPTER 7</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter007_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uevoLyxj2T6hmzLfZJ7Geh5" playOrder="14" class="chapter">
+        <navLabel>
+          <text>CHAPTER 8</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter008_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uG7sKxsfCruGJzQtkjCDb5F" playOrder="15" class="chapter">
+        <navLabel>
+          <text>CHAPTER 9</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter009_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="umR2IM7akndrbFh9GRomvr9" playOrder="16" class="chapter">
+        <navLabel>
+          <text>CHAPTER 10</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter010_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uKikiqvMXX3D5GbPYon2nTF" playOrder="17" class="chapter">
+        <navLabel>
+          <text>CHAPTER 11</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter011_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uikrtoVPtdqPuvXr6YckvE8" playOrder="18" class="chapter">
+        <navLabel>
+          <text>CHAPTER 12</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter012_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="u5gYEDf9JZKaETwS6EOlwPA" playOrder="19" class="chapter">
+        <navLabel>
+          <text>CHAPTER 13</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter013_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uuJoapEN4WEuSQFcal5ayQ6" playOrder="20" class="chapter">
+        <navLabel>
+          <text>CHAPTER 14</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter014_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uqmlMTxA62JS2nBNfLrtEjF" playOrder="21" class="chapter">
+        <navLabel>
+          <text>CHAPTER 15</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter015_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uelxEr8UNJOtugEARXeL9WE" playOrder="22" class="chapter">
+        <navLabel>
+          <text>CHAPTER 16</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter016_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ufrPH2PyHjUiIaotpgdTp67" playOrder="23" class="chapter">
+        <navLabel>
+          <text>CHAPTER 17</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter017_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uRafwBg4WtjXGPeyvQdsJr9" playOrder="24" class="chapter">
+        <navLabel>
+          <text>CHAPTER 18</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter018_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="upxDJlQBoHLuia6IBzeOKQ7" playOrder="25" class="chapter">
+        <navLabel>
+          <text>CHAPTER 19</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter019_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uUYLledTTxWUAcCHL6X7or9" playOrder="26" class="chapter">
+        <navLabel>
+          <text>CHAPTER 20</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter020_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uA2cRdQzH9BT8o2KzfueghF" playOrder="27" class="chapter">
+        <navLabel>
+          <text>CHAPTER 21</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter021_split_000.xhtml"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="uFIE7U4VfSPvFZpH2MbNNq3" playOrder="28" class="chapter">
+      <navLabel>
+        <text>PART TWO</text>
+      </navLabel>
+      <content src="EPUB/xhtml/part002.xhtml"/>
+      <navPoint id="uiDM8H8LBzfV74xxLj7FqH8" playOrder="29" class="chapter">
+        <navLabel>
+          <text>CHAPTER 22</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter022_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="usHc4QVVzpFNrGSctGFKxIG" playOrder="30" class="chapter">
+        <navLabel>
+          <text>CHAPTER 23</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter023_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uSTxsP5cdhWpcDcb5YBpnn6" playOrder="31" class="chapter">
+        <navLabel>
+          <text>CHAPTER 24</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter024_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uWjswMMldGuIMnbmuUw69m4" playOrder="32" class="chapter">
+        <navLabel>
+          <text>CHAPTER 25</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter025_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="usy3UKzEb3Ylf6dUrZu3WtF" playOrder="33" class="chapter">
+        <navLabel>
+          <text>CHAPTER 26</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter026_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="unBDfAsy3pB8BYnzXuX9pk6" playOrder="34" class="chapter">
+        <navLabel>
+          <text>CHAPTER 27</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter027_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uX2aTd3PfVVf9S2OSYfvh4F" playOrder="35" class="chapter">
+        <navLabel>
+          <text>CHAPTER 28</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter028_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uiV3nbwq62kYur8eMxFidNG" playOrder="36" class="chapter">
+        <navLabel>
+          <text>CHAPTER 29</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter029_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uHYENXDOyA2LjeAelBdb8K6" playOrder="37" class="chapter">
+        <navLabel>
+          <text>CHAPTER 30</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter030_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uIz4EOgUmVIymRMwdKyITO5" playOrder="38" class="chapter">
+        <navLabel>
+          <text>CHAPTER 31</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter031_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uiQ9fD2via5aZlS8indA9fB" playOrder="39" class="chapter">
+        <navLabel>
+          <text>CHAPTER 32</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter032_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="udxn2d7oPEnLfFOWFl4dYHH" playOrder="40" class="chapter">
+        <navLabel>
+          <text>CHAPTER 33</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter033_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uZDUNAq92KFqriB5elzORp6" playOrder="41" class="chapter">
+        <navLabel>
+          <text>CHAPTER 34</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter034_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uDAwCIzeDfPVbggQQOLsNsC" playOrder="42" class="chapter">
+        <navLabel>
+          <text>CHAPTER 35</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter035_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uOMDrzMquxmdlIXPOAu6cq3" playOrder="43" class="chapter">
+        <navLabel>
+          <text>CHAPTER 36</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter036_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="umoMuMqEkT9wMFdxDVbqxoD" playOrder="44" class="chapter">
+        <navLabel>
+          <text>CHAPTER 37</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter037_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ugPYuafyxazqH3YgGuCsLaG" playOrder="45" class="chapter">
+        <navLabel>
+          <text>CHAPTER 38</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter038_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="umT9ge7RxvLovYKxUmCDwJF" playOrder="46" class="chapter">
+        <navLabel>
+          <text>CHAPTER 39</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter039_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uqyxTUnor843uDVd4VHRGd8" playOrder="47" class="chapter">
+        <navLabel>
+          <text>CHAPTER 40</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter040_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uyawFq5PITYdXG6JjNewS5E" playOrder="48" class="chapter">
+        <navLabel>
+          <text>CHAPTER 41</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter041_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="udI7BQmSvXt5hTA9kKaXpg6" playOrder="49" class="chapter">
+        <navLabel>
+          <text>CHAPTER 42</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter042_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uHkG4nyxFOdbRokRBo9a7IC" playOrder="50" class="chapter">
+        <navLabel>
+          <text>CHAPTER 43</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter043_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uMMVJnnYtKQM2v6CYAyZaJ5" playOrder="51" class="chapter">
+        <navLabel>
+          <text>CHAPTER 44</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter044_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="u3KLIXRCuwodexc9vnmE6oE" playOrder="52" class="chapter">
+        <navLabel>
+          <text>CHAPTER 45</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter045_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ujMDRAfyXw7wsG9ZhcYGYMF" playOrder="53" class="chapter">
+        <navLabel>
+          <text>CHAPTER 46</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter046_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uTAqamhVRFjJISa8bknSYW9" playOrder="54" class="chapter">
+        <navLabel>
+          <text>CHAPTER 47</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter047_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uJMQLFd9NuyT72oq7sFJsOG" playOrder="55" class="chapter">
+        <navLabel>
+          <text>CHAPTER 48</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter048_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ubgpXuOltgIkYraBRByyjH4" playOrder="56" class="chapter">
+        <navLabel>
+          <text>CHAPTER 49</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter049_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uKTiZkLeEP5DWmavC9lbiED" playOrder="57" class="chapter">
+        <navLabel>
+          <text>CHAPTER 50</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter050_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uxadSeDObtEbehdUAGyf9I9" playOrder="58" class="chapter">
+        <navLabel>
+          <text>CHAPTER 51</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter051_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ulAtYhJEXLR7TGtTr5cZqjA" playOrder="59" class="chapter">
+        <navLabel>
+          <text>CHAPTER 52</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter052_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="utgkgJnK5Bwy2RFceEarua5" playOrder="60" class="chapter">
+        <navLabel>
+          <text>CHAPTER 53</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter053_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uPX4HiiXTsEUrNjSXRVL497" playOrder="61" class="chapter">
+        <navLabel>
+          <text>CHAPTER 54</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter054_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="utv2xP4SFM2iblepdrCTA72" playOrder="62" class="chapter">
+        <navLabel>
+          <text>CHAPTER 55</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter055_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uirtvrRzDHwyMndIODiexl3" playOrder="63" class="chapter">
+        <navLabel>
+          <text>CHAPTER 56</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter056_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ulRsY3eW96tPc929kGk3aw8" playOrder="64" class="chapter">
+        <navLabel>
+          <text>CHAPTER 57</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter057_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uRRmo8byGuMrR5jWjdhddYC" playOrder="65" class="chapter">
+        <navLabel>
+          <text>CHAPTER 58</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter058_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uMCB99J2LBV2MT7eijLoyj6" playOrder="66" class="chapter">
+        <navLabel>
+          <text>CHAPTER 59</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter059_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uoMPURr4w8cgILbY5Bi3Xh8" playOrder="67" class="chapter">
+        <navLabel>
+          <text>CHAPTER 60</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter060_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uJZ7PmdWgNQq9iGLDqYKWl9" playOrder="68" class="chapter">
+        <navLabel>
+          <text>CHAPTER 61</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter061_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="u5OI39iQ63zcdd4giRnwfeG" playOrder="69" class="chapter">
+        <navLabel>
+          <text>CHAPTER 62</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter062_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uzAPy5Nkwlf3hctSCsLILTG" playOrder="70" class="chapter">
+        <navLabel>
+          <text>CHAPTER 63</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter063_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uOxcEiXr7uioMjROJdVk6R5" playOrder="71" class="chapter">
+        <navLabel>
+          <text>CHAPTER 64</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter064_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uYdmnkJRc6dAgdHia48jX2H" playOrder="72" class="chapter">
+        <navLabel>
+          <text>CHAPTER 65</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter065_split_000.xhtml"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="ut2qrxMSoOQfT9hrarGSpp3" playOrder="73" class="chapter">
+      <navLabel>
+        <text>PART THREE</text>
+      </navLabel>
+      <content src="EPUB/xhtml/part003.xhtml"/>
+      <navPoint id="uMtKxBWoNOIZgqFrSDoSm6E" playOrder="74" class="chapter">
+        <navLabel>
+          <text>CHAPTER 66</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter066_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uf8yohaTaullDzwR33YFUND" playOrder="75" class="chapter">
+        <navLabel>
+          <text>CHAPTER 67</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter067_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="u6fTxGjVdysAOUhKgpF8Zi7" playOrder="76" class="chapter">
+        <navLabel>
+          <text>CHAPTER 68</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter068_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uNXiYhydmHzAhEFKgKYcNZB" playOrder="77" class="chapter">
+        <navLabel>
+          <text>CHAPTER 69</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter069_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uy6Owz29zhaXPnlyFCF8NOH" playOrder="78" class="chapter">
+        <navLabel>
+          <text>CHAPTER 70</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter070_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uDhPTSiWyz7mopPFpkOAxw4" playOrder="79" class="chapter">
+        <navLabel>
+          <text>CHAPTER 71</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter071_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uOd7BzzWAFYhjKwPTnhcmqE" playOrder="80" class="chapter">
+        <navLabel>
+          <text>CHAPTER 72</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter072_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="utRzPH8hSMPwszyPOxhSjMB" playOrder="81" class="chapter">
+        <navLabel>
+          <text>CHAPTER 73</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter073_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uHblx8P6s9Kmkjguw4MyFPF" playOrder="82" class="chapter">
+        <navLabel>
+          <text>CHAPTER 74</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter074_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uawj332l8c2cGXhhtuWROB6" playOrder="83" class="chapter">
+        <navLabel>
+          <text>CHAPTER 75</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter075_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="uxhZecnaANmfn3U8SvKWWT5" playOrder="84" class="chapter">
+        <navLabel>
+          <text>CHAPTER 76</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter076_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ugQmUPjQIctelQkFnIQnV6D" playOrder="85" class="chapter">
+        <navLabel>
+          <text>CHAPTER 77</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter077_split_000.xhtml"/>
+      </navPoint>
+      <navPoint id="ueG7Q4qz5kmuefrMXxebgaE" playOrder="86" class="chapter">
+        <navLabel>
+          <text>CHAPTER 78</text>
+        </navLabel>
+        <content src="EPUB/xhtml/chapter078_split_000.xhtml"/>
+      </navPoint>
+    </navPoint>
+    <navPoint id="udUreyMrXN9NPokX7DI3fp7" playOrder="87" class="chapter">
+      <navLabel>
+        <text>EPILOGUE</text>
+      </navLabel>
+      <content src="EPUB/xhtml/epilogue_split_000.xhtml"/>
+    </navPoint>
+    <navPoint id="uT8mJEMrIyp4A9ST9CIpu3F" playOrder="88" class="chapter">
+      <navLabel>
+        <text>CONTENT NOTES FROM THE AUTHOR</text>
+      </navLabel>
+      <content src="EPUB/xhtml/content_notes.xhtml"/>
+    </navPoint>
+    <navPoint id="ujj8cVCmTe5XxJqbTI6yK4C" playOrder="89" class="chapter">
+      <navLabel>
+        <text>ACKNOWLEDGEMENTS</text>
+      </navLabel>
+      <content src="EPUB/xhtml/acknowledgements.xhtml"/>
+    </navPoint>
+    <navPoint id="uruFPCtSnJHewKvYwtxEpk6" playOrder="90" class="chapter">
+      <navLabel>
+        <text>COPYRIGHT</text>
+      </navLabel>
+      <content src="EPUB/xhtml/copyright.xhtml"/>
+    </navPoint>
+  </navMap>
+</ncx>

@@ -1,6 +1,6 @@
-Flask==3.0.0
+Flask
 sentence-transformers
 numpy
 scipy
-sentence-transformers
-numpy
+beautifulsoup4
+pysbd

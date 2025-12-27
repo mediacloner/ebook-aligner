@@ -662,10 +662,28 @@ def align_tocs(en_toc, es_toc):
                              break
                      
         if match:
-            anchors.append((en, match))
-            en_matched.add(en['idx'])
-            es_matched.add(match['idx'])
-            # print(f"DEBUG Match Found: En[{en['idx']}] '{en['item']['label']}' -> Es[{match['idx']}] '{match['item']['label']}' (Src: {en['item']['src']} -> {match['item']['src']})")
+            # Check Level Match (User Suggestion: prevent mismatch of Parent vs Child)
+            # If Levels diff is > 0, maybe valid if structure differs, but often error.
+            # User specifically asked: "only allow the chapter that don't have parent" (Level 1?)
+            # or "check ... is sure".
+            
+            # Let's enforce strict level matching if available
+            en_level = en['item'].get('level', 1)
+            es_level = match['item'].get('level', 1)
+            
+            level_mismatch = abs(en_level - es_level) > 0
+            
+            # Additional check: If Roman Numeral mismatch (e.g. X vs IX), we should have skipped already via fuzzy check.
+            # But fuzzy might have matched "Chapter" with "Capitulo".
+            
+            if level_mismatch:
+                 print(f"DEBUG: Levels mismatch for '{en['item']['label']}' (L{en_level}) vs '{match['item']['label']}' (L{es_level}). Skipping.")
+                 # Do not add to anchors if levels mismatch
+            else:
+                 anchors.append((en, match))
+                 en_matched.add(en['idx'])
+                 es_matched.add(match['idx'])
+                 # print(f"DEBUG Match Found: En[{en['idx']}] '{en['item']['label']}' -> Es[{match['idx']}] '{match['item']['label']}' (Src: {en['item']['src']} -> {match['item']['src']})")
 
     # Sort anchors by English index to establish a skeleton
     anchors.sort(key=lambda x: x[0]['idx'])

@@ -18,6 +18,10 @@ class Splitter:
         if not text:
             return []
         
+        # Strip decorative scene separator symbols before processing
+        # These are visual markers, not sentence boundaries
+        text = re.sub(r'\s*[⁂❦※]\s*', ' ', text).strip()
+        
         try:
             import pysbd
             seg = pysbd.Segmenter(language="en", clean=False)

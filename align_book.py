@@ -374,8 +374,9 @@ def split_sentences_helper(text):
     """
     if not text:
         return []
-    # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start
-    pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
+    # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start/Dash
+    # Added em-dash (—) and en-dash (–) to lookahead for Spanish dialogue
+    pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-\—\–]))'
     parts = re.split(pattern, text)
     sentences = []
     current_sent = ""
@@ -585,20 +586,16 @@ def align_tocs(en_toc, es_toc):
     for i, item in enumerate(en_toc):
         norm = normalize_label(item['label'])
         raw = item['label'].lower().strip()
-        # Filter Ignored Items - Modified to allow Title Page, Cover, etc.
-        # We only strictly filter recursives like 'Table of Contents'? 
-        # Actually user wants 'Table of Contents' too? "like original one".
-        # Let's remove the filter entirely or just keep empty checks.
-        if not raw: continue
-        en_items.append({'idx': i, 'item': item, 'norm': norm})
+        # Don't skip empty labels - we'll use filename matching for them
+        en_items.append({'idx': i, 'item': item, 'norm': norm, 'raw':  raw})
 
     es_items = []
     for i, item in enumerate(es_toc):
         norm = normalize_label(item['label'])
         raw = item['label'].lower().strip()
-        # Filter Ignored Items
+        # Filter Ignored Items (but not empty labels)
         if raw in ['tabla de contenido', 'contenido', 'página de título', 'cubierta', 'derechos de autor']: continue
-        es_items.append({'idx': i, 'item': item, 'norm': norm})
+        es_items.append({'idx': i, 'item': item, 'norm': norm, 'raw': raw})
     
     anchors = []
     en_matched = set()
@@ -620,11 +617,30 @@ def align_tocs(en_toc, es_toc):
              
              score = 0
              
-             # 1. Exact Normalized Match (Highest Priority)
-             if en_norm and en_norm == es_norm:
+             # 1. Filename-based matching for empty labels
+             if not en['raw'] and not es['raw']:
+                 # Both labels are empty - use position-based matching primarily
+                 # This handles cases where filename numbers have inconsistent offsets
+                 # (e.g., content0011 -> Sec0009, content0012 -> Sec0010)
+                 
+                 # Position matching: chapters at same relative position should match
+                 en_pos = i / len(en_items) if len(en_items) > 0 else 0
+                 es_pos = j / len(es_items) if len(es_items) > 0 else 0
+                 pos_diff = abs(en_pos - es_pos)
+                 
+                 # High score for items at same position
+                 if pos_diff < 0.05:  # Within 5% position
+                     score = 0.95
+                 elif pos_diff < 0.15:  # Within 15% position  
+                     score = 0.8
+                 else:
+                     score = max(0.3, 0.8 - (pos_diff * 2))  # Decay with distance
+                     
+             # 2. Exact Normalized Match (Highest Priority for non-empty labels)
+             elif en_norm and en_norm == es_norm:
                  score = 1.0
              else:
-                 # 2. Fuzzy Match
+                 # 3. Fuzzy Match
                  import difflib
                  sim = difflib.SequenceMatcher(None, en_label.lower(), es_label.lower()).ratio()
                  score = sim
@@ -931,11 +947,10 @@ def clean_text(text):
 
 def split_sentences(text):
     """
-    Deprecated: No longer splits sentences. Returns text as single item.
+    Splits text into sentences using the helper regex function.
+    Restored for Heuristic Alignment drill-down.
     """
-    if not text:
-        return []
-    return [text.strip()]
+    return split_sentences_helper(text)
 
 
 def split_sentences_aggressive(text):
@@ -2131,7 +2146,92 @@ def align_chunks(en_chunks, es_chunks):
         sm = difflib.SequenceMatcher(None, fp_en, fp_es, autojunk=False)
         local_res = []
         
-        for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if not sm.get_opcodes(): return []
+        
+        # DEBUG LOGGING
+        import logging
+        debug_log = logging.getLogger('align_debug')
+        if not debug_log.handlers:
+            fh = logging.FileHandler('/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/debug_align.log')
+            fh.setLevel(logging.DEBUG)
+            debug_log.addHandler(fh)
+            debug_log.setLevel(logging.DEBUG)
+        
+        debug_log.debug(f"=== align_section called depth={depth} ===")
+        debug_log.debug(f"EN chunks: {len(en_sec)}, ES chunks: {len(es_sec)}")
+        for idx, c in enumerate(en_sec[:5]):
+            debug_log.debug(f"  EN[{idx}]: {c['text'][:50]}...")
+        for idx, c in enumerate(es_sec[:5]):
+            debug_log.debug(f"  ES[{idx}]: {c['text'][:50]}...")
+        
+        # Post-process opcodes to handle N:M mismatches (e.g. 1 long ES para vs 2 short EN paras)
+        raw_opcodes = sm.get_opcodes()
+        debug_log.debug(f"Raw opcodes: {raw_opcodes}")
+        opcodes = []
+        
+        # We process manually to allow merging multiple blocks
+        i = 0
+        while i < len(raw_opcodes):
+            tag, i1, i2, j1, j2 = raw_opcodes[i]
+            
+            merged = False
+            
+            # 1. Forward Merge: EQUAL + DELETE
+            # Check if this EQUAL block should absorb the NEXT DELETE block
+            if tag == 'equal' and i + 1 < len(raw_opcodes):
+                n_tag, n_i1, n_i2, n_j1, n_j2 = raw_opcodes[i+1]
+                if n_tag == 'delete':
+                     en_len = sum(len(c['text']) for c in en_sec[i1:i2])
+                     es_len = sum(len(c['text']) for c in es_sec[j1:j2])
+                     del_en_len = sum(len(c['text']) for c in en_sec[n_i1:n_i2])
+                     debug_log.debug(f"FWD check: ES={es_len} vs EN={en_len}+DEL={del_en_len}")
+                     
+                     if es_len > en_len * 1.2 and es_len > (en_len + del_en_len) * 0.8:
+                         debug_log.debug("  -> FWD MERGE!")
+                         opcodes.append(('replace', i1, n_i2, j1, j2))
+                         i += 2 # Skip next
+                         continue
+
+            # 2. Backward Merge: DELETE + EQUAL
+            # Check if this DELETE block should be absorbed by the NEXT EQUAL block
+            if tag == 'delete' and i + 1 < len(raw_opcodes):
+                n_tag, n_i1, n_i2, n_j1, n_j2 = raw_opcodes[i+1]
+                if n_tag == 'equal':
+                     en_len = sum(len(c['text']) for c in en_sec[n_i1:n_i2]) # Next EN (Equal)
+                     es_len = sum(len(c['text']) for c in es_sec[n_j1:n_j2]) # Next ES (Equal)
+                     del_en_len = sum(len(c['text']) for c in en_sec[i1:i2]) # Current EN (Deleted)
+                     debug_log.debug(f"BWD check: ES={es_len} vs EN={en_len}+DEL={del_en_len}")
+                     
+                     if es_len > en_len * 1.2 and es_len > (en_len + del_en_len) * 0.8:
+                         debug_log.debug("  -> BWD MERGE!")
+                         opcodes.append(('replace', i1, n_i2, n_j1, n_j2))
+                         i += 2 # Skip next
+                         continue
+
+                # 3. Delete + Insert => Replace
+                # If we delete EN and immediately insert ES, treat as REPLACE to try sentence alignment
+                if n_tag == 'insert':
+                     en_len = sum(len(c['text']) for c in en_sec[i1:i2])
+                     es_len = sum(len(c['text']) for c in es_sec[n_j1:n_j2])
+                     debug_log.debug(f"DEL+INS check: EN={en_len}, ES={es_len}")
+                     
+                     # Loose heuristic: match if lengths are broadly compatible
+                     if es_len > 0 and en_len > 0:
+                         ratio = es_len / en_len
+                         debug_log.debug(f"  ratio={ratio}")
+                         if 0.5 < ratio < 2.0:
+                             debug_log.debug("  -> DEL+INS MERGE!")
+                             opcodes.append(('replace', i1, i2, n_j1, n_j2))
+                             i += 2
+                             continue
+            
+            opcodes.append(raw_opcodes[i])
+            i += 1
+
+        debug_log.debug(f"Final opcodes: {opcodes}")
+
+
+        for tag, i1, i2, j1, j2 in opcodes:
             if tag == 'equal':
                 for k in range(i2 - i1):
                     en_item = en_sec[i1+k]
@@ -4724,6 +4824,17 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 # e.g. 'chapter001_split_000' -> 'chapter001_split_001'.
                 # Or simply: assume standard flow.
                 
+                # SKIP ATTRIBUTION/METADATA PAGES
+                # These have almost no real content and shouldn't steal Spanish translations
+                fname = os.path.basename(spine_abs).lower()
+                skip_patterns = ['w2e', 'writer2epub', 'copyright', 'colophon', 'aboutthebook', 
+                                'abouttheauthor', 'dedication', 'frontmatter', 'backmatter']
+                is_skip_page = any(pat in fname for pat in skip_patterns)
+                
+                if is_skip_page:
+                    print(f"DEBUG: Skipping attribution/metadata page: {fname}")
+                    continue  # Don't create (cont.) for these
+                
                 # Let's use it.
                 # Use '-1' for index to indicate it's an extension
                 final_processing_list.append( (9999, f"{current_label} (cont.)", spine_abs, current_es_match, 0) )
@@ -4838,8 +4949,23 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                                 best_score = score
                                 best_match_idx = j
                         
-                        split_indices.append(best_match_idx)
-                        print(f"    {label_en}: Split point at chunk {best_match_idx} (score: {best_score:.2f})")
+                        
+                        # Check if semantic matching succeeded
+                        # If match score is too low, fall back to proportional distribution
+                        SCORE_THRESHOLD = 0.1  # Require at least 10% word overlap
+                        
+                        if best_score >= SCORE_THRESHOLD and best_match_idx > split_indices[-1]:
+                            # Good semantic match found, use it
+                            split_indices.append(best_match_idx)
+                            print(f"    {label_en}: Split point at chunk {best_match_idx} (semantic, score: {best_score:.2f})")
+                        else:
+                            # Poor match or non-monotonic, fall back to proportional
+                            proportional_idx = int(i * len(es_chunks_all) / len(en_list))
+                            # Ensure monotonic increase
+                            proportional_idx = max(proportional_idx, split_indices[-1] + 1)
+                            split_indices.append(proportional_idx)
+                            print(f"    {label_en}: Split point at chunk {proportional_idx} (proportional, semantic score was {best_score:.2f})")
+                        
                         
                     except Exception as e:
                         print(f"    {label_en}: Error finding split point: {e}, using proportional fallback")

@@ -111,13 +111,15 @@ def apply_styling(node, config, is_translation=False):
         css_class = None  # Original doesn't get special class
     
     # Apply styling based on mode
-    if bilingual_config.style_mode == StyleMode.INLINE or bilingual_config.style_mode == StyleMode.HYBRID:
-        if color:
-            current_style = node.get('style', '')
-            if current_style and not current_style.endswith(';'):
-                current_style += ';'
-            node['style'] = f"{current_style} color: {color} !important;"
-    
+    # ALWAYS apply color if explicitly set in config, regardless of mode
+    # (Users expect the color they picked to work)
+    if color:
+        current_style = node.get('style', '')
+        if current_style and not current_style.endswith(';'):
+            current_style += ';'
+        node['style'] = f"{current_style} color: {color} !important;"
+
+    # Apply class if needed
     if bilingual_config.style_mode == StyleMode.CLASS_BASED or bilingual_config.style_mode == StyleMode.HYBRID:
         if is_translation and css_class:
             current_classes = node.get('class', [])

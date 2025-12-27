@@ -1662,6 +1662,8 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
     # Check if using new layout mode system
     bilingual_config = config.get('bilingual')
     use_layout_modes = bilingual_config is not None
+    # print(f"DEBUG: inject_translation called. Text len: {len(es_text) if es_text else 0}. LayoutMode: {use_layout_modes}")
+
     
     # 0. Pre-check: Extract Images from English Node?
     # User Request: Order should be EN -> ES -> IMG
@@ -1689,10 +1691,12 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
         # Separator: Use <br> for new line (User request)
         separator = soup.new_tag("br")
         
+        from layout_helpers import apply_styling
+        
         # Create span for Spanish styling
         span = soup.new_tag("span")
-        span['class'] = "es-translation"
-        span['style'] = "color: grey !important;"
+        # Apply unified styling logic
+        apply_styling(span, config, is_translation=True)
         
         # Parse es_text as HTML to preserve formatting tags
         inner_content = BeautifulSoup(es_text, 'html.parser')
@@ -4307,18 +4311,7 @@ def process_chapter_pair(args):
                          last_node = new_en_node.find_next_sibling()
         
         
-        # 6. Inject Interactive Settings Panel & Save In-Place
-        from settings_panel import generate_settings_panel
-        settings_html = generate_settings_panel(config)
-        
-        # Find body tag and inject settings panel
-        if settings_html and soup.body:
-            # Parse settings panel HTML
-            settings_soup = BeautifulSoup(settings_html, 'html.parser')
-            # Insert at beginning of body
-            for element in reversed(list(settings_soup.children)):
-                if element.name:  # Skip text nodes
-                    soup.body.insert(0, element)
+
         
         with open(target_path, 'w', encoding='utf-8') as f:
              f.write(str(soup))

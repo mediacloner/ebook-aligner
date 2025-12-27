@@ -52,7 +52,7 @@ def find_oebps(root_dir):
                 return root
     return root_dir # Fallback
 
-def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_dir=None):
+def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_dir=None, user_config=None):
     try:
         active_jobs[job_id]['status'] = 'processing'
         active_jobs[job_id]['message'] = 'Unzipping files...'
@@ -80,6 +80,38 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
         config = {}
         if use_local_ai:
             config['use_neural'] = True
+            
+        # Apply user bilingual configuration
+        if user_config:
+            from bilingual_config import BilingualConfig, LayoutMode, StyleMode
+            
+            # Map string values to Enums if necessary, or let BilingualConfig handle basic types
+            # BilingualConfig uses Enums for layout_mode and style_mode
+            
+            # Create config object
+            b_conf = BilingualConfig()
+            
+            # Apply fields safely
+            if 'layoutMode' in user_config:
+                try: b_conf.layout_mode = LayoutMode(user_config['layoutMode'])
+                except: pass
+            
+            if 'styleMode' in user_config:
+                try: b_conf.style_mode = StyleMode(user_config['styleMode'])
+                except: pass
+                
+            if 'columnGap' in user_config:
+                b_conf.column_gap_percentage = int(user_config['columnGap'])
+                
+            if 'enColor' in user_config:
+                b_conf.original_color = user_config['enColor']
+                
+            if 'esColor' in user_config:
+                b_conf.translation_color = user_config['esColor']
+                
+            # Add to main config
+            config['bilingual'] = b_conf
+            print(f"Applied bilingual config: {b_conf}")
             
         def cancel_check():
             return active_jobs.get(job_id, {}).get('status') == 'cancelled'
@@ -163,6 +195,11 @@ def cancel_job(job_id):
 def index():
     return render_template('index.html')
 
+@app.route('/config', methods=['GET'])
+def config_page():
+    return render_template('config.html')
+
+
 @app.route('/upload', methods=['POST'])
 def upload_files():
     if 'en_file' not in request.files or 'es_file' not in request.files:
@@ -194,8 +231,19 @@ def upload_files():
         'file': None
     }
     
+    # Parse user configuration
+    import json
+    user_config_json = request.form.get('bilingual_config')
+    user_config = {}
+    if user_config_json:
+        try:
+            print(f"Received user config: {user_config_json}")
+            user_config = json.loads(user_config_json)
+        except Exception as e:
+            print(f"Failed to parse user config: {e}")
+
     # Start thread
-    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir, use_local_ai, output_dir))
+    thread = threading.Thread(target=process_job_worker, args=(job_id, en_path, es_path, job_dir, use_local_ai, output_dir, user_config))
     thread.start()
     
     return jsonify({'job_id': job_id})

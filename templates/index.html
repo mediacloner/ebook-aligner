@@ -295,14 +295,79 @@
       button.stop-btn:hover {
         background: #dc2626;
       }
+      /* Configuration Button */
+      .config-button {
+        position: fixed;
+        top: 25px;
+        right: 25px;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+        z-index: 2000;
+        text-decoration: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .config-button:hover {
+        background: rgba(255, 255, 255, 0.25);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+      }
+      .config-button span {
+        font-weight: 600;
+        letter-spacing: 0.3px;
+      }
+
+      /* Preview Tags */
+      .current-settings {
+        margin-top: -10px;
+        margin-bottom: 24px;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px;
+      }
+      .setting-tag {
+        display: inline-flex;
+        align-items: center;
+        background: #f3f4f6;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #4b5563;
+        border: 1px solid #e5e7eb;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
     </style>
   </head>
   <body>
+    <!-- Config Button (Link) -->
+    <a href="/config" class="config-button">
+      ⚙️ <span>Configure Styles</span>
+    </a>
+
     <div class="card-wrapper" id="cardWrapper">
       <!-- FRONT FACE: Single Mode -->
       <div class="card-face card-front">
         <h1>Single Mode</h1>
         <p class="subtitle">Align one book pair at a time</p>
+
+        <div class="current-settings" id="settingsPreview">
+          <!-- Settings tags will appear here -->
+        </div>
 
         <form
           id="uploadForm"
@@ -516,6 +581,73 @@
     <script>
       let batchQueue = [];
 
+      // --- Configuration Logic ---
+      let bilingualConfig = {
+        layoutMode: "below",
+        columnGap: 10,
+        enColor: "#000000",
+        esColor: "#666666",
+        styleMode: "class",
+      };
+
+      const PRESETS = {
+        default: {
+          layoutMode: "below",
+          columnGap: 10,
+          enColor: "#000000",
+          esColor: "#666666",
+          styleMode: "class",
+        },
+        side_by_side: {
+          layoutMode: "side",
+          columnGap: 10,
+          enColor: "#000000",
+          esColor: "#000000",
+          styleMode: "class",
+        },
+        color_coded: {
+          layoutMode: "below",
+          columnGap: 10,
+          enColor: "#000000",
+          esColor: "#555555",
+          styleMode: "inline",
+        },
+        learner_mode: {
+          layoutMode: "side",
+          columnGap: 15,
+          enColor: "#000000",
+          esColor: "#0066cc",
+          styleMode: "inline",
+        },
+      };
+
+      function initConfig() {
+        const saved = localStorage.getItem("epubConfig");
+        if (saved) bilingualConfig = JSON.parse(saved);
+
+        updatePreview();
+      }
+
+      function updatePreview() {
+        const prev = document.getElementById("settingsPreview");
+        if (prev) {
+          prev.innerHTML = `
+                  <span class="setting-tag">📐 ${bilingualConfig.layoutMode}</span>
+                  <span class="setting-tag"><span style="color:${bilingualConfig.enColor}">●</span> EN</span>
+                  <span class="setting-tag"><span style="color:${bilingualConfig.esColor}">●</span> ES</span>
+              `;
+        }
+      }
+
+      // Initialize on load
+      window.addEventListener("load", () => {
+        initConfig();
+        const savedPath = getCookie("last_output_dir");
+        if (savedPath) {
+          syncOutputPaths(savedPath);
+        }
+      });
+
       // --- Cookie Helpers ---
       function setCookie(name, value, days) {
         let expires = "";
@@ -549,14 +681,6 @@
 
         setCookie("last_output_dir", value, 365);
       }
-
-      // Initialize from cookie on load
-      document.addEventListener("DOMContentLoaded", () => {
-        const savedPath = getCookie("last_output_dir");
-        if (savedPath) {
-          syncOutputPaths(savedPath);
-        }
-      });
 
       function toggleFlip() {
         document.getElementById("cardWrapper").classList.toggle("flipped");
@@ -636,6 +760,9 @@
         statusText.innerText = "Uploading files...";
 
         try {
+          // Append Configuration
+          formData.append("bilingual_config", JSON.stringify(bilingualConfig));
+
           const response = await fetch("/upload", {
             method: "POST",
             body: formData,
@@ -846,6 +973,9 @@
           formData.append("en_file", item.enFile);
           formData.append("es_file", item.esFile);
           if (outputDir) formData.append("output_dir", outputDir);
+
+          // Append Configuration for Batch too
+          formData.append("bilingual_config", JSON.stringify(bilingualConfig));
 
           try {
             const response = await fetch("/upload", {

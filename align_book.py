@@ -4739,6 +4739,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
         # CRITICAL: Detect Shared Spanish Files and calculate PROPORTIONAL splits
         # Build mapping: es_abs -> [(idx, en_abs, label), ...]
+        print(f"DEBUG: Building ES file usage map from {len(final_processing_list)} items")
         es_file_usage = {}
         for idx, label, en_abs, es_rel, level in final_processing_list:
             if not es_rel: continue
@@ -4752,8 +4753,13 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 es_file_usage[es_abs] = []
             es_file_usage[es_abs].append((idx, en_abs, label))
         
+        print(f"DEBUG: Found {len(es_file_usage)} unique ES files")
+        for es_path, en_refs in es_file_usage.items():
+            print(f"DEBUG:   {os.path.basename(es_path)}: {len(en_refs)} EN references")
+        
         # Filter to only multi-reference files
         shared_es_files = {k: v for k, v in es_file_usage.items() if len(v) > 1}
+        print(f"DEBUG: After filtering, {len(shared_es_files)} are shared (multiple references)")
         
         if shared_es_files:
             print(f"Detected {len(shared_es_files)} shared Spanish files used by multiple English chapters")

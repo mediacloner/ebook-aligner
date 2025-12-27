@@ -604,88 +604,76 @@ def align_tocs(en_toc, es_toc):
     en_matched = set()
     es_matched = set()
     
-    # 1. Find Anchors (Greedy Best Match)
-    for en in en_items:
-        match = None
+    # GLOBAL BEST MATCH STRATEGY (Stable Marriage Approx)
+    
+    candidates = [] # (score, en_idx, es_idx)
+    
+    for i, en in enumerate(en_items):
+        en_label = en['item']['label']
+        en_norm = normalize_label(en_label)
+        en_level = en['item'].get('level', 1)
         
-        # Debug print for number extraction
-        en_src_debug = en['item']['src']
-        en_num_debug = extract_chapter_number(en_src_debug)
-        # print(f"DEBUG EN Item: '{en['norm']}' Src='{en_src_debug}' Num={en_num_debug}")
-        
-        # Strategy A: Structural Match (Label + Level)
-        if isinstance(en['norm'], tuple):
-            for es in es_items:
-                if es['idx'] in es_matched: continue
-                if es['norm'] == en['norm']:
-                    match = es
-                    break
-                    
-        # Strategy B: String Match (Label only)
-        if not match and isinstance(en['norm'], str) and en['norm']:
-             for es in es_items:
-                if es['idx'] in es_matched: continue
-                if es['norm'] == en['norm']: 
-                    match = es
-                    break
-        
-        # Strategy C: Filename Number Match (Fallback for Splits/No-Labels)
-        if not match:
-             en_src = en['item']['src']
-             en_num = extract_chapter_number(en_src)
+        for j, es in enumerate(es_items):
+             es_label = es['item']['label']
+             es_norm = normalize_label(es_label)
+             es_level = es['item'].get('level', 1)
              
-             if en_num is not None:
-                 for es in es_items:
-                     es_src = es['item']['src']
-                     es_num = extract_chapter_number(es_src)
-                     
-                     # Debug matching attempt
-                     # if es_num is not None and es['idx'] not in es_matched:
-                     #    print(f"DEBUG Check: En#{en_num} ({en_src}) vs Es#{es_num} ({es_src})")
-                     
-                     if es_num == en_num:
-                         if es['idx'] in es_matched:
-                             prev_anchors = [x for x in anchors if x[1]['idx'] == es['idx']]
-                             if not prev_anchors: continue 
-                             
-                             prev_en = prev_anchors[-1][0]
-                             prev_en_src = prev_en['item']['src']
-                             prev_en_num = extract_chapter_number(prev_en_src)
-                             
-                             if prev_en_num == en_num:
-                                 match = es
-                                 break
-                             else:
-                                 continue
-                         else:
-                             match = es
-                             break
-                     
-        if match:
-            # Check Level Match (User Suggestion: prevent mismatch of Parent vs Child)
-            # If Levels diff is > 0, maybe valid if structure differs, but often error.
-            # User specifically asked: "only allow the chapter that don't have parent" (Level 1?)
-            # or "check ... is sure".
+             score = 0
+             
+             # 1. Exact Normalized Match (Highest Priority)
+             if en_norm and en_norm == es_norm:
+                 score = 1.0
+             else:
+                 # 2. Fuzzy Match
+                 import difflib
+                 sim = difflib.SequenceMatcher(None, en_label.lower(), es_label.lower()).ratio()
+                 score = sim
+                 
+             # PENALTIES
+             # Level Mismatch Penalty
+             if abs(en_level - es_level) > 0:
+                 # Strict rejection for mismatch
+                 if score < 0.9: score = 0 
+             
+             # Relative Position Penalty (Keep diagonal)
+             en_pos = i / len(en_items) if en_items else 0
+             es_pos = j / len(es_items) if es_items else 0
+             pos_diff = abs(en_pos - es_pos)
+             if pos_diff > 0.3:
+                 score -= 0.2
+                 
+             if score > 0.3: # Min Threshold
+                candidates.append((score, i, j))
+                
+    # Sort by Score Descending
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    
+    # Assign
+    en_assigned = set()
+    es_assigned = set()
+    matches_map = {} # en_idx -> es_idx
+    
+    for score, i, j in candidates:
+        if i in en_assigned or j in es_assigned:
+            continue
             
-            # Let's enforce strict level matching if available
-            en_level = en['item'].get('level', 1)
-            es_level = match['item'].get('level', 1)
-            
-            level_mismatch = abs(en_level - es_level) > 0
-            
-            # Additional check: If Roman Numeral mismatch (e.g. X vs IX), we should have skipped already via fuzzy check.
-            # But fuzzy might have matched "Chapter" with "Capitulo".
-            
-            if level_mismatch:
-                 print(f"DEBUG: Levels mismatch for '{en['item']['label']}' (L{en_level}) vs '{match['item']['label']}' (L{es_level}). Skipping.")
-                 # Do not add to anchors if levels mismatch
-            else:
-                 anchors.append((en, match))
-                 en_matched.add(en['idx'])
-                 es_matched.add(match['idx'])
-                 # print(f"DEBUG Match Found: En[{en['idx']}] '{en['item']['label']}' -> Es[{match['idx']}] '{match['item']['label']}' (Src: {en['item']['src']} -> {match['item']['src']})")
-
-    # Sort anchors by English index to establish a skeleton
+        matches_map[i] = j
+        en_assigned.add(i)
+        es_assigned.add(j)
+        
+    anchors = []
+    
+    for i, en_item_data in enumerate(en_items):
+        if i in matches_map:
+            es_idx = matches_map[i]
+            anchors.append((en_item_data, es_items[es_idx]))
+        else:
+            # Unmatched EN - Logic requires us to return only matched/anchors? 
+            # Original function returned list of (en, es).
+            # If not matched, we skip it here.
+            pass
+    
+    # Sort by English index to keep order
     anchors.sort(key=lambda x: x[0]['idx'])
     
     # --- FILTER ANCHORS FOR MONOTONICITY (LIS) ---

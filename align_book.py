@@ -3908,12 +3908,22 @@ def filter_to_matching_headers(en_chunks, es_chunks):
 
 
 def process_chapter_pair(args):
-
+    # Unpack args
+    if len(args) == 7:
+        idx, en_path, es_path, es_opf_dir, config, label, chunk_range = args
+    else:
+        # Backward compatibility
+        idx, en_path, es_path, es_opf_dir, config, label = args
+        chunk_range = None
     """
     Worker function to process a single chapter pair IN-PLACE.
     args: (idx, target_path, es_rel, es_opf_dir, config, label)
     """
-    idx, target_path, es_rel, es_opf_dir, config, label = args
+    # The original line `idx, target_path, es_rel, es_opf_dir, config, label = args` is replaced by the if/else block above.
+    # Now, map the new variable names to the old ones for the rest of the function's logic.
+    target_path = en_path
+    es_rel = es_path
+
     print(f"DEBUG: Entering process_chapter_pair for {label}")
     print(f"DEBUG: MAPPING: {os.path.basename(target_path)} <-> {os.path.basename(es_rel) if es_rel else 'None'}")
     
@@ -3995,11 +4005,24 @@ def process_chapter_pair(args):
              config['es'] =  {
                 'header_tags': ['h1', 'h2', 'h3', 'class:chapter-title', 'class:title'],
                 'ignore_classes': [],
-                'ignore_div_classes': []
              }
              
         es_chunks = parse_file(es_rel, SpanishParser, config)
         print(f"DEBUG: {label} - Parsed {len(es_chunks)} ES chunks")
+        
+        # CRITICAL: Apply chunk range if this is a shared Spanish file
+        if chunk_range:
+            position, total_refs = chunk_range
+            total_chunks = len(es_chunks)
+            
+            # Calculate chunk boundaries for this portion
+            chunk_per_ref = total_chunks / total_refs
+            start_idx = int(position * chunk_per_ref)
+            end_idx = int((position + 1) * chunk_per_ref) if position < total_refs - 1 else total_chunks
+            
+            print(f"DEBUG: {label} - Shared file detected, using chunks {start_idx}-{end_idx} (portion {position+1}/{total_refs})")
+            es_chunks = es_chunks[start_idx:end_idx]
+            print(f"DEBUG: {label} - After splitting: {len(es_chunks)} ES chunks for this chapter")
         
         # --- PART TITLE PAGE DETECTION ---
         # If EN page has only headers (part/chapter title page), filter ES to matching headers only.
@@ -4700,25 +4723,52 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         # We need es_toc_dir to resolve es_rel
         es_toc_dir = os.path.dirname(es_toc_path)
         
-        # CRITICAL: Track Spanish files to prevent reuse
-        es_files_processed = set()
-        
+        # CRITICAL: Detect Shared Spanish Files (multiple EN chapters using same ES file)
+        # Build mapping: es_abs -> [(idx, en_abs, label), ...]
+        es_file_usage = {}
         for idx, label, en_abs, es_rel, level in final_processing_list:
             if not es_rel: continue
             
-            # Resolve es_rel (it is relative to ES TOC)
             if not os.path.isabs(es_rel):
                 es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
             else:
                 es_abs = es_rel
             
-            # DUPLICATE CHECK: Skip if this Spanish file already processed
-            if es_abs in es_files_processed:
-                print(f"WARNING: Skipping duplicate Spanish file '{es_rel}' for '{label}' to prevent content reuse")
-                continue
+            if es_abs not in es_file_usage:
+                es_file_usage[es_abs] = []
+            es_file_usage[es_abs].append((idx, en_abs, label))
+        
+        # Filter to only multi-reference files
+        shared_es_files = {k: v for k, v in es_file_usage.items() if len(v) > 1}
+        
+        if shared_es_files:
+            print(f"Detected {len(shared_es_files)} shared Spanish files used by multiple English chapters")
+            for es_abs, en_list in shared_es_files.items():
+                labels = [label for _, _, label in en_list]
+                print(f"  {os.path.basename(es_abs)} -> {labels}")
+        
+        # Build args_list with chunk range info
+        # For shared files, we'll add metadata to indicate chunk splitting is needed
+        for idx, label, en_abs, es_rel, level in final_processing_list:
+            if not es_rel: continue
             
-            es_files_processed.add(es_abs)
-            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label) )
+            if not os.path.isabs(es_rel):
+                es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
+            else:
+                es_abs = es_rel
+            
+            # Check if this ES file is shared
+            chunk_range = None
+            if es_abs in shared_es_files:
+                en_list = shared_es_files[es_abs]
+                # Find this entry's position in the list
+                position = next(i for i, (_, e, _) in enumerate(en_list) if e == en_abs)
+                total_refs = len(en_list)
+                # Store metadata for chunk splitting (will be applied in process_chapter_pair)
+                chunk_range = (position, total_refs)
+                print(f"  {label}: Will use portion {position+1}/{total_refs} of shared file {os.path.basename(es_abs)}")
+            
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range) )
             
         # Replaces the original loop below
         

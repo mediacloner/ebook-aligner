@@ -4887,10 +4887,10 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
     except Exception as e:
         print(f"CRITICAL ERROR in Spine Expansion: {e}. Fallback to TOC only.")
-        # Fallback to original logic if spine parsing fails
-        # (The original loop is what follows this block in the file, but we need to structure it so we don't duplicate.)
-        # Actually, let's just crash/log if this fails because this IS the fix.
-        pass
+        import traceback
+        traceback.print_exc()
+        # args_list will be empty, triggering fallback below
+        args_list = []
 
     if not args_list: 
          # Fallback loop if args_list wasn't populated (e.g. error above handled silently?)

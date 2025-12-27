@@ -4012,17 +4012,22 @@ def process_chapter_pair(args):
         
         # CRITICAL: Apply chunk range if this is a shared Spanish file
         if chunk_range:
-            position, total_refs = chunk_range
+            position, proportions = chunk_range
             total_chunks = len(es_chunks)
             
-            # Calculate chunk boundaries for this portion
-            chunk_per_ref = total_chunks / total_refs
-            start_idx = int(position * chunk_per_ref)
-            end_idx = int((position + 1) * chunk_per_ref) if position < total_refs - 1 else total_chunks
+            # Calculate cumulative boundaries using proportions
+            cumulative = 0
+            start_idx = 0
+            for i in range(position):
+                cumulative += proportions[i]
+            start_idx = int(cumulative * total_chunks)
             
-            print(f"DEBUG: {label} - Shared file detected, using chunks {start_idx}-{end_idx} (portion {position+1}/{total_refs})")
+            cumulative += proportions[position]
+            end_idx = int(cumulative * total_chunks) if position < len(proportions) - 1 else total_chunks
+            
+            print(f"DEBUG: {label} - Shared file detected, using chunks {start_idx}-{end_idx} ({proportions[position]*100:.1f}% of {total_chunks})")
             es_chunks = es_chunks[start_idx:end_idx]
-            print(f"DEBUG: {label} - After splitting: {len(es_chunks)} ES chunks for this chapter")
+            print(f"DEBUG: {label} - After proportional splitting: {len(es_chunks)} ES chunks for this chapter")
         
         # --- PART TITLE PAGE DETECTION ---
         # If EN page has only headers (part/chapter title page), filter ES to matching headers only.
@@ -4723,7 +4728,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         # We need es_toc_dir to resolve es_rel
         es_toc_dir = os.path.dirname(es_toc_path)
         
-        # CRITICAL: Detect Shared Spanish Files (multiple EN chapters using same ES file)
+        # CRITICAL: Detect Shared Spanish Files and calculate PROPORTIONAL splits
         # Build mapping: es_abs -> [(idx, en_abs, label), ...]
         es_file_usage = {}
         for idx, label, en_abs, es_rel, level in final_processing_list:
@@ -4743,12 +4748,33 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
         if shared_es_files:
             print(f"Detected {len(shared_es_files)} shared Spanish files used by multiple English chapters")
+            
+            # For each shared file, calculate proportional chunk ranges based on EN lengths
             for es_abs, en_list in shared_es_files.items():
                 labels = [label for _, _, label in en_list]
                 print(f"  {os.path.basename(es_abs)} -> {labels}")
+                
+                # Pre-parse English files to get chunk counts
+                en_chunk_counts = []
+                for idx, en_abs, label in en_list:
+                    try:
+                        with open(en_abs, 'r', encoding='utf-8') as f:
+                            soup = BeautifulSoup(f.read(), 'lxml')
+                        en_chunks_temp = extract_nodes(soup)
+                        en_chunk_counts.append(len(en_chunks_temp))
+                        print(f"    {label}: {len(en_chunks_temp)} EN chunks")
+                    except:
+                        # Fallback to equal split if parsing fails
+                        en_chunk_counts.append(1)
+                
+                # Calculate proportions
+                total_en_chunks = sum(en_chunk_counts)
+                proportions = [count / total_en_chunks for count in en_chunk_counts]
+                
+                # Store proportional ranges
+                shared_es_files[es_abs] = (en_list, proportions)
         
-        # Build args_list with chunk range info
-        # For shared files, we'll add metadata to indicate chunk splitting is needed
+        # Build args_list with proportional chunk range info
         for idx, label, en_abs, es_rel, level in final_processing_list:
             if not es_rel: continue
             
@@ -4760,13 +4786,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             # Check if this ES file is shared
             chunk_range = None
             if es_abs in shared_es_files:
-                en_list = shared_es_files[es_abs]
+                en_list, proportions = shared_es_files[es_abs]
                 # Find this entry's position in the list
                 position = next(i for i, (_, e, _) in enumerate(en_list) if e == en_abs)
-                total_refs = len(en_list)
-                # Store metadata for chunk splitting (will be applied in process_chapter_pair)
-                chunk_range = (position, total_refs)
-                print(f"  {label}: Will use portion {position+1}/{total_refs} of shared file {os.path.basename(es_abs)}")
+                # Store (position, proportions) for use in process_chapter_pair
+                chunk_range = (position, proportions)
+                print(f"  {label}: Will use {proportions[position]*100:.1f}% of shared file {os.path.basename(es_abs)}")
             
             args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range) )
             

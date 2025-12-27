@@ -1669,6 +1669,30 @@ def is_standalone_numeric_header(text):
     if text.isdigit():
         return True
     
+    # Quick Win #2: Roman numerals
+    # CAUTION: Spanish headers often are JUST "IX". We shouldn't filter them if they are likely headers.
+    # We only filter if they look like minor structure (e.g. small part) AND aren't matching a chapter pattern.
+    # But detecting that here is hard.
+    # checking strict strict roman numeral (I, V, X, L, C, D, M)
+    # If it's just a Roman numeral, it CAN be a header.
+    # Let's REMOVE this aggressive filter for now to let Roman Numeral Constraints handle it.
+    # if re.match(r'^[IVX]+\.?$', text):
+    #     return True
+     
+    # Quick Win #2: All-caps short text (likely headers)
+    # Refined: Only if very short and common words, or completely isolated.
+    # "CHAPTER ONE" -> Keep it (don't return True to skip). We WANT to align headers.
+    # The original intent of this function was to skip "Standalone Numeric Headers" that don't have translations.
+    # But "Chapter One" usually HAS a translation "Capítulo Uno".
+    # "3" might not.
+    
+    # Reverting aggressive filtering for textual headers to prevent data loss.
+    # Only filter pure digits or symbols.
+    
+    # Scene break separators
+    if re.match(r'^[*#\-—═]{3,}$', text):
+        return True
+    
     # Check for roman numerals
     if all(c in 'IVXLCDM' for c in text.upper()) and len(text) <= 10:
         return True
@@ -4081,9 +4105,25 @@ def process_chapter_pair(args):
                          elif re.match(r'^(\d+)\.\s+[A-Z]', txt):
                              m_list = re.match(r'^(\d+)\.', txt)
                              if m_list:
-                                 num = "L" + m_list.group(1) # Prefix to avoid collision with Figure 1
                                  if num not in en_nums: en_nums[num] = []
                                  en_nums[num].append(i)
+                                 
+                         # Quick Win #4: Roman Numeral Anchors
+                         # "Chapter IV" <-> "Capitulo IV" or "IV"
+                         m_rom = re.search(r'\b([IVXLCDM]+)\b\.?', txt.upper())
+                         if m_rom and len(txt) < 40:
+                             # Simple Roman Check
+                             try:
+                                 # Convert to int to normalize (IX == 9, VIIII? no)
+                                 # We just use string for matching if robust
+                                 # Actually, convert to int is safer
+                                 from roman_helper import roman_to_int
+                                 r_val = roman_to_int(m_rom.group(1))
+                                 r_key = f"ROM_{r_val}"
+                                 if r_key not in en_nums: en_nums[r_key] = []
+                                 en_nums[r_key].append(i)
+                             except:
+                                 pass
                               
                      # 2. Find Matches in Spanish (Monotonic)
                      last_en_idx = -1
@@ -4101,6 +4141,19 @@ def process_chapter_pair(args):
                              potential_num = "L" + m_list.group(1)
                              if potential_num in en_nums:
                                  found_num = potential_num
+                                 
+                         # Check for Roman Match
+                         if not found_num and len(es_loop_txt) < 40:
+                             m_rom = re.search(r'\b([IVXLCDM]+)\b\.?', es_loop_txt.upper())
+                             if m_rom:
+                                 try:
+                                     from roman_helper import roman_to_int
+                                     r_val = roman_to_int(m_rom.group(1))
+                                     r_key = f"ROM_{r_val}"
+                                     if r_key in en_nums:
+                                         found_num = r_key
+                                 except:
+                                     pass
                          
                          # Check for Figure match
                          if not found_num:

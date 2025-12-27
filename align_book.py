@@ -1659,6 +1659,10 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
     if not en_node or not es_text:
         return
     
+    # Check if using new layout mode system
+    bilingual_config = config.get('bilingual')
+    use_layout_modes = bilingual_config is not None
+    
     # 0. Pre-check: Extract Images from English Node?
     # User Request: Order should be EN -> ES -> IMG
     # Currently it is EN(with img) -> ES.
@@ -1708,7 +1712,38 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
         
         return en_node  # Return the modified node
             
-    # --- BLOCK MODE (for paragraphs and other elements) ---
+    # --- LAYOUT MODE SYSTEM (for paragraphs and other elements) ---
+    if use_layout_modes:
+        from layout_helpers import inject_layout_mode
+        
+        result_node = inject_layout_mode(soup, en_node, es_text, config)
+        
+        # Handle extracted images
+        if extracted_images:
+            # Create image container
+            img_container = soup.new_tag(en_node.name)
+            img_container.attrs = en_node.attrs.copy()
+            if 'id' in img_container.attrs:
+                del img_container.attrs['id']
+            
+            # Reset margins for image container
+            img_style = img_container.get('style', '')
+            if img_style and not img_style.endswith(';'):
+                img_style += ';'
+            img_container['style'] = img_style + " margin-top: 1em;"
+            
+            for img in extracted_images:
+                img_container.append(img)
+            
+            # Insert after the result node
+            if result_node:
+                result_node.insert_after(img_container)
+            else:
+                en_node.insert_after(img_container)
+        
+        return result_node
+    
+    # --- LEGACY BLOCK MODE (backward compatibility) ---
     # 1. Exact Clone of the Wrapper (p, div, h1, etc.)
     # We create a new tag with the same name
     new_tag = soup.new_tag(en_node.name)
@@ -1798,8 +1833,9 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
             
         # Insert AFTER the Spanish node
         new_tag.insert_after(img_container)
-
+    
     return new_tag
+
 
 def perform_injection(aligned_pairs, config, soup):
     from itertools import groupby
@@ -4270,9 +4306,23 @@ def process_chapter_pair(args):
                          inject_translation(new_en_node, es_text, config, soup)
                          last_node = new_en_node.find_next_sibling()
         
-        # 6. Save In-Place
+        
+        # 6. Inject Interactive Settings Panel & Save In-Place
+        from settings_panel import generate_settings_panel
+        settings_html = generate_settings_panel(config)
+        
+        # Find body tag and inject settings panel
+        if settings_html and soup.body:
+            # Parse settings panel HTML
+            settings_soup = BeautifulSoup(settings_html, 'html.parser')
+            # Insert at beginning of body
+            for element in reversed(list(settings_soup.children)):
+                if element.name:  # Skip text nodes
+                    soup.body.insert(0, element)
+        
         with open(target_path, 'w', encoding='utf-8') as f:
              f.write(str(soup))
+
         
         # Collect images if any (extract from soup check?)
         # For now, we don't need to return images as we are preserving original structure

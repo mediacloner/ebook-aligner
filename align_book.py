@@ -4041,6 +4041,15 @@ def process_chapter_pair(args):
                                  num = m2.group(1)
                                  if num not in en_nums: en_nums[num] = []
                                  en_nums[num].append(i)
+                         
+                         # Quick Win #3: Numbered List anchors ("1. ", "2. ")
+                         # Helps align list structures even if interleaved with text
+                         elif re.match(r'^(\d+)\.\s+[A-Z]', txt):
+                             m_list = re.match(r'^(\d+)\.', txt)
+                             if m_list:
+                                 num = "L" + m_list.group(1) # Prefix to avoid collision with Figure 1
+                                 if num not in en_nums: en_nums[num] = []
+                                 en_nums[num].append(i)
                               
                      # 2. Find Matches in Spanish (Monotonic)
                      last_en_idx = -1
@@ -4050,9 +4059,23 @@ def process_chapter_pair(args):
                          es_loop_txt = c['text'].strip()
                          # Safety:
                          if len(es_loop_txt) > 300 and c.get('type') != 'caption': continue
-                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
-                         if m:
-                             num = m.group(1).rstrip('.:,;- ')
+                         
+                         # Check for Numbered List match ("1. ", "2. ")
+                         found_num = None
+                         m_list = re.match(r'^(\d+)\.\s+[A-Z]', es_loop_txt)
+                         if m_list:
+                             potential_num = "L" + m_list.group(1)
+                             if potential_num in en_nums:
+                                 found_num = potential_num
+                         
+                         # Check for Figure match
+                         if not found_num:
+                             m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*([\d\.\-]+)', es_loop_txt, re.IGNORECASE)
+                             if m:
+                                 found_num = m.group(1).rstrip('.:,;- ')
+                         
+                         if found_num:
+                             num = found_num
                              if num in en_nums:
                                  # Find first valid English match that preserves monotonicity
                                  candidates = en_nums[num]

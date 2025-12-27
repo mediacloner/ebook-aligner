@@ -1051,6 +1051,10 @@ class BaseParser(HTMLParser):
         self.capture_text = False
         self.raw_source = raw_source
         self.line_offsets = []
+        
+        # List State Tracking
+        self.list_stack = [] # Stack of {'tag': 'ol'|'ul', 'count': 0}
+        
         if raw_source:
              self._calculate_offsets()
              
@@ -1370,7 +1374,7 @@ class SpanishParser(BaseParser):
             return
 
     # Block-level tags that should initiate a chunk
-        block_tags = ['p', 'div'] + [f'h{i}' for i in range(1, 7)]
+        block_tags = ['p', 'div', 'li'] + [f'h{i}' for i in range(1, 7)]
         target_tags = set(block_tags + self.rules.get('header_tags', []))
 
         if tag in target_tags:
@@ -1424,9 +1428,39 @@ class SpanishParser(BaseParser):
                 'special_type': special_type,
                 'raw_start_offset': self.get_offset(*self.getpos())
             }
+            
+            # Special Handling for <ol> lists:
+            # If we are inside an <ol>, we should inject the number into the text
+            # so that it aligns with explicit numbered lists in the other language.
+            # (Note: self.list_stack should track 'ol'/'ul' state)
+            # But BaseParser doesn't track list stack well yet. Let's add simple check.
+            # OR: just check if parent tag was ol? No, handle_starttag usage prevents easy parent access without stack.
+            # Assuming 'li' is block tag now.
+            
+            if tag == 'li':
+                 # Hack: Check if we are in an Ordered List. 
+                 # We need to maintain a counter.
+                 # Let's add self.in_ordered_list and self.list_counter to __init__?
+                 # Too invasive.
+                 pass
+            
+
+            if tag in ['ol', 'ul']:
+                self.list_stack.append({'tag': tag, 'count': 0})
+            
+            if tag == 'li' and self.list_stack:
+                parent = self.list_stack[-1]
+                if parent['tag'] == 'ol':
+                     parent['count'] += 1
+                     # Inject Number: "1. "
+                     self.current_chunk['text'] = f"{parent['count']}. "
+            
             self.capture_text = True
 
     def handle_endtag(self, tag):
+        if tag in ['ol', 'ul'] and self.list_stack:
+             self.list_stack.pop()
+
         if self.ignore_section:
             self.ignore_depth -= 1
             if self.ignore_depth == 0:

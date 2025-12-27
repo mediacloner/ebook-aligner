@@ -4012,22 +4012,31 @@ def process_chapter_pair(args):
         
         # CRITICAL: Apply chunk range if this is a shared Spanish file
         if chunk_range:
-            position, proportions = chunk_range
-            total_chunks = len(es_chunks)
-            
-            # Calculate cumulative boundaries using proportions
-            cumulative = 0
-            start_idx = 0
-            for i in range(position):
-                cumulative += proportions[i]
-            start_idx = int(cumulative * total_chunks)
-            
-            cumulative += proportions[position]
-            end_idx = int(cumulative * total_chunks) if position < len(proportions) - 1 else total_chunks
-            
-            print(f"DEBUG: {label} - Shared file detected, using chunks {start_idx}-{end_idx} ({proportions[position]*100:.1f}% of {total_chunks})")
-            es_chunks = es_chunks[start_idx:end_idx]
-            print(f"DEBUG: {label} - After proportional splitting: {len(es_chunks)} ES chunks for this chapter")
+            # Check if it's semantic (direct indices) or proportional
+            if isinstance(chunk_range[0], int) and isinstance(chunk_range[1], int):
+                # Semantic: direct (start, end) indices
+                start_idx, end_idx = chunk_range
+                total_chunks = len(es_chunks)
+                print(f"DEBUG: {label} - Shared file detected (semantic), using chunks {start_idx}-{end_idx}")
+                es_chunks = es_chunks[start_idx:end_idx]
+                print(f"DEBUG: {label} - After semantic splitting: {len(es_chunks)} ES chunks for this chapter")
+            else:
+                # Proportional fallback: (position, proportions)
+                position, proportions = chunk_range
+                total_chunks = len(es_chunks)
+                
+                # Calculate cumulative boundaries using proportions
+                cumulative = 0
+                for i in range(position):
+                    cumulative += proportions[i]
+                start_idx = int(cumulative * total_chunks)
+                
+                cumulative += proportions[position]
+                end_idx = int(cumulative * total_chunks) if position < len(proportions) - 1 else total_chunks
+                
+                print(f"DEBUG: {label} - Shared file detected (proportional), using chunks {start_idx}-{end_idx} ({proportions[position]*100:.1f}% of {total_chunks})")
+                es_chunks = es_chunks[start_idx:end_idx]
+                print(f"DEBUG: {label} - After proportional splitting: {len(es_chunks)} ES chunks for this chapter")
         
         # --- PART TITLE PAGE DETECTION ---
         # If EN page has only headers (part/chapter title page), filter ES to matching headers only.
@@ -4749,32 +4758,95 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         if shared_es_files:
             print(f"Detected {len(shared_es_files)} shared Spanish files used by multiple English chapters")
             
-            # For each shared file, calculate proportional chunk ranges based on EN lengths
+            # For each shared file, find SEMANTIC split points
             for es_abs, en_list in shared_es_files.items():
                 labels = [label for _, _, label in en_list]
                 print(f"  {os.path.basename(es_abs)} -> {labels}")
                 
-                # Pre-parse English files to get chunk counts
-                en_chunk_counts = []
-                for idx, en_abs, label in en_list:
+                # Parse Spanish file ONCE to get all chunks
+                try:
+                    es_chunks_all = parse_file(es_abs, SpanishParser, config)
+                    print(f"    Parsed {len(es_chunks_all)} total ES chunks in shared file")
+                except Exception as e:
+                    print(f"    Error parsing shared file: {e}, falling back to equal split")
+                    # Fallback to equal proportions
+                    total_refs = len(en_list)
+                    proportions = [1.0 / total_refs] * total_refs
+                    shared_es_files[es_abs] = (en_list, proportions, None)
+                    continue
+                
+                # Find split points by matching first paragraphs
+                split_indices = [0]  # First chapter starts at index 0
+                
+                for i in range(1, len(en_list)):
+                    idx_en, en_abs, label_en = en_list[i]
+                    
+                    # Extract first paragraph from this English chapter
                     try:
                         with open(en_abs, 'r', encoding='utf-8') as f:
                             soup = BeautifulSoup(f.read(), 'lxml')
                         en_chunks_temp = extract_nodes(soup)
-                        en_chunk_counts.append(len(en_chunks_temp))
-                        print(f"    {label}: {len(en_chunks_temp)} EN chunks")
-                    except:
-                        # Fallback to equal split if parsing fails
-                        en_chunk_counts.append(1)
+                        
+                        if not en_chunks_temp:
+                            print(f"    {label_en}: No EN chunks found, using proportional fallback")
+                            split_indices.append(int(i * len(es_chunks_all) / len(en_list)))
+                            continue
+                        
+                        # Get first meaningful paragraph (skip headers)
+                        first_para = None
+                        for chunk in en_chunks_temp[:5]:  # Check first 5 chunks
+                            if chunk.get('type') == 'std' and len(chunk.get('text', '').strip()) > 20:
+                                first_para = chunk['text'].strip()
+                                break
+                        
+                        if not first_para:
+                            print(f"    {label_en}: No meaningful first paragraph, using proportional fallback")
+                            split_indices.append(int(i * len(es_chunks_all) / len(en_list)))
+                            continue
+                        
+                        # Find best matching Spanish chunk using simple text matching
+                        # (Semantic embeddings would be better but this is faster and simpler)
+                        best_match_idx = 0
+                        best_score = 0
+                        
+                        # Search starting from previous split point
+                        search_start = split_indices[-1]
+                        for j in range(search_start, min(search_start + 200, len(es_chunks_all))):
+                            es_text = es_chunks_all[j].get('text', '').strip()
+                            if len(es_text) < 20:
+                                continue
+                            
+                            # Simple similarity: check if first words match
+                            en_words = first_para.lower().split()[:10]
+                            es_words = es_text.lower().split()[:10]
+                            
+                            # Count matching words (simple heuristic)
+                            matches = sum(1 for w in en_words if w in es_words)
+                            score = matches / len(en_words) if en_words else 0
+                            
+                            if score > best_score:
+                                best_score = score
+                                best_match_idx = j
+                        
+                        split_indices.append(best_match_idx)
+                        print(f"    {label_en}: Split point at chunk {best_match_idx} (score: {best_score:.2f})")
+                        
+                    except Exception as e:
+                        print(f"    {label_en}: Error finding split point: {e}, using proportional fallback")
+                        split_indices.append(int(i * len(es_chunks_all) / len(en_list)))
                 
-                # Calculate proportions
-                total_en_chunks = sum(en_chunk_counts)
-                proportions = [count / total_en_chunks for count in en_chunk_counts]
+                # Convert split indices to chunk ranges
+                chunk_ranges_list = []
+                for i in range(len(en_list)):
+                    start = split_indices[i]
+                    end = split_indices[i+1] if i+1 < len(split_indices) else len(es_chunks_all)
+                    chunk_ranges_list.append((start, end))
+                    print(f"    {en_list[i][2]}: chunks {start}-{end} ({end-start} chunks)")
                 
-                # Store proportional ranges
-                shared_es_files[es_abs] = (en_list, proportions)
+                # Store ranges for this shared file
+                shared_es_files[es_abs] = (en_list, None, chunk_ranges_list)
         
-        # Build args_list with proportional chunk range info
+        # Build args_list with semantic chunk range info
         for idx, label, en_abs, es_rel, level in final_processing_list:
             if not es_rel: continue
             
@@ -4783,15 +4855,21 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             else:
                 es_abs = es_rel
             
-            # Check if this ES file is shared
+            # Check if this ES file is shared (has semantic split points)
             chunk_range = None
             if es_abs in shared_es_files:
-                en_list, proportions = shared_es_files[es_abs]
-                # Find this entry's position in the list
-                position = next(i for i, (_, e, _) in enumerate(en_list) if e == en_abs)
-                # Store (position, proportions) for use in process_chapter_pair
-                chunk_range = (position, proportions)
-                print(f"  {label}: Will use {proportions[position]*100:.1f}% of shared file {os.path.basename(es_abs)}")
+                en_list, proportions_unused, chunk_ranges_list = shared_es_files[es_abs]
+                
+                if chunk_ranges_list:  # Semantic splitting worked
+                    # Find this entry's position in the list
+                    position = next(i for i, (_, e, _) in enumerate(en_list) if e == en_abs)
+                    start, end = chunk_ranges_list[position]
+                    chunk_range = (start, end)
+                    print(f"  {label}: Will use chunks {start}-{end} of shared file {os.path.basename(es_abs)}")
+                elif proportions_unused:  # Fallback to proportions
+                    position = next(i for i, (_, e, _) in enumerate(en_list) if e == en_abs)
+                    chunk_range = (position, proportions_unused)
+                    print(f"  {label}: Will use {proportions_unused[position]*100:.1f}% of shared file {os.path.basename(es_abs)}")
             
             args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range) )
             

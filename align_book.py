@@ -4047,14 +4047,6 @@ def process_chapter_pair(args):
                                  # Find first valid English match that preserves monotonicity
                                  candidates = en_nums[num]
                                  best_match = -1
-                                 # --- PRE-PROCESSING: MERGE SENTENCE FRAGMENTS ---
-                                 # Fix: "where Mrs. ⁂" + "Jones was..." → "where Mrs. ⁂ Jones was..."
-                                 from fragment_merger import merge_sentence_fragments
-                                 
-                                 print(f"DEBUG: {label} - Before merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
-                                 en_filtered = merge_sentence_fragments(en_filtered)
-                                 es_filtered = merge_sentence_fragments(es_filtered)
-                                 print(f"DEBUG: {label} - After merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
                                  
                                  # --- HARD CONSTRAINTS ---
                                  for candidate in candidates:

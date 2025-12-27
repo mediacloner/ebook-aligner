@@ -1699,7 +1699,6 @@ def is_standalone_numeric_header(text):
     
     # Pattern 2: Optional "Chapter/Part/Section" + number + optional punctuation
     # "Chapter 4", "CHAPTER 4", "Part IV", "4."
-    import re
     pattern = r'^(?:chapter|part|section|ch\.?|pt\.?)\s*(?:\d+|[ivxlcdm]+)[\.:\s]*$'
     if re.match(pattern, text, re.IGNORECASE):
         return True

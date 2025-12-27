@@ -4765,10 +4765,14 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                 
                 # Parse Spanish file ONCE to get all chunks
                 try:
+                    print(f"    Attempting to parse shared ES file: {es_abs}")
                     es_chunks_all = parse_file(es_abs, SpanishParser, config)
-                    print(f"    Parsed {len(es_chunks_all)} total ES chunks in shared file")
+                    print(f"    Successfully parsed {len(es_chunks_all)} total ES chunks in shared file")
                 except Exception as e:
-                    print(f"    Error parsing shared file: {e}, falling back to equal split")
+                    print(f"    ERROR parsing shared file {os.path.basename(es_abs)}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    print(f"    Falling back to equal split")
                     # Fallback to equal proportions
                     total_refs = len(en_list)
                     proportions = [1.0 / total_refs] * total_refs

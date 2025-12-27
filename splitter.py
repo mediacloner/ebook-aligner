@@ -13,30 +13,37 @@ class Splitter:
 
     def split_sentences(self, text):
         """
-        Splits text into sentences.
+        Splits text into sentences using pySBD for better accuracy with abbreviations.
         """
         if not text:
             return []
         
-        # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start
-        pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
-        
-        parts = re.split(pattern, text)
-        sentences = []
-        current_sent = ""
-        
-        for i, part in enumerate(parts):
-            if i % 2 == 0:
-                current_sent += part
-            else:
-                current_sent += part
-                sentences.append(current_sent.strip())
-                current_sent = ""
-                
-        if current_sent and current_sent.strip():
-            sentences.append(current_sent.strip())
+        try:
+            import pysbd
+            seg = pysbd.Segmenter(language="en", clean=False)
+            sentences = seg.segment(text)
+            return [s.strip() for s in sentences if s.strip()]
+        except ImportError:
+            print("Warning: pySBD not found, falling back to regex splitting")
+            # Fallback: End punctuation + optional quotes + whitespace + Next is Upper/Start
+            pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-]))'
             
-        return sentences
+            parts = re.split(pattern, text)
+            sentences = []
+            current_sent = ""
+            
+            for i, part in enumerate(parts):
+                if i % 2 == 0:
+                    current_sent += part
+                else:
+                    current_sent += part
+                    sentences.append(current_sent.strip())
+                    current_sent = ""
+                    
+            if current_sent and current_sent.strip():
+                sentences.append(current_sent.strip())
+                
+            return sentences
 
     def process_pair(self, en_text, es_text, debug=False):
         """

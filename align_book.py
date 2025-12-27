@@ -4007,6 +4007,16 @@ def process_chapter_pair(args):
                      
                  should_filter = False # Force it to run
                  print(f"DEBUG: Processing Ch Pair. should_filter={should_filter}")
+                 
+                 # --- PRE-PROCESSING: MERGE SENTENCE FRAGMENTS ---
+                 # Fix: "where Mrs. ⁂" + "Jones was..." → "where Mrs. ⁂ Jones was..."
+                 from fragment_merger import merge_sentence_fragments
+                 
+                 print(f"DEBUG: {label} - Before merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
+                 en_filtered = merge_sentence_fragments(en_filtered)
+                 es_filtered = merge_sentence_fragments(es_filtered)
+                 print(f"DEBUG: {label} - After merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
+                 
                  # --- HEURISTIC: PRE-CALCULATE CONSTRAINTS ---
                  # If captions are present, we want to force-align them based on explicit numbering.
                  constraints = []

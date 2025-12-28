@@ -4929,17 +4929,16 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                             continue
                         
                         # FIX: If this English file is tiny (e.g., Part title page),
-                        # don't let it steal half the Spanish content. Give it a
-                        # proportionally small slice based on its actual content.
+                        # don't let it steal content from the previous chapter.
+                        # Skip adding a split point - the part title detection logic
+                        # in process_chapter_pair will handle filtering it to headers only.
                         en_chunk_count = len([c for c in en_chunks_temp if c.get('type') != 'image'])
                         if en_chunk_count <= 5:
-                            # Tiny file (e.g., Part title page) - give it minimal Spanish content
-                            # Just use the end of the shared file for this tiny section
-                            minimal_slice = max(2, en_chunk_count)  # At least 2 chunks for title matching
-                            split_idx = len(es_chunks_all) - minimal_slice
-                            split_idx = max(split_idx, split_indices[-1] + 1)  # Ensure monotonic
+                            # Tiny file - give it the last chunk only (for fallback)
+                            # The Part Title detection in process_chapter_pair will filter properly
+                            split_idx = len(es_chunks_all)  # Point to end, giving it nothing
                             split_indices.append(split_idx)
-                            print(f"    {label_en}: Tiny file ({en_chunk_count} chunks), assigning minimal slice at chunk {split_idx}")
+                            print(f"    {label_en}: Tiny file ({en_chunk_count} chunks), skipping (split at end: {split_idx})")
                             continue
                         
                         # Get first meaningful paragraph (skip headers)

@@ -4523,6 +4523,67 @@ def process_chapter_pair(args):
                  print(f"Neural alignment failed: {e}. Fallback to heuristic.")
                  aligned_pairs = align_chunks(en_chunks, es_chunks)
                  
+             # --- RESCUE PASS: Handle Reordered Paragraphs ---
+             # Detect English paragraphs with empty/missing translations and
+             # search for semantic matches in unused Spanish chunks
+             try:
+                 # Collect used Spanish text (already assigned)
+                 used_es_text = set()
+                 orphaned_pairs = []
+                 
+                 for pair in aligned_pairs:
+                     if pair.get('es') and pair['es'].strip():
+                         used_es_text.add(pair['es'].strip()[:50])  # Use prefix as key
+                     elif pair.get('en') and len(pair['en'].strip()) > 30:
+                         # This EN paragraph has no translation - mark as orphaned
+                         orphaned_pairs.append(pair)
+                 
+                 if orphaned_pairs and len(orphaned_pairs) <= 20:  # Don't rescue too many
+                     print(f"DEBUG: {label} - Rescue pass: {len(orphaned_pairs)} orphaned EN paragraphs")
+                     
+                     # Build list of unused Spanish chunks
+                     unused_es = []
+                     for c in es_filtered:
+                         txt = c.get('text', '').strip()
+                         if txt and txt[:50] not in used_es_text and len(txt) > 30:
+                             unused_es.append(c)
+                     
+                     if unused_es:
+                         print(f"DEBUG: {label} - {len(unused_es)} unused ES chunks available for rescue")
+                         
+                         # Embed orphaned EN and unused ES
+                         orphan_texts = [{'text': p['en']} for p in orphaned_pairs]
+                         orphan_embs = aligner.embed_chunks(orphan_texts)
+                         unused_embs = aligner.embed_chunks(unused_es)
+                         
+                         from scipy.spatial.distance import cosine
+                         import numpy as np
+                         
+                         used_unused_indices = set()
+                         
+                         for i, pair in enumerate(orphaned_pairs):
+                             best_j = -1
+                             best_sim = 0.65  # Threshold for rescue match
+                             
+                             for j, es_chunk in enumerate(unused_es):
+                                 if j in used_unused_indices:
+                                     continue
+                                 sim = 1 - cosine(orphan_embs[i], unused_embs[j])
+                                 if sim > best_sim:
+                                     best_sim = sim
+                                     best_j = j
+                             
+                             if best_j >= 0:
+                                 # Found a match - update the pair
+                                 pair['es'] = unused_es[best_j]['text']
+                                 used_unused_indices.add(best_j)
+                                 print(f"  Rescued: '{pair['en'][:30]}...' -> '{pair['es'][:30]}...' (sim={best_sim:.2f})")
+                         
+                         print(f"DEBUG: {label} - Rescued {len(used_unused_indices)} orphaned paragraphs")
+                         
+             except Exception as e:
+                 print(f"Rescue pass failed: {e}")
+                
              # --- SPLITTING LOGIC ---
              try:
                  # Local import removed to prevent UnboundLocalError

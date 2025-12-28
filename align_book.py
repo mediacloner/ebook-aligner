@@ -503,6 +503,48 @@ def save_cleaned_opf(soup, path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(content)
 
+def pre_split_long_paragraphs(chunks, threshold=400):
+    """
+    Split long paragraphs (>threshold chars) into sentences BEFORE alignment.
+    This enables better matching when EN has merged paragraphs but ES has them split.
+    
+    Each resulting chunk retains a reference to the original node for injection.
+    """
+    result = []
+    
+    for chunk in chunks:
+        text = chunk.get('text', '').strip()
+        chunk_type = chunk.get('type', 'std')
+        
+        # Only split standard paragraphs, not headers/captions
+        if len(text) > threshold and chunk_type == 'std':
+            # Split into sentences using regex
+            # Match sentence endings followed by whitespace
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z""\'])', text)
+            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+            
+            if len(sentences) > 1:
+                # Create a chunk for each sentence, preserving original node reference
+                for i, sent in enumerate(sentences):
+                    # Robust filter: Skip short chunks that are just asterisms or punctuation
+                    if len(sent.strip()) < 5 and (u'⁂' in sent or '*' in sent):
+                        continue
+                    new_chunk = chunk.copy()
+                    new_chunk['text'] = sent
+                    new_chunk['is_pre_split'] = True
+                    new_chunk['pre_split_idx'] = i
+                    new_chunk['pre_split_count'] = len(sentences)
+                    # Keep reference to original node for injection
+                    if 'node' in chunk:
+                        new_chunk['original_node'] = chunk['node']
+                    result.append(new_chunk)
+                continue
+        
+        # Chunk doesn't need splitting - add as-is
+        result.append(chunk)
+    
+    return result
+
 def merge_bleeding_blocks(aligner, blocks):
     """
     Detects if the end of block N bleeds into the start of block N+1.
@@ -1460,7 +1502,7 @@ class SpanishParser(BaseParser):
                 caption_classes = self.rules.get('caption_classes', [])
                 citation_sub = self.rules.get('citation_substring', 'Citas')
 
-                if any(c in classes for c in caption_classes):
+                if any(c in classes for c in caption_classes) or any('pie_foto' in c.lower() for c in classes):
                     chunk_type = 'caption'
                 elif any(citation_sub in c for c in classes):
                     chunk_type = 'std'
@@ -4081,24 +4123,10 @@ def process_chapter_pair(args):
 
 
 
-        # --- PRE-PROCESS: Split Massive English Chunks ---
-        # Same rationale as Spanish: Granularity mismatch causes alignment drifts/merges.
-        temp_splitter_en = Splitter()
-        new_en_chunks = []
-        for c in en_chunks:
-            txt = c['text']
-            # Only split standard text, preserve headers/captions structure if small enough
-            # But here we just use length check. 
-            if len(txt) > 600 and c['type'] == 'std':
-                parts = temp_splitter_en.split_sentences(txt)
-                for part in parts:
-                     if not part.strip(): continue
-                     new_c = c.copy()
-                     new_c['text'] = part
-                     new_en_chunks.append(new_c)
-            else:
-                new_en_chunks.append(c)
-        en_chunks = new_en_chunks
+        # --- PRE-PROCESS: Split Massive English Chunks into Sentences ---
+        # This enables better matching when EN source has merged paragraphs but ES has them split.
+        # Lower threshold (400) catches more cases than original (600).
+        en_chunks = pre_split_long_paragraphs(en_chunks, threshold=400)
         print(f"DEBUG: {label} - Split EN chunks to {len(en_chunks)}")
         
         # 3. Parse Spanish Content
@@ -4170,10 +4198,22 @@ def process_chapter_pair(args):
         for c in es_chunks:
             txt = c['text']
             if len(txt) > 600:
+                # Force split of footnotes attached to punctuation (e.g. "end.[148]")
+                # This ensures they become standalone chunks and get filtered below.
+                txt = re.sub(r'([.?!])(\[\d+\])', r'\1 \2', txt)
+                # Also force split AFTER footnote if followed by Capital (e.g. "[148] Otro")
+                txt = re.sub(r'(\[\d+\])\s+(?=[A-ZÁÉÍÓÚÑ¡¿])', r'\1. ', txt)
+                
                 # Split into sentences
                 parts = temp_splitter.split_sentences(txt)
                 for part in parts:
                     if not part.strip(): continue
+                    # Robust filter: Filter out standalone footnote markers or asterisms
+                    # If it's short (< 10 chars) and looks like a ref [123] or asterism
+                    clean_part = part.strip()
+                    if len(clean_part) < 10 and (re.search(r'\[\d+\]', clean_part) or u'⁂' in clean_part):
+                        continue
+                        
                     # Clone the chunk metadata but update text
                     new_c = c.copy()
                     new_c['text'] = part
@@ -4254,6 +4294,10 @@ def process_chapter_pair(args):
                  en_filtered = merge_sentence_fragments(en_filtered)
                  es_filtered = merge_sentence_fragments(es_filtered)
                  print(f"DEBUG: {label} - After merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
+                 
+                 # Assign original indices for constraint mapping
+                 for i, c in enumerate(en_filtered): c['orig_idx'] = i 
+                 for i, c in enumerate(es_filtered): c['orig_idx'] = i
                  
                  # --- HEURISTIC: PRE-CALCULATE CONSTRAINTS ---
                  # If captions are present, we want to force-align them based on explicit numbering.
@@ -4365,7 +4409,10 @@ def process_chapter_pair(args):
                                          best_match = candidate
                                          break
                                  if best_match != -1:
-                                     constraints.append((best_match, j, {'soft': False}))
+                                     # Use SOFT constraints for figures.
+                                     # This handles cases where figure/text order is swapped between languages.
+                                     # If hard, a swap forces text misalignment. If soft, semantic text match can win.
+                                     constraints.append((en_filtered[best_match]['orig_idx'], c['orig_idx'], {'soft': True}))
 
                                      last_en_idx = best_match
 

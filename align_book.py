@@ -66,7 +66,8 @@ PROFILES = {
             ],
             'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado', 'caption'],
             'ignore_tags': [],
-            'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo'],
+            'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo', 'Notas-Pie_Notas_Pie', '_idFootnote'],
+            'ignore_div_classes': ['_idFootnotes'],
             'merge_headers': True,
             'header_merge_trigger': 'Capitulos_Capitulo_1_Linea',
             'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo']

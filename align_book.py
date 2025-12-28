@@ -1,6 +1,6 @@
 import argparse
 import sys
-print(f"DEBUG: Loading align_book.py from {__file__}")
+print(f"DEBUG: Loading align_book.py v2024.12.28.1019 from {__file__}")
 import os
 import time
 import re
@@ -4266,7 +4266,7 @@ def process_chapter_pair(args):
                          # Safety: Captions shouldn't be huge paragraphs, unless explicit caption type
                          if len(txt) > 300 and c.get('type') != 'caption': continue 
 
-                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)\s*([\d\.\-]+)', txt, re.IGNORECASE)
+                         m = re.match(r'^(?:Figure|Figura|Table|Tabla|Cuadro|Grafico|Map|Mapa|Fig\.?)[\s:]*([0-9]+)', txt, re.IGNORECASE)
                          if m:
                              num = m.group(1).rstrip('.:,;- ') # Aggr. Normalize
                              if num not in en_nums: en_nums[num] = []
@@ -4274,7 +4274,7 @@ def process_chapter_pair(args):
                          # Also match numbered captions like "3. A speculative reconstruction..."
                          # when chunk is already classified as 'caption' (from class="figure")
                          elif c.get('type') == 'caption':
-                             m2 = re.match(r'^(\d+)\.\s+\S', txt)
+                             m2 = re.match(r'^(\d+)\.?\s+\S', txt)
                              if m2:
                                  num = m2.group(1)
                                  if num not in en_nums: en_nums[num] = []
@@ -4285,6 +4285,7 @@ def process_chapter_pair(args):
                          elif re.match(r'^(\d+)\.\s+[A-Z]', txt):
                              m_list = re.match(r'^(\d+)\.', txt)
                              if m_list:
+                                 num = m_list.group(1) # Assign num here
                                  if num not in en_nums: en_nums[num] = []
                                  en_nums[num].append(i)
                                  
@@ -4305,6 +4306,8 @@ def process_chapter_pair(args):
                              except:
                                  pass
                               
+                     print(f"DEBUG: {label} - EN figure numbers: {en_nums}")
+                     
                      # 2. Find Matches in Spanish (Monotonic)
                      last_en_idx = -1
                       
@@ -4433,7 +4436,7 @@ def process_chapter_pair(args):
                              last_es_idx = -1
                              for en_pos, (en_idx, en_hdr) in enumerate(en_headers):
                                  best_es_idx = -1
-                                 best_sim = 0.6  # Threshold for header match
+                                 best_sim = 0.5  # Threshold for header match (lowered for cross-lingual)
                                  
                                  for es_pos, (es_idx, es_hdr) in enumerate(es_headers):
                                      if es_idx <= last_es_idx:  # Maintain monotonicity
@@ -4646,7 +4649,6 @@ def process_chapter_pair(args):
                              
                              # Split ES into sentences
                              es_text = pair['es']
-                             import re
                              es_sentences = re.split(r'(?<=[.!?])\s+', es_text)
                              es_sentences = [s.strip() for s in es_sentences if s.strip()]
                              

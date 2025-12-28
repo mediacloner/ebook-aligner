@@ -4411,11 +4411,47 @@ def process_chapter_pair(args):
                                  for s_i in s_idxs:
                                       # Make constraint HARD when reference is unique (1:1 match)
                                       # This prevents DTW from misaligning paragraphs that discuss same figure
-                                      is_unique = len(e_idxs) == 1 and len(s_idxs) == 1
-                                      constraints.append((e_i, s_i, {'soft': not is_unique, 'allow_col_merge': True}))
-                     
+                                       is_unique = len(e_idxs) == 1 and len(s_idxs) == 1
+                                       constraints.append((e_i, s_i, {'soft': not is_unique, 'allow_col_merge': True}))
+                      
+                     # --- HEADER-TO-HEADER CONSTRAINTS ---
+                     # Prevent headers from being misaligned to content paragraphs
+                     en_headers = [(i, c) for i, c in enumerate(en_filtered) if c.get('type') == 'header']
+                     es_headers = [(i, c) for i, c in enumerate(es_filtered) if c.get('type') == 'header']
+                      
+                     if en_headers and es_headers:
+                         # Embed headers for semantic matching
+                         try:
+                             en_hdr_texts = [{'text': c['text']} for _, c in en_headers]
+                             es_hdr_texts = [{'text': c['text']} for _, c in es_headers]
+                             en_hdr_embs = aligner.embed_chunks(en_hdr_texts)
+                             es_hdr_embs = aligner.embed_chunks(es_hdr_texts)
+                             
+                             from scipy.spatial.distance import cosine
+                             
+                             # For each EN header, find best matching ES header
+                             last_es_idx = -1
+                             for en_pos, (en_idx, en_hdr) in enumerate(en_headers):
+                                 best_es_idx = -1
+                                 best_sim = 0.6  # Threshold for header match
+                                 
+                                 for es_pos, (es_idx, es_hdr) in enumerate(es_headers):
+                                     if es_idx <= last_es_idx:  # Maintain monotonicity
+                                         continue
+                                     sim = 1 - cosine(en_hdr_embs[en_pos], es_hdr_embs[es_pos])
+                                     if sim > best_sim:
+                                         best_sim = sim
+                                         best_es_idx = es_idx
+                                 
+                                 if best_es_idx >= 0:
+                                     constraints.append((en_idx, best_es_idx, {'soft': False}))
+                                     last_es_idx = best_es_idx
+                                     print(f"  Header constraint: '{en_hdr['text'][:25]}...' -> ES idx {best_es_idx} (sim={best_sim:.2f})")
+                         except Exception as e:
+                             print(f"Header constraint generation failed: {e}")
+                      
                      with open("/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/constraints.log", "a") as f:
-                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs)\n")
+                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs + Headers)\n")
                          for c in constraints: f.write(f"  {c}\n")
 
                  # Run Alignment on Filtered Sequences
@@ -4583,6 +4619,83 @@ def process_chapter_pair(args):
                          
              except Exception as e:
                  print(f"Rescue pass failed: {e}")
+              
+             # --- REDISTRIBUTION PASS: Handle Merged Paragraphs ---
+             # When one ES paragraph contains translations for multiple EN paragraphs,
+             # split ES into sentences and redistribute to consecutive orphaned EN paragraphs
+             try:
+                 # Find pairs where ES is abnormally long compared to EN
+                 redistribution_needed = False
+                 for i, pair in enumerate(aligned_pairs):
+                     en_len = len(pair.get('en', '').strip())
+                     es_len = len(pair.get('es', '').strip())
+                     
+                     # ES is 3x+ longer than EN suggests merged content
+                     if en_len > 30 and es_len > en_len * 3:
+                         # Check if next pairs are orphaned (no ES translation)
+                         orphan_count = 0
+                         for j in range(i + 1, min(i + 10, len(aligned_pairs))):
+                             if not aligned_pairs[j].get('es', '').strip():
+                                 orphan_count += 1
+                             else:
+                                 break
+                         
+                         if orphan_count >= 2:  # At least 2 consecutive orphans
+                             redistribution_needed = True
+                             print(f"DEBUG: {label} - Redistribution candidate at index {i}: ES ({es_len}) is {es_len/en_len:.1f}x longer than EN ({en_len}), {orphan_count} orphans follow")
+                             
+                             # Split ES into sentences
+                             es_text = pair['es']
+                             import re
+                             es_sentences = re.split(r'(?<=[.!?])\s+', es_text)
+                             es_sentences = [s.strip() for s in es_sentences if s.strip()]
+                             
+                             if len(es_sentences) >= orphan_count + 1:
+                                 # Collect EN paragraphs to redistribute to
+                                 en_targets = [pair]  # Include current pair
+                                 for j in range(i + 1, min(i + orphan_count + 1, len(aligned_pairs))):
+                                     en_targets.append(aligned_pairs[j])
+                                 
+                                 # Embed EN paragraphs and ES sentences
+                                 en_texts = [{'text': t.get('en', '')} for t in en_targets]
+                                 es_sent_dicts = [{'text': s} for s in es_sentences]
+                                 
+                                 en_embs = aligner.embed_chunks(en_texts)
+                                 es_embs = aligner.embed_chunks(es_sent_dicts)
+                                 
+                                 from scipy.spatial.distance import cosine
+                                 
+                                 # Greedy assignment: for each EN, find best matching consecutive ES sentences
+                                 # Use monotonic matching to preserve order
+                                 es_pointer = 0
+                                 for k, target in enumerate(en_targets):
+                                     if es_pointer >= len(es_sentences):
+                                         break
+                                     
+                                     # Find how many ES sentences belong to this EN
+                                     best_end = es_pointer + 1
+                                     best_sim = 0
+                                     
+                                     for end in range(es_pointer + 1, min(es_pointer + 4, len(es_sentences) + 1)):
+                                         combined = ' '.join(es_sentences[es_pointer:end])
+                                         combined_emb = aligner.embed_chunks([{'text': combined}])[0]
+                                         sim = 1 - cosine(en_embs[k], combined_emb)
+                                         
+                                         if sim > best_sim:
+                                             best_sim = sim
+                                             best_end = end
+                                     
+                                     # Assign to target
+                                     assigned_text = ' '.join(es_sentences[es_pointer:best_end])
+                                     target['es'] = assigned_text
+                                     print(f"  Redistributed: '{target['en'][:25]}...' <- '{assigned_text[:25]}...' (sim={best_sim:.2f})")
+                                     es_pointer = best_end
+                             
+                 if redistribution_needed:
+                     print(f"DEBUG: {label} - Redistribution pass completed")
+                     
+             except Exception as e:
+                 print(f"Redistribution pass failed: {e}")
                 
              # --- SPLITTING LOGIC ---
              try:

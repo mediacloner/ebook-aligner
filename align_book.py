@@ -1944,14 +1944,26 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
 
 
 def perform_injection(aligned_pairs, config, soup):
-    from itertools import groupby
+    from collections import defaultdict
+    
+    print(f"DEBUG: perform_injection called with {len(aligned_pairs)} pairs")
+    
     def get_node_id(p): return id(p.get('node'))
     
-    for node_id, group_iter in groupby(aligned_pairs, get_node_id):
-        group = list(group_iter)
+    # CRITICAL FIX: Pre-group ALL pairs by node_id instead of using groupby.
+    # groupby only groups CONSECUTIVE items, but split chunks can become
+    # non-consecutive after alignment, causing later pairs to overwrite earlier ones.
+    node_groups = defaultdict(list)
+    seen_order = []  # Preserve first-occurrence order for stable processing
+    for p in aligned_pairs:
+        nid = get_node_id(p)
+        if nid not in node_groups:
+            seen_order.append(nid)
+        node_groups[nid].append(p)
+    
+    for node_id in seen_order:
+        group = node_groups[node_id]
         if not group: continue
-        
-        if len(group) == 0: continue
         
         original_node = group[0].get('node')
         if not original_node: continue
@@ -4170,6 +4182,8 @@ def process_chapter_pair(args):
                 new_es_chunks.append(c)
         es_chunks = new_es_chunks
         print(f"DEBUG: {label} - Split ES chunks to {len(es_chunks)}")
+        
+        print(f"DEBUG: {label} - use_neural={config.get('use_neural')}")
              
         if config.get('use_neural'):
              try:
@@ -4912,6 +4926,20 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                         if not en_chunks_temp:
                             print(f"    {label_en}: No EN chunks found, using proportional fallback")
                             split_indices.append(int(i * len(es_chunks_all) / len(en_list)))
+                            continue
+                        
+                        # FIX: If this English file is tiny (e.g., Part title page),
+                        # don't let it steal half the Spanish content. Give it a
+                        # proportionally small slice based on its actual content.
+                        en_chunk_count = len([c for c in en_chunks_temp if c.get('type') != 'image'])
+                        if en_chunk_count <= 5:
+                            # Tiny file (e.g., Part title page) - give it minimal Spanish content
+                            # Just use the end of the shared file for this tiny section
+                            minimal_slice = max(2, en_chunk_count)  # At least 2 chunks for title matching
+                            split_idx = len(es_chunks_all) - minimal_slice
+                            split_idx = max(split_idx, split_indices[-1] + 1)  # Ensure monotonic
+                            split_indices.append(split_idx)
+                            print(f"    {label_en}: Tiny file ({en_chunk_count} chunks), assigning minimal slice at chunk {split_idx}")
                             continue
                         
                         # Get first meaningful paragraph (skip headers)

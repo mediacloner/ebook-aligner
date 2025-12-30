@@ -259,6 +259,66 @@ def enrich_toc_from_content(toc, base_dir):
             # print(f"Error enriching {rel_path}: {e}")
             pass
 
+
+def extract_figure_number(text):
+    """Extract figure number from caption text."""
+    m = re.match(r'^(?:Figure|Figura|Table|Tabla|Fig\.?)\s*(\d+)', text.strip(), re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+def clone_match_rescue(aligned_pairs, es_chunks, aligner, label=""):
+    """Clone & Match: Find ES text for unmatched EN headers/captions."""
+    try:
+        unmatched = []
+        for p in aligned_pairs:
+            t = (p.get('tag') or '').lower()
+            classes = ' '.join(p.get('classes', []))
+            # Check headers (h1-h6) 
+            is_hdr = t.startswith('h') and len(t)==2
+            # Check figcaption elements AND caption-related classes
+            is_cap = 'figcaption' in t or 'caption' in classes.lower() or 'illcap' in classes.lower()
+            if (is_hdr or is_cap) and not p.get('es','').strip():
+                if len(p.get('en','').strip()) > 5: unmatched.append(p)
+        if not unmatched: return
+        print(f"DEBUG: {label} - Clone&Match: {len(unmatched)} unmatched")
+        es_sents = []
+        for c in es_chunks:
+            txt = c.get('text','').strip()
+            if txt:
+                for s in re.split(r'(?<=[.!?])\s+', txt):
+                    if len(s.strip())>10: es_sents.append(s.strip())
+        if not es_sents: return
+        es_embs = aligner.embed_chunks([{'text':s} for s in es_sents])
+        from scipy.spatial.distance import cosine
+        for p in unmatched:
+            # IMPROVEMENT: Try direct figure number match first
+            en_fig_num = extract_figure_number(p['en'])
+            if en_fig_num:
+                found_direct = False
+                for j, es_sent in enumerate(es_sents):
+                    es_fig_num = extract_figure_number(es_sent)
+                    if es_fig_num == en_fig_num:
+                        p['es'] = es_sent
+                        print(f"  Clone&Match (FigNum): '{p['en'][:20]}' -> Fig {en_fig_num}")
+                        found_direct = True
+                        break
+                if found_direct:
+                    continue
+            
+            en_emb = aligner.embed_chunks([{'text':p['en']}])[0]
+            # IMPROVEMENT: Lower threshold for short captions
+            threshold = 0.45 if len(p['en']) < 100 else 0.55
+            best_j,best_sim = -1, threshold
+            for j in range(len(es_sents)):
+                sim = 1-cosine(en_emb, es_embs[j])
+                if sim > best_sim: best_sim,best_j = sim,j
+            if best_j >= 0:
+                p['es'] = es_sents[best_j]
+                print(f"  Clone&Match: '{p['en'][:20]}' (sim={best_sim:.2f})")
+    except Exception as e:
+        print(f"Clone&Match failed: {e}")
+
 def roman_to_int(s):
     if not s: return 0
     rom_val = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
@@ -574,6 +634,11 @@ def pre_split_long_paragraphs(chunks, threshold=400):
     for chunk in chunks:
         text = chunk.get('text', '').strip()
         chunk_type = chunk.get('type', 'std')
+        
+        # NEVER split captions - they should remain atomic
+        if chunk_type == 'caption':
+            result.append(chunk)
+            continue
         
         # Only split standard paragraphs, not headers/captions
         if len(text) > threshold and chunk_type == 'std':
@@ -4387,12 +4452,13 @@ def process_chapter_pair(args):
                                          best_match = candidate
                                          break
                                  if best_match != -1:
-                                     # Use SOFT constraints for figures.
-                                     # This handles cases where figure/text order is swapped between languages.
-                                     # If hard, a swap forces text misalignment. If soft, semantic text match can win.
-                                     constraints.append((en_filtered[best_match]['orig_idx'], c['orig_idx'], {'soft': True}))
+                                      # IMPROVEMENT: Use HARD constraints for caption-to-caption pairs
+                                      # This prevents DTW from overriding explicit figure number matches.
+                                      # Keep SOFT for mixed types where figure/text order may be swapped.
+                                      is_caption_pair = en_filtered[best_match].get('type') == 'caption' and c.get('type') == 'caption'
+                                      constraints.append((en_filtered[best_match]['orig_idx'], c['orig_idx'], {'soft': not is_caption_pair}))
 
-                                     last_en_idx = best_match
+                                      last_en_idx = best_match
 
                      # --- SECONDARY ANCHORS (References in Text) ---
                      # "as seen in Figure 22" <-> "como en la figura 22"
@@ -4647,6 +4713,8 @@ def process_chapter_pair(args):
                          
              except Exception as e:
                  print(f"Rescue pass failed: {e}")
+             # --- HEADER/CAPTION CLONE & MATCH PASS ---
+             clone_match_rescue(aligned_pairs, es_chunks, aligner, label)
               
              # --- REDISTRIBUTION PASS: Handle Merged Paragraphs ---
              # When one ES paragraph contains translations for multiple EN paragraphs,

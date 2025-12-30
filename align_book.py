@@ -17,6 +17,8 @@ from datetime import datetime
 from difflib import SequenceMatcher
 from collections import Counter
 import json
+import numpy as np
+from scipy.spatial.distance import cdist
 from bs4 import BeautifulSoup
 import warnings
 from bs4 import XMLParsedAsHTMLWarning
@@ -199,6 +201,63 @@ def parse_toc(ncx_path):
                 pass # Failed to sniff {content}: {e}
 
     return nav_points
+
+def enrich_toc_from_content(toc, base_dir):
+    """
+    Scans the source files for each TOC item to find subtitles (dates)
+    that might be missing from the NCX label.
+    """
+    for item in toc:
+        if not item['src']: continue
+        
+        # Resolve path
+        rel_path = item['src'].split('#')[0]
+        full_path = os.path.join(base_dir, rel_path)
+        
+        if not os.path.exists(full_path):
+            continue
+        
+        try:
+            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                # Read first 3KB - subtitles are usually at top
+                content = f.read(3000)
+            
+            # print(f"Scanned {rel_path}: {len(content)} bytes") # excessive
+            
+            # Regex for subtitles
+            # Match elements with "subtitulo" or "subtitle" in class
+            matches = re.findall(r'<(h[2-3]|p)[^>]*class="[^"]*subtitul[^"]*"[^>]*>(.*?)</\1>', content, re.IGNORECASE | re.DOTALL)
+            
+            if matches:
+                pass # print(f"Found subtitle matches in {rel_path}: {matches}")
+            
+            extracted_subs = []
+            for tag, text in matches:
+                clean = re.sub(r'<[^>]+>', '', text).strip()
+                if clean and len(clean) < 50:
+                    extracted_subs.append(clean)
+            
+            # If nothing found via class, look for loose dates in ANY h2/h3
+            if not extracted_subs:
+                headers = re.findall(r'<(h[2-3])[^>]*>(.*?)</\1>', content, re.IGNORECASE | re.DOTALL)
+                for tag, text in headers:
+                     clean = re.sub(r'<[^>]+>', '', text).strip()
+                     # Check if looks like date
+                     if re.search(r'\d{4}', clean) and len(clean) < 50:
+                         extracted_subs.append(clean)
+
+            if extracted_subs:
+                # Append to label
+                # Avoid dupes
+                existing = item['label'].lower()
+                to_add = [s for s in extracted_subs if s.lower() not in existing]
+                if to_add:
+                    item['label'] = f"{item['label']} ({', '.join(to_add)})"
+                    # print(f"Enriched TOC: {item['label']}")
+
+        except Exception as e:
+            # print(f"Error enriching {rel_path}: {e}")
+            pass
 
 def roman_to_int(s):
     if not s: return 0
@@ -619,34 +678,44 @@ def merge_bleeding_blocks(aligner, blocks):
             
     return merged 
 
-def align_tocs(en_toc, es_toc):
+def align_tocs(en_toc, es_toc, aligner=None):
     """
-    Aligns chapters using a hybrid 'Anchor and Fill' strategy.
-    Returns list of (label, en_src, es_src).
-    Includes unmatched items from both sides (paired with None) to ensure no content is lost.
+    Aligns chapters using a hybrid 'Anchor and Fill' strategy with Iterative Gap Filling.
+    1. Identify High-Confidence Anchors (> 0.85).
+    2. Fill gaps between anchors with lower threshold candidates (> 0.4).
     """
     en_items = []
     for i, item in enumerate(en_toc):
         norm = normalize_label(item['label'])
         raw = item['label'].lower().strip()
-        # Don't skip empty labels - we'll use filename matching for them
         en_items.append({'idx': i, 'item': item, 'norm': norm, 'raw':  raw})
 
     es_items = []
     for i, item in enumerate(es_toc):
         norm = normalize_label(item['label'])
         raw = item['label'].lower().strip()
-        # Filter Ignored Items (but not empty labels)
         if raw in ['tabla de contenido', 'contenido', 'página de título', 'cubierta', 'derechos de autor']: continue
         es_items.append({'idx': i, 'item': item, 'norm': norm, 'raw': raw})
     
-    anchors = []
-    en_matched = set()
-    es_matched = set()
-    
-    # GLOBAL BEST MATCH STRATEGY (Stable Marriage Approx)
-    
-    candidates = [] # (score, en_idx, es_idx)
+    # Pre-compute semantic similarity matrix
+    semantic_sim_matrix = None
+    if aligner and en_items and es_items:
+        print("Using Neural Aligner for TOC matching...")
+        try:
+            en_texts = [x['item']['label'] or "Chapter" for x in en_items]
+            es_texts = [x['item']['label'] or "Capitulo" for x in es_items]
+            
+            en_embs = aligner.embed_chunks([{'text': t} for t in en_texts])
+            es_embs = aligner.embed_chunks([{'text': t} for t in es_texts])
+            
+            dists = cdist(en_embs, es_embs, metric='cosine')
+            semantic_sim_matrix = 1 - dists
+        except Exception as e:
+            print(f"Neural TOC alignment preparation failed: {e}")
+            semantic_sim_matrix = None
+
+    # --- SCORE CALCULATION ---
+    all_candidates = [] # (score, en_idx, es_idx)
     
     for i, en in enumerate(en_items):
         en_label = en['item']['label']
@@ -658,208 +727,117 @@ def align_tocs(en_toc, es_toc):
              es_norm = normalize_label(es_label)
              es_level = es['item'].get('level', 1)
              
-             score = 0
+             score = 0.0
              
-             # 1. Filename-based matching for empty labels
              if not en['raw'] and not es['raw']:
-                 # Both labels are empty - use position-based matching primarily
-                 # This handles cases where filename numbers have inconsistent offsets
-                 # (e.g., content0011 -> Sec0009, content0012 -> Sec0010)
-                 
-                 # Position matching: chapters at same relative position should match
+                 # Empty labels: Position Match
                  en_pos = i / len(en_items) if len(en_items) > 0 else 0
                  es_pos = j / len(es_items) if len(es_items) > 0 else 0
                  pos_diff = abs(en_pos - es_pos)
-                 
-                 # High score for items at same position
-                 if pos_diff < 0.05:  # Within 5% position
-                     score = 0.95
-                 elif pos_diff < 0.15:  # Within 15% position  
-                     score = 0.8
-                 else:
-                     score = max(0.3, 0.8 - (pos_diff * 2))  # Decay with distance
-                     
-             # 2. Exact Normalized Match (Highest Priority for non-empty labels)
+                 if pos_diff < 0.05: score = 0.95
+                 elif pos_diff < 0.15: score = 0.8
+                 else: score = max(0.3, 0.8 - (pos_diff * 2))
              elif en_norm and en_norm == es_norm:
                  score = 1.0
              else:
-                 # 3. Fuzzy Match
-                 import difflib
                  sim = difflib.SequenceMatcher(None, en_label.lower(), es_label.lower()).ratio()
                  score = sim
                  
-             # PENALTIES
-             # Level Mismatch Penalty
+                 # Neural Boost
+                 if semantic_sim_matrix is not None:
+                     sem_score = semantic_sim_matrix[i, j]
+                     if sem_score > score:
+                         if sem_score > 0.8: score = sem_score
+                         else: score = (score + sem_score) / 2
+            
+             # --- HARD CONSTRAINT: DATE MISMATCH ---
+             if isinstance(en_norm, tuple) and isinstance(es_norm, tuple):
+                 # Check if they are both date chapters
+                 if en_norm[0] == 'date-chapter' and es_norm[0] == 'date-chapter':
+                     if en_norm != es_norm:
+                         score = 0.0 # Force mismatch for different dates
+            
+             # Level Penalty
              if abs(en_level - es_level) > 0:
-                 # Strict rejection for mismatch
                  if score < 0.9: score = 0 
              
              # Relative Position Penalty (Keep diagonal)
              en_pos = i / len(en_items) if en_items else 0
              es_pos = j / len(es_items) if es_items else 0
              pos_diff = abs(en_pos - es_pos)
-             if pos_diff > 0.3:
-                 score -= 0.2
+             if pos_diff > 0.4: score -= 0.3
                  
-             if score > 0.3: # Min Threshold
-                candidates.append((score, i, j))
-                
-    # Sort by Score Descending
-    candidates.sort(key=lambda x: x[0], reverse=True)
+             if score > 0.1:
+                all_candidates.append({'score': score, 'en': i, 'es': j})
+
+    # --- STAGE 1: HIGH CONFIDENCE ANCHORS ---
+    candidates_sorted = sorted(all_candidates, key=lambda x: x['score'], reverse=True)
     
-    # Assign
     en_assigned = set()
     es_assigned = set()
     matches_map = {} # en_idx -> es_idx
     
-    for score, i, j in candidates:
-        if i in en_assigned or j in es_assigned:
-            continue
-            
+    # High Threshold for initial anchoring
+    HIGH_THRESHOLD = 0.85
+    
+    for cand in candidates_sorted:
+        if cand['score'] < HIGH_THRESHOLD: break
+        
+        i, j = cand['en'], cand['es']
+        if i in en_assigned or j in es_assigned: continue
+        
+        # Monotonicity Check (LIS-lite): 
+        # Only accept if consistent with existing strong anchors?
+        # Actually, let's just take highest scores first.
+        # But we MUST filter by LIS later.
+        
         matches_map[i] = j
         en_assigned.add(i)
         es_assigned.add(j)
         
-    anchors = []
-    
-    for i, en_item_data in enumerate(en_items):
-        if i in matches_map:
-            es_idx = matches_map[i]
-            anchors.append((en_item_data, es_items[es_idx]))
-        else:
-            # Unmatched EN - Logic requires us to return only matched/anchors? 
-            # Original function returned list of (en, es).
-            # If not matched, we skip it here.
-            pass
-    
-    # Sort by English index to keep order
-    anchors.sort(key=lambda x: x[0]['idx'])
-    
-    # --- FILTER ANCHORS FOR MONOTONICITY (LIS) ---
-    # We need to find the Longest Increasing Subsequence of Spanish indices.
-    # Anchors that violate the sequence are likely mismatches (e.g. Front Note <-> Back Note).
-    
-    if anchors:
-        es_indices = [x[1]['idx'] for x in anchors]
-        
-        # Standard LIS algorithm O(N log N) or O(N^2) - N is small here
-        # We need to retrieve the actual items, not just length.
-        
-        # Simple O(N^2) approach for reconstruction
-        n = len(es_indices)
-        # dp[i] = (length, predecessor_index)
-        dp = [(1, -1)] * n
-        
-        for i in range(1, n):
-            for j in range(i):
-                if es_indices[j] < es_indices[i]:
-                    if dp[j][0] + 1 > dp[i][0]:
-                        dp[i] = (dp[j][0] + 1, j)
-                        
-        # Find max length
-        max_len_idx = -1
-        max_len = 0
-        for i in range(n):
-            if dp[i][0] > max_len:
-                max_len = dp[i][0]
-                max_len_idx = i
-                
-        # Reconstruct path
-        lis_indices = []
-        curr = max_len_idx
-        while curr != -1:
-            lis_indices.append(curr)
-            curr = dp[curr][1]
-            
-        lis_indices.reverse()
-        
-        # Filter anchors
-        valid_anchors = [anchors[i] for i in lis_indices]
-        
-        if len(valid_anchors) < len(anchors):
-            print(f"Refined Anchors via LIS: {len(anchors)} -> {len(valid_anchors)} (Removed outliers)")
-            
-        anchors = valid_anchors
+    # --- RECURSIVE BEST-FIRST ALIGNMENT ---
+    # Strictly enforces monotonicity while maximizing score sum.
+    final_pairs_map = {} 
 
-    final_pairs = []
-    
-    # 2. Fill Gaps
-    last_en_idx = -1
-    # Add a sentinel anchor at the end to handle trailing items
-    # CAUTION: If we used N-to-1 mapping, we can't assume 1-to-1 gaps.
-    # But the gap fill logic simply zips what's between anchors.
-    # If consecutive anchors map [En1->Es1, En2->Es1], the gap between En1 and En2 is empty.    
-    # --- Phase 2: Fill Gaps Between Anchors ---
-    # Gaps are unmatched EN/ES items between consecutive anchors.
-    # We pair them linearly (zip-like) BUT with strict duplicate prevention.
-    final_pairs = []
-    last_en_idx = -1
-    last_es_idx = -1
-    
-    # CRITICAL: Track ALL used ES sources to prevent duplication
-    used_es_sources = set()
-    
-    # Pre-populate with anchor ES sources
-    for anchor_en, anchor_es in anchors:
-        # Only add if it's a real item, not a sentinel
-        if 'src' in anchor_es['item']:
-            used_es_sources.add(anchor_es['item']['src'])
-    
-    sentinel_en = {'idx': len(en_items), 'item': {'label': 'SENTINEL_EN', 'src': None, 'level': 0}}
-    sentinel_es = {'idx': len(es_items), 'item': {'label': 'SENTINEL_ES', 'src': None, 'level': 0}}
-    anchors.append((sentinel_en, sentinel_es))
+    def recursive_align(en_start, en_end, es_start, es_end):
+        if en_start >= en_end or es_start >= es_end:
+            return
 
-    for anchor_en, anchor_es in anchors:
-        current_en_idx = anchor_en['idx']
-        current_es_idx = anchor_es['idx']
+        # Find best candidate strictly within this block
+        best_cand = None
+        best_score = -1
         
-        gap_en = [x for x in en_items if last_en_idx < x['idx'] < current_en_idx and x['idx'] not in en_assigned]
-        gap_es = [x for x in es_items if last_es_idx < x['idx'] < current_es_idx and x['idx'] not in es_assigned]
+        for cand in all_candidates:
+            if (en_start <= cand['en'] < en_end and es_start <= cand['es'] < es_end):
+                if cand['score'] > best_score:
+                    best_score = cand['score']
+                    best_cand = cand
         
-        # STRICT PAIRING: Only pair if we have BOTH EN and ES, and ES is NOT already used
-        for k in range(min(len(gap_en), len(gap_es))):
-            en_item = gap_en[k]
-            es_item = gap_es[k]
-            
-            en_src = en_item['item']['src']
+        if best_score < 0.4: return
+
+        final_pairs_map[best_cand['en']] = best_cand['es']
+        recursive_align(en_start, best_cand['en'], es_start, best_cand['es'])
+        recursive_align(best_cand['en'] + 1, en_end, best_cand['es'] + 1, es_end)
+
+    recursive_align(0, len(en_items), 0, len(es_items))
+    
+    final_pairs = []
+    for i, en_item in enumerate(en_items):
+        label = en_item['item']['label']
+        en_src = en_item['item']['src']
+        level = en_item['item'].get('level', 0)
+        
+        if i in final_pairs_map:
+            es_idx = final_pairs_map[i]
+            es_item = es_items[es_idx]
             es_src = es_item['item']['src']
-            
-            # DUPLICATE CHECK
-            if es_src in used_es_sources:
-                # This ES source was already used (by an anchor or earlier gap item)
-                # Leave EN unmatched rather than duplicate
-                final_pairs.append((en_item['item']['label'], en_src, None, en_item['item'].get('level', 0)))
-                continue
-            
-            # Valid 1-to-1 pairing
-            used_es_sources.add(es_src)
-            label = en_item['item']['label']
-            level = en_item['item'].get('level', 0)
             final_pairs.append((label, en_src, es_src, level))
-        
-        # Handle EXCESS English chapters (more EN than ES in gap)
-        for k in range(min(len(gap_en), len(gap_es)), len(gap_en)):
-            en_item = gap_en[k]
-            final_pairs.append((en_item['item']['label'], en_item['item']['src'], None, en_item['item'].get('level', 0)))
-        
-        # Handle EXCESS Spanish chapters (more ES than EN in gap)
-        # These are orphaned Spanish content - we can't align them
-        for k in range(min(len(gap_en), len(gap_es)), len(gap_es)):
-            es_item = gap_es[k]
-            es_src = es_item['item']['src']
-            if es_src not in used_es_sources:
-                used_es_sources.add(es_src)
-                final_pairs.append((es_item['item']['label'], None, es_src, es_item['item'].get('level', 0)))
-             
-        # Add the Anchor itself (if not sentinel)
-        if current_en_idx < len(en_items) and current_es_idx < len(es_items):
-             level = anchor_en['item'].get('level', 0)
-             final_pairs.append((anchor_en['item']['label'], anchor_en['item']['src'], anchor_es['item']['src'], level))
-             
-        last_en_idx = current_en_idx
-        last_es_idx = current_es_idx
-        
+        else:
+            final_pairs.append((label, en_src, None, level))
+    
     return final_pairs
+
+
 
 def align_by_spine(en_base, es_base, en_toc_path, es_toc_path):
     """
@@ -4897,7 +4875,13 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
 
     en_toc = parse_toc(en_toc_path)
     es_toc = parse_toc(es_toc_path)
-    pairs = align_tocs(en_toc, es_toc)
+    
+    # Enrichment: improve matching by finding subtitles/dates in content
+    enrich_toc_from_content(en_toc, os.path.dirname(en_toc_path))
+    enrich_toc_from_content(es_toc, os.path.dirname(es_toc_path))
+    
+    # Use CACHED_ALIGNER if available to improve TOC alignment
+    pairs = align_tocs(en_toc, es_toc, aligner=CACHED_ALIGNER)
     print(f"Identified {len(pairs)} chapters to align.")
     
     # Fallback: Detect if TOC alignment failed (most EN chapters have no ES match)

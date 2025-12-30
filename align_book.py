@@ -4862,11 +4862,15 @@ def process_chapter_pair(args):
                          # Clear attributes that shouldn't be duplicated? IDs?
                          if new_en_node.has_attr('id'): del new_en_node['id']
                          
-                         last_node.insert_after(new_en_node)
-                         
+                         if last_node:
+                             last_node.insert_after(new_en_node)
+                         else:
+                             # At the end of the container, just append
+                             if original_node.parent:
+                                 original_node.parent.append(new_en_node)
+                        
                          inject_translation(new_en_node, es_text, config, soup)
                          last_node = new_en_node.find_next_sibling()
-        
         
 
         

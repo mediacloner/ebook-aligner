@@ -1620,12 +1620,8 @@ class SpanishParser(BaseParser):
 
     def finish_chunk(self):
         # Override to perform text-based classification before finalizing
-        if self.current_chunk and self.current_chunk['type'] == 'std':
-             text = self.current_chunk['text'].strip()
-             # Check for "Figura X" pattern
-             # We match "Figura" followed by a number
-             if re.match(r'^Figura\s+\d+', text, re.IGNORECASE):
-                 self.current_chunk['type'] = 'caption'
+        # Type upgrade is now handled in process_chapter_pair using extract_figure_number
+        pass
                  
         super().finish_chunk()
 
@@ -1722,10 +1718,8 @@ def extract_nodes(soup):
         chunk_type = 'std'
         if tag.startswith('h'):
             chunk_type = 'header'
-        # Detect captions via CSS class (figure/figura) OR text patterns
+        # Detect captions via CSS class (figure/figura)
         elif any(c in ['figure', 'figura', 'figura1', 'caption'] for c in classes):
-            chunk_type = 'caption'
-        elif re.match(r'^(?:Figure|Figura|Table|Tabla|Box|Map|Mapa|Fig\.?)\s*\d+\s*[:\.\s]', text, re.IGNORECASE):
             chunk_type = 'caption'
         # Numbered captions starting with just "N." (e.g. "3. A speculative reconstruction...")
         elif re.match(r'^\d+\.\s+\S', text) and len(text) < 500:
@@ -4337,6 +4331,23 @@ def process_chapter_pair(args):
                  en_filtered = merge_sentence_fragments(en_filtered)
                  es_filtered = merge_sentence_fragments(es_filtered)
                  print(f"DEBUG: {label} - After merge: EN={len(en_filtered)}, ES={len(es_filtered)}")
+                 
+                 # --- PRE-PROCESSING: UPGRADE CHUNK TYPES FOR FIGURE CAPTIONS ---
+                 # Use extract_figure_number to detect figure numbers and upgrade type to 'caption'
+                 # This ensures consistent typing across languages without hardcoding patterns in parsers
+                 for c in en_filtered:
+                     if c.get('type') == 'std':
+                         fig_num = extract_figure_number(c['text'])
+                         if fig_num:
+                             c['type'] = 'caption'
+                             print(f"DEBUG: {label} - Upgraded EN chunk to caption: '{c['text'][:40]}...'")
+                 
+                 for c in es_filtered:
+                     if c.get('type') == 'std':
+                         fig_num = extract_figure_number(c['text'])
+                         if fig_num:
+                             c['type'] = 'caption'
+                             print(f"DEBUG: {label} - Upgraded ES chunk to caption: '{c['text'][:40]}...'")
                  
                  # Assign original indices for constraint mapping
                  for i, c in enumerate(en_filtered): c['orig_idx'] = i 

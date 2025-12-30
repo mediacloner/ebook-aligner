@@ -124,11 +124,22 @@ class NeuralAligner:
         
         for i in range(1, n):
             for j in range(1, m):
-                choices = [
-                    acc[i-1, j-1], # Match
-                    acc[i-1, j],   # En advances, Es stays (merge En)
-                    acc[i, j-1]    # Es advances, En stays (merge Es)
-                ]
+                # Option 0: Match (Diagonal)
+                match_cost = acc[i-1, j-1]
+                
+                # Option 1: Vertical (En advances, Es stays / Merge En)
+                vert_cost = acc[i-1, j]
+                
+                # Option 2: Horizontal (Es advances, En stays / Merge Es)
+                # This implies En[i] maps to Es[j-1] AND Es[j].
+                # We want to PENALIZE this if Es[j] is a pre-split chunk (should be 1:1).
+                horiz_cost = acc[i, j-1]
+                if es_chunks[j].get('is_pre_split', False):
+                    # Add significant penalty to discourage merging pre-split Spanish chunks
+                    # D values are usually < 1.0, so 5.0 is a strong deterrent
+                    horiz_cost += 5.0
+                
+                choices = [match_cost, vert_cost, horiz_cost]
                 best_idx = np.argmin(choices)
                 acc[i, j] = D[i, j] + choices[best_idx]
                 path_matrix[i, j] = best_idx
@@ -257,24 +268,31 @@ class NeuralAligner:
             block_en = {i}
             block_es = set(related_es)
             
-            # Expand block until stable
-            while True:
-                initial_size = len(block_en) + len(block_es)
-                
-                # Add all En that map to any in block_es (excluding already processed)
-                for es_idx in list(block_es):
-                    for en_idx in es_to_en[es_idx]:
-                        if en_idx not in processed_en:
-                            block_en.add(en_idx)
+            # CHECK: If this chunk is pre-split, do NOT expand the block
+            # Pre-split chunks should maintain 1:1 alignment with their translations
+            is_presplit_en = en_chunks[i].get('is_pre_split', False)
+            is_presplit_es = any(es_chunks[j].get('is_pre_split', False) for j in related_es if j < m)
+            
+            # Only expand if NOT pre-split
+            if not is_presplit_en and not is_presplit_es:
+                # Expand block until stable
+                while True:
+                    initial_size = len(block_en) + len(block_es)
                     
-                # Add all Es that map to any in block_en (excluding already processed)
-                for en_idx in list(block_en):
-                    for es_idx in en_to_es[en_idx]:
-                        if es_idx not in processed_es:
-                            block_es.add(es_idx)
-                    
-                if len(block_en) + len(block_es) == initial_size:
-                    break
+                    # Add all En that map to any in block_es (excluding already processed)
+                    for es_idx in list(block_es):
+                        for en_idx in es_to_en[es_idx]:
+                            if en_idx not in processed_en:
+                                block_en.add(en_idx)
+                        
+                    # Add all Es that map to any in block_en (excluding already processed)
+                    for en_idx in list(block_en):
+                        for es_idx in en_to_es[en_idx]:
+                            if es_idx not in processed_es:
+                                block_es.add(es_idx)
+                        
+                    if len(block_en) + len(block_es) == initial_size:
+                        break
             
             # Sort and store (filter out any processed indices that slipped in)
             sorted_en = sorted([x for x in block_en if x not in processed_en])

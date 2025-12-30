@@ -1956,7 +1956,7 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
     # 3. Add Span for Styling
     # User Request: "add a span to put grey color in text"
     # Check config for classes if needed
-    span_class = "es-translation"
+    span_class = "es-trans"
     
     span = soup.new_tag("span")
     span['class'] = span_class
@@ -4225,40 +4225,15 @@ def process_chapter_pair(args):
             print(f"DEBUG: {label} - Filtered ES to {len(es_chunks)} header chunks")
         
         # --- PRE-PROCESS: Split Massive Spanish Chunks ---
-        # If a Spanish chunk is huge (e.g. > 600 chars), it likely contains merged paragraphs/headers.
-        # We split it to give the aligner better granularity.
-        
-        # Instantiate Splitter for this pre-pass (Splitter is imported class)
-        temp_splitter = Splitter() 
-        
-        new_es_chunks = []
-        for c in es_chunks:
-            txt = c['text']
-            if len(txt) > 600:
-                # Force split of footnotes attached to punctuation (e.g. "end.[148]")
-                # This ensures they become standalone chunks and get filtered below.
-                txt = re.sub(r'([.?!])(\[\d+\])', r'\1 \2', txt)
-                # Also force split AFTER footnote if followed by Capital (e.g. "[148] Otro")
-                txt = re.sub(r'(\[\d+\])\s+(?=[A-ZÁÉÍÓÚÑ¡¿])', r'\1. ', txt)
-                
-                # Split into sentences
-                parts = temp_splitter.split_sentences(txt)
-                for part in parts:
-                    if not part.strip(): continue
-                    # Robust filter: Filter out standalone footnote markers or asterisms
-                    # If it's short (< 10 chars) and looks like a ref [123] or asterism
-                    clean_part = part.strip()
-                    if len(clean_part) < 10 and (re.search(r'\[\d+\]', clean_part) or u'⁂' in clean_part):
-                        continue
-                        
-                    # Clone the chunk metadata but update text
-                    new_c = c.copy()
-                    new_c['text'] = part
-                    new_es_chunks.append(new_c)
-            else:
-                new_es_chunks.append(c)
-        es_chunks = new_es_chunks
-        print(f"DEBUG: {label} - Split ES chunks to {len(es_chunks)}")
+        # Apply the same pre-splitting logic as English to ensure consistent behavior.
+        # This fixes issues like Sapiens where Spanish paragraphs combine multiple English sentences.
+        print(f"DEBUG: {label} - BEFORE split: {len(es_chunks)} ES chunks")
+        for i, c in enumerate(es_chunks[:5]):  # Show first 5
+            print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
+        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=400)
+        print(f"DEBUG: {label} - AFTER split: {len(es_chunks)} ES chunks")
+        for i, c in enumerate(es_chunks[:10]):  # Show first 10 after split
+            print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
         
         print(f"DEBUG: {label} - use_neural={config.get('use_neural')}")
              
@@ -5516,7 +5491,7 @@ if __name__ == "__main__":
                        help='Language for left column in side-by-side mode (default: english)')
     parser.add_argument('--original-color', type=str, default=None,
                        help='Color for original English text (e.g., #000000 or black)')
-    parser.add_argument('--translation-color', type=str, default=None,
+    parser.add_argument('--translation-color', type=str, default='grey',
                        help='Color for Spanish translation (e.g., #555555 or grey)')
     parser.add_argument('--preset', type=str, default=None,
                        choices=['default', 'side_by_side', 'color_coded', 'spanish_first', 'spanish_only', 'learner_mode'],

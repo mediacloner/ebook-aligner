@@ -64,7 +64,8 @@ PROFILES = {
                 'Capitulos_Capitulo_Numero', 
                 'Capitulos_Capitulo_1_Linea', 
                 'Subcapitulos_subcapitulo', 
-                'Subcapitulos_Subcapitulo'
+                'Subcapitulos_Subcapitulo',
+                'tith', 'title', 'titulo', 'tit'
             ],
             'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado', 'caption'],
             'ignore_tags': [],
@@ -72,7 +73,7 @@ PROFILES = {
             'ignore_div_classes': ['_idFootnotes'],
             'merge_headers': True,
             'header_merge_trigger': 'Capitulos_Capitulo_1_Linea',
-            'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo']
+            'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo', 'tith', 'title', 'titulo', 'tit']
         }
     }
 }
@@ -4215,6 +4216,18 @@ def process_chapter_pair(args):
                 print(f"DEBUG: {label} - Shared file detected (proportional), using chunks {start_idx}-{end_idx} ({proportions[position]*100:.1f}% of {total_chunks})")
                 es_chunks = es_chunks[start_idx:end_idx]
                 print(f"DEBUG: {label} - After proportional splitting: {len(es_chunks)} ES chunks for this chapter")
+        
+        # --- PRE-PROCESS: Cleanup Empty ES Chunks ---
+        # Sapiens often has empty <p> tags (indent) between Number and Title.
+        # Removing them allows header merging to work.
+        es_chunks = [c for c in es_chunks if c.get('text', '').strip() or c.get('type') != 'std']
+        
+        # --- PRE-PROCESS: Merge Consecutive Headers for Spanish ---
+        # Useful for cases like Sapiens where Number and Title are split (h3 + p.tith)
+        es_conf = config.get('es', {})
+        if es_conf.get('merge_headers'):
+             es_chunks = merge_consecutive_headers(es_chunks)
+             print(f"DEBUG: {label} - Merged ES headers, count is now {len(es_chunks)}")
         
         # --- PART TITLE PAGE DETECTION ---
         # If EN page has only headers (part/chapter title page), filter ES to matching headers only.

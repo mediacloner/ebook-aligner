@@ -48,14 +48,14 @@ PROFILES = {
         'filter_captions': False, # KEEP CAPTIONS (User requested generic-only, so enabled globally)
         'en': {
             'header_tags': ['h1', 'h2', 'h3'],
-            'header_classes': ['CN', 'CN-Only', 'CT'], 
+            'header_classes': ['CN', 'CN-Only', 'CT', 'fmh', 'bibh', 'bib_center2', 'bib_jus', 'bib_jus1', 'bib_center'], 
             'caption_start_tags': ['figcaption'],
             'caption_classes': ['caption'],
             'ignore_tags': [],
             'ignore_classes': [],
             'SPLIT_TRIGGER_CHARS': 240,
             'image_tag': 'img',
-            'merge_headers': True,
+            'merge_headers': False,
             'header_merge_targets': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
         },
         'es': {
@@ -65,13 +65,14 @@ PROFILES = {
                 'Capitulos_Capitulo_1_Linea', 
                 'Subcapitulos_subcapitulo', 
                 'Subcapitulos_Subcapitulo',
-                'tith', 'title', 'titulo', 'tit'
+                'tith', 'title', 'titulo', 'tit',
+                'fmh', 'centern', 'bibh', 'notes1', 'notesb'
             ],
             'caption_classes': ['Basico_pie_foto', 'Basico_pie_foto_centrado', 'caption'],
             'ignore_tags': [],
-            'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo', 'Notas-Pie_Notas_Pie', '_idFootnote'],
+            'ignore_classes': ['_idFootnotes', 'centradoespacioantes', 'capitulo', 'Notas-Pie_Notas_Pie', '_idFootnote', 'credit'],
             'ignore_div_classes': ['_idFootnotes'],
-            'merge_headers': True,
+            'merge_headers': False,
             'header_merge_trigger': 'Capitulos_Capitulo_1_Linea',
             'header_merge_targets': ['Capitulos_Capitulo_Numero', 'Capitulos_Capitulo_1_Linea', 'capitulo', 'tith', 'title', 'titulo', 'tit']
         }
@@ -405,7 +406,17 @@ def normalize_label(label):
     if 'intro' in label: return 'introduction'
     if 'preface' in label or 'prefacio' in label: return 'preface'
     if 'bibliograph' in label or 'bibliograf' in label: return 'bibliography'
+    if 'bibliograph' in label or 'bibliograf' in label: return 'bibliography'
+    
+    # Specific Author's Note Check (Before generic note check)
+    if ('note' in label and 'author' in label) or ('nota' in label and ('autora' in label or 'autor' in label)):
+        return 'authors_note_specific'
+        
     if 'note' in label or 'nota' in label: return 'notes'
+    
+    # Reading Group Guide
+    if 'reading group' in label or 'lectura de grupo' in label: return 'reading_group_guide'
+    if 'questions' in label and ('discussion' in label or 'discusión' in label): return 'reading_group_guide'
     
     # Enhanced mappings
     if 'dedication' in label or 'dedicación' in label or 'dedicatoria' in label: return 'dedication'
@@ -1449,6 +1460,8 @@ class SpanishParser(BaseParser):
             
         ignore_classes = self.rules.get('ignore_classes', [])
         if any(c in classes for c in ignore_classes):
+            self.ignore_section = True
+            self.ignore_depth = 1
             return
 
         # Handle BR for Spanish
@@ -5528,7 +5541,7 @@ if __name__ == "__main__":
             layout_mode=LayoutMode.from_string(args.layout_mode),
             column_gap_percentage=args.column_gap,
             left_column_language=args.left_column,
-            style_mode=StyleMode[args.style_mode.upper()],
+            style_mode=StyleMode(args.style_mode.lower()),
             original_color=args.original_color,
             translation_color=args.translation_color,
         )

@@ -5567,16 +5567,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                     import traceback; traceback.print_exc()
                 
                 count_done += 1
-                if progress_callback: progress_callback(count_done / total * 100)
+                if progress_callback: 
+                    progress_callback(count_done, total, f"Processed {count_done}/{total}")
                 
                 if cancel_check and cancel_check():
                     print("Cancellation requested.")
-                    # ThreadPool cannot strict cancel running threads, but we stop submitting/waiting
                     break
-
-                    
-                    if progress_callback:
-                        progress_callback(count_done, total, f"Processed {count_done}/{total}")
             
             time.sleep(0.1)
             

@@ -905,7 +905,7 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None, m
     # --- GAP FILLING FOR SHARED/SPARSE ES FILES ---
     assigned_en_count = len(final_pairs_map)
     
-    if en_items and es_items and assigned_en_count < len(en_items) * 0.4 and len(es_items) < len(en_items) * 0.5:
+    if en_items and assigned_en_count < len(en_items) * 0.4 and len(es_items) < len(en_items) * 0.5:
         print(f"Sparse ES TOC detected ({len(es_items)} items vs {len(en_items)} EN). Attempting Gap Filling.")
         
         if en_toc_dir and es_toc_dir:
@@ -951,6 +951,15 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None, m
                         print("Semantic Alignment returned no results. Falling back to Proportional.")
                 else:
                     print("Neural Model not provided to align_tocs. Skipping Semantic Alignment.")
+
+                # STRATEGY B: PROPORTIONAL (Fallback)
+                # 1. Calculate Sizes (Restored)
+                en_sizes = []
+                for i, en_item in enumerate(en_items):
+                    src_full = en_item['item']['src'].split('#')[0]
+                    path = os.path.join(en_toc_dir, src_full)
+                    size = os.path.getsize(path) if os.path.exists(path) else 1000
+                    en_sizes.append(size)
 
                 # If discovery found more files than TOC, use the discovered list
                 # This fixes 'Animal Farm' where TOC has 52, 53 but content is 50, 51, 52, 53

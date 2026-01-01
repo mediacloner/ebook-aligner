@@ -55,7 +55,7 @@ def align_tocs_semantically(en_items, es_items, en_toc_dir, es_toc_dir, model):
             en_samples.append(text)
             en_valid_indices.append(i)
         else:
-            print(f"  Warning: No text found for EN item {src}")
+            print(f"  Warning: No text found for EN item {src} at {full_path}")
 
     es_samples = []
     es_paths = [] # Store relative paths to return
@@ -64,29 +64,46 @@ def align_tocs_semantically(en_items, es_items, en_toc_dir, es_toc_dir, model):
         # Determine path
         if 'item' in item:
             src = item['item']['src'].split('#')[0]
-            full_path = os.path.join(es_toc_dir, src)
             rel_path = item['item']['src']
         elif 'path' in item:
-            full_path = item['path']
-            rel_path = item.get('src', os.path.basename(full_path))
+            # candidate item (dict with path)
+            full_path = item['path'] # Absolute path
+            rel_path = os.path.basename(full_path)
+            # wait, logic below re-joins? 
+            # item['path'] is absolute if from discovery.
+            src = None 
         else:
             continue
+            
+        if src:
+            full_path = os.path.join(es_toc_dir, src)
+            
+        # Debug
+        # print(f"  Reading ES sample: {full_path}")
             
         text = extract_text_sample(full_path)
         if text:
             es_samples.append(text)
             es_paths.append(rel_path)
-    
+        else:
+             print(f"  Warning: No text found for ES item {rel_path} at {full_path}")
     if not en_samples or not es_samples:
         print("  Semantic Align Failed: Not enough text samples.")
         return []
 
     # 2. Encode
-    print("  Encoding content samples...")
+    print(f"  Encoding content samples ({len(en_samples)} EN, {len(es_samples)} ES)...")
     en_embeddings = model.encode(en_samples)
     es_embeddings = model.encode(es_samples)
     
-    # 3. Compute Similarity
+    # Ensure 2D arrays (Handle single sample case)
+    if len(en_embeddings.shape) == 1:
+        en_embeddings = en_embeddings.reshape(1, -1)
+    if len(es_embeddings.shape) == 1:
+        es_embeddings = es_embeddings.reshape(1, -1)
+    
+    # 3. Compute Similarity Matrix
+    # Shape: (n_en, n_es)
     sim_matrix = cosine_similarity(en_embeddings, es_embeddings)
     
     # 4. Assign

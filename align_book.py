@@ -144,9 +144,12 @@ def extract_title_from_html(file_path):
         pass # Error sniffing title from {file_path}: {e}
     return ""
 
-def parse_toc(ncx_path):
-    """Parses the NCX file and returns a list of (label, src) tuples."""
-    tree = ET.parse(ncx_path)
+def parse_toc(toc_path):
+    """Parses the NCX (or OPF) file and returns a list of (label, src) tuples."""
+    if toc_path.lower().endswith('.opf'):
+        return parse_opf_as_toc(toc_path)
+        
+    tree = ET.parse(toc_path)
     root = tree.getroot()\
     
     # Handle namespaces which can be finicky
@@ -4087,11 +4090,53 @@ def find_toc_file(base_dir):
     std = os.path.join(base_dir, 'toc.ncx')
     if os.path.exists(std): return std
     # Search recursively
+    # Search recursively for NCX
     for root, dirs, files in os.walk(base_dir):
         for f in files:
             if f.endswith('.ncx'):
                 return os.path.join(root, f)
+                
+    # Fallback: Search for OPF to use as pseudo-TOC
+    for root, dirs, files in os.walk(base_dir):
+        for f in files:
+            if f.endswith('.opf'):
+                return os.path.join(root, f)
+                
     return None
+    
+def parse_opf_as_toc(opf_path):
+    """
+    Parses an OPF file and constructs a flat TOC from the spine.
+    Used as fallback when no NCX exists (e.g. Blackwater ES).
+    """
+    print(f"Parsing OPF as fallback TOC: {opf_path}")
+    tree = ET.parse(opf_path)
+    root = tree.getroot()
+    # Namespace handling
+    ns = {'opf': 'http://www.idpf.org/2007/opf'}
+    # If no namespace found, try without or check root tag
+    if not root.tag.startswith('{http://www.idpf.org/2007/opf}'):
+        ns = {} # Or handle differently
+        
+    # Map manifest IDs to hrefs
+    manifest = {}
+    for item in root.findall('.//opf:item', ns) or root.findall('.//item'):
+        if item.get('id') and item.get('href'):
+            manifest[item.get('id')] = item.get('href')
+            
+    # Read Spine
+    toc_items = []
+    spine = root.find('.//opf:spine', ns) or root.find('.//spine')
+    if spine:
+        for itemref in spine.findall('.//opf:itemref', ns) or spine.findall('.//itemref'):
+            idref = itemref.get('idref')
+            if idref in manifest:
+                href = manifest[idref]
+                # Use basename as label since we don't have real titles
+                label = os.path.splitext(os.path.basename(href))[0]
+                toc_items.append({'label': label, 'src': href, 'level': 0})
+                
+    return toc_items
 
 def collect_split_files(base_src, base_dir):
     """

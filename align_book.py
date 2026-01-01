@@ -186,7 +186,7 @@ def parse_toc(toc_path):
             
         return items
 
-    base_dir = os.path.dirname(ncx_path)
+    base_dir = os.path.dirname(toc_path)
     nav_points = []
     
     # Iterate top-level navPoints

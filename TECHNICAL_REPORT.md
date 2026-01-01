@@ -102,6 +102,16 @@ This is the most computationally intensive phase.
 - **Problem**: High-density Spanish EPUBs often combine 10 chapters into 1 massive HTML file.
 - **Solution**: Instead of failing, the system aligns Chapter 1 (EN) to the _entire_ Spanish file, but _detects where Chapter 2 (EN) begins_. It virtually "slices" the Spanish file, ensuring Chapter 1 only matches text up to the start of Chapter 2.
 
+  - Splits the Spanish file into virtual segments for isolated alignment.
+
+### 5. Semantic Chapter Alignment ("The Little LLM")
+
+- **Problem**: Table of Contents (TOC) metadata is often sparse, misleading, or completely mismatched (e.g., "Chapter One" in English TOC vs "Inicio" in Spanish TOC, or missing entries entirely).
+- **Solution**: We implemented a **Semantic TOC Aligner** using the LaBSE neural model.
+  - **Strategy**: Instead of relying on labels, the system reads the first 1000 characters of _content_ from every candidate file.
+  - **Process**: These content samples are encoded into vector space. The system calculates a similarity matrix between English Chapter Starts and Spanish File Starts.
+  - **Result**: Matches are made based on _Textual Meaning_. If "Chapter 1" text starts with "Mr. Jones...", it will find the Spanish file starting with "El señor Jones...", even if the file is named `09Cap1.xhtml` and is not in the TOC.
+
 ## 5. Supported/Tested Books (Case Studies)
 
 | Book                        | Key Challenge                           | Solution Ref                     |

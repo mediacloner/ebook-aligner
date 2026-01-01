@@ -19,8 +19,11 @@ from collections import Counter
 import json
 import numpy as np
 from scipy.spatial.distance import cdist
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Comment, Tag
 import warnings
+from sentence_transformers import SentenceTransformer, util
+import torch
+import semantic_toc  # [NEW] Import our semantic aligner modulening
 from bs4 import XMLParsedAsHTMLWarning
 warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
@@ -578,7 +581,6 @@ def distribute_spanish(aligner, en_chunks, es_text):
             current_es_str += (" " + sent) if current_es_str else sent
             
             # Length Ratio Guard (looser than Splitter)
-            ratio = len(current_es_str) / (en_len + 1)
             # If ratio is too small, keep adding. If too big, stop?
             # English might be 50 chars ("Figure 35") and Spanish 200 chars ("La Figura 35 muestra...")
             # So ratio can be high.
@@ -721,7 +723,6 @@ def merge_bleeding_blocks(aligner, blocks):
         en_text = last_en_chunk['text'].strip()
         es_text = first_es_chunk['text'].strip()
         
-        # Heuristic: verify short snippets match
         en_sents = re.split(r'[.?!]\s+', en_text)
         es_sents = re.split(r'[.?!]\s+', es_text)
         
@@ -755,12 +756,15 @@ def merge_bleeding_blocks(aligner, blocks):
             
     return merged 
 
-def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None):
+def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None, model=None):
     """
-    Aligns chapters using a hybrid 'Anchor and Fill' strategy with Iterative Gap Filling.
-    1. Identify High-Confidence Anchors (> 0.85).
-    2. Fill gaps between anchors with lower threshold candidates (> 0.4).
+    Aligns the Table of Contents from both books.
+    Returns a list of tuples: (Label, en_src, es_src, level)
+    
+    Args:
+        model: Optional SentenceTransformer model (LaBSE). If provided, enables Semantic Alignment strategy.
     """
+
     en_items = []
     for i, item in enumerate(en_toc):
         norm = normalize_label(item['label'])
@@ -899,27 +903,14 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None):
     recursive_align(0, len(en_items), 0, len(es_items))
     
     # --- GAP FILLING FOR SHARED/SPARSE ES FILES ---
-    # Heuristic: If we have very few ES items compared to EN items (e.g. < 40%),
-    # and they cover the whole book (implied), we should distribute them proportionally.
     assigned_en_count = len(final_pairs_map)
     
     if en_items and es_items and assigned_en_count < len(en_items) * 0.4 and len(es_items) < len(en_items) * 0.5:
-        print(f"Sparse ES TOC detected ({len(es_items)} items vs {len(en_items)} EN). Attempting proportional assignment.")
+        print(f"Sparse ES TOC detected ({len(es_items)} items vs {len(en_items)} EN). Attempting Gap Filling.")
         
-        # We need file sizes to do this proportionally.
         if en_toc_dir and es_toc_dir:
             try:
-                # 1. Calculate Sizes
-                en_sizes = []
-                total_en_size = 0
-                for en in en_items:
-                    path = os.path.join(en_toc_dir, en['item']['src'].split('#')[0])
-                    size = os.path.getsize(path) if os.path.exists(path) else 1000
-                    en_sizes.append(size)
-                    total_en_size += size
-                
-                # 1. Discover ALL content files (handling hidden files like 51.xhtml)
-                print(f"DEBUG: Scanning {es_toc_dir} for hidden ES content files...")
+                # 0. Discovery (Same as before)
                 found_es_files = []
                 try:
                     for f in os.listdir(es_toc_dir):
@@ -941,6 +932,25 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None):
                 except Exception as e:
                     print(f"DEBUG: Error scanning ES dir: {e}")
                     found_es_files = []
+
+                # Use discovered files if more comprehensive
+                candidate_es_items = [{'path': f} for f in found_es_files] if len(found_es_files) > len(es_items) else es_items
+
+                # ---------------------------------------------------------
+                # STRATEGY A: SEMANTIC MATCHING (If Model Available)
+                # ---------------------------------------------------------
+                if model:
+                    print(">>> Using SEMANTIC TOC ALIGNMENT (Neural) <<<")
+                    semantic_pairs = semantic_toc.align_tocs_semantically(
+                        en_items, candidate_es_items, en_toc_dir, es_toc_dir, model
+                    )
+                    if semantic_pairs:
+                        print(f"Semantic Alignment returned {len(semantic_pairs)} pairs. Using them.")
+                        return semantic_pairs
+                    else:
+                        print("Semantic Alignment returned no results. Falling back to Proportional.")
+                else:
+                    print("Neural Model not provided to align_tocs. Skipping Semantic Alignment.")
 
                 # If discovery found more files than TOC, use the discovered list
                 # This fixes 'Animal Farm' where TOC has 52, 53 but content is 50, 51, 52, 53
@@ -2676,8 +2686,7 @@ def fix_split_headers(aligned_items):
 
 def fix_merged_captions(aligned_items):
     """
-    Detects and fixes cases where a Spanish caption is merged with the following paragraph,
-    causing it to look like the English Body text's translation.
+    Detects and fixes cases where a Spanish caption is merged with the following paragraph.
     """
     unmatched_captions = []
     
@@ -4243,19 +4252,18 @@ def filter_to_matching_headers(en_chunks, es_chunks):
 
 
 def process_chapter_pair(args):
-    # Unpack args
-    if len(args) == 7:
+    # Unpack args (Support Variable Length with Model)
+    idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model = (None,) * 8
+    
+    if len(args) == 8:
+        idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model = args
+    elif len(args) == 7:
         idx, en_path, es_path, es_opf_dir, config, label, chunk_range = args
     else:
         # Backward compatibility
         idx, en_path, es_path, es_opf_dir, config, label = args
         chunk_range = None
-    """
-    Worker function to process a single chapter pair IN-PLACE.
-    args: (idx, target_path, es_rel, es_opf_dir, config, label)
-    """
-    # The original line `idx, target_path, es_rel, es_opf_dir, config, label = args` is replaced by the if/else block above.
-    # Now, map the new variable names to the old ones for the rest of the function's logic.
+
     target_path = en_path
     es_rel = es_path
 
@@ -5093,8 +5101,33 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     enrich_toc_from_content(en_toc, os.path.dirname(en_toc_path))
     enrich_toc_from_content(es_toc, os.path.dirname(es_toc_path))
     
+    # 2b. Load Neural Model EARLY (if configured)
+    # We load it here to pass to Semantic TOC alignment
+    model = None
+    if config.get('use_neural', True):
+        try:
+             import logging
+             # Reduce SentenceTransformer verbosity
+             logging.getLogger('sentence_transformers').setLevel(logging.WARNING)
+             
+             print("Loading Neural Model (LaBSE) for Alignment...")
+             # Use the same device logic as process_chapter_pair
+             device_name = 'cpu'
+             if torch.backends.mps.is_available(): device_name = 'mps'
+             elif torch.cuda.is_available(): device_name = 'cuda'
+             
+             model = SentenceTransformer('sentence-transformers/LaBSE', device=device_name)
+             print(f"Model loaded on {device_name}")
+        except Exception as e:
+             print(f"Warning: Failed to load neural model early: {e}")
+             model = None
+
     # Use CACHED_ALIGNER if available to improve TOC alignment
-    pairs = align_tocs(en_toc, es_toc, en_toc_dir=os.path.dirname(en_toc_path), es_toc_dir=os.path.dirname(es_toc_path), aligner=CACHED_ALIGNER)
+    pairs = align_tocs(en_toc, es_toc, 
+                       en_toc_dir=os.path.dirname(en_toc_path), 
+                       es_toc_dir=os.path.dirname(es_toc_path), 
+                       aligner=CACHED_ALIGNER,
+                       model=model) # [NEW] Pass model
     print(f"Identified {len(pairs)} chapters to align.")
     
     # Fallback: Detect if TOC alignment failed (most EN chapters have no ES match)
@@ -5455,7 +5488,8 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                     chunk_range = (position, proportions_unused)
                     print(f"  {label}: Will use {proportions_unused[position]*100:.1f}% of shared file {os.path.basename(es_abs)}")
             
-            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range) )
+            # Append arguments (including model)
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range, model) )
             
         # Replaces the original loop below
         
@@ -5468,9 +5502,6 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
 
     if not args_list: 
          # Fallback loop if args_list wasn't populated (e.g. error above handled silently?)
-         # Or if spine was empty.
-         # Re-implement basic loop here or structure code to allow fallback?
-         # Simplest: check "src" loop
          
          en_toc_dir = os.path.dirname(en_toc_path)
          args_list = []
@@ -5484,7 +5515,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             if not es_rel: continue
             es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
             
-            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label) )
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, None, model) )
 
     # 4. Process Chapters (In-Place)
     
@@ -5493,14 +5524,16 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     
     # ...
     
-    # 5. Process Chapters (ProcessPool)
-    # args_list is now ready from Spine Expansion
+    # 5. Process Chapters (ProcessPool -> ThreadPool)
+    # Using ThreadPoolExecutor allows efficient sharing of the 'model' object (LaBSE)
+    # which is large and unpicklable (or slow to pickle) for Multiprocessing.
+    # Since PyTorch releases GIL for heavy ops, threading is efficient here.
     
     print(f"Executing {len(args_list)} content tasks...")
+    import concurrent.futures
 
     # Parallel Processing
-    max_workers = 1 if config and config.get('use_neural') else None
-    pool = multiprocessing.Pool(processes=max_workers)
+    max_workers = 1 if config and config.get('use_neural') else 4
     
     # We don't need to collect results for manifest/spine/images here,
     # as we are modifying in place and the original EPUB structure is preserved.
@@ -5511,24 +5544,27 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         count_done = 0
         total = len(args_list)
         
-        async_results = [pool.apply_async(process_chapter_pair, (args,)) for args in args_list]
-
-        completed_indices = set()
-        while len(completed_indices) < len(async_results):
-            if cancel_check and cancel_check():
-                pool.terminate()
-                raise InterruptedError("Cancelled")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {executor.submit(process_chapter_pair, args): i for i, args in enumerate(args_list)}
+            
+            for future in concurrent.futures.as_completed(future_to_idx):
+                i = future_to_idx[future]
+                try:
+                    res_idx, res_filename, res_label, res_images = future.result()
+                    if res_images:
+                        all_collected_images.update(res_images)
+                except Exception as exc:
+                    print(f"Task {i} failed: {exc}")
+                    import traceback; traceback.print_exc()
                 
-            for i, res in enumerate(async_results):
-                if i not in completed_indices and res.ready():
-                    try:
-                        res_idx, res_filename, res_label, res_images = res.get() # Get results to collect images
-                        if res_images:
-                            all_collected_images.update(res_images)
-                    except Exception as exc:
-                        print(f"Task {i} failed: {exc}")
-                    completed_indices.add(i)
-                    count_done += 1
+                count_done += 1
+                if progress_callback: progress_callback(count_done / total * 100)
+                
+                if cancel_check and cancel_check():
+                    print("Cancellation requested.")
+                    # ThreadPool cannot strict cancel running threads, but we stop submitting/waiting
+                    break
+
                     
                     if progress_callback:
                         progress_callback(count_done, total, f"Processed {count_done}/{total}")

@@ -755,7 +755,7 @@ def merge_bleeding_blocks(aligner, blocks):
             
     return merged 
 
-def align_tocs(en_toc, es_toc, aligner=None):
+def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None):
     """
     Aligns chapters using a hybrid 'Anchor and Fill' strategy with Iterative Gap Filling.
     1. Identify High-Confidence Anchors (> 0.85).
@@ -898,6 +898,135 @@ def align_tocs(en_toc, es_toc, aligner=None):
 
     recursive_align(0, len(en_items), 0, len(es_items))
     
+    # --- GAP FILLING FOR SHARED/SPARSE ES FILES ---
+    # Heuristic: If we have very few ES items compared to EN items (e.g. < 40%),
+    # and they cover the whole book (implied), we should distribute them proportionally.
+    assigned_en_count = len(final_pairs_map)
+    
+    if en_items and es_items and assigned_en_count < len(en_items) * 0.4 and len(es_items) < len(en_items) * 0.5:
+        print(f"Sparse ES TOC detected ({len(es_items)} items vs {len(en_items)} EN). Attempting proportional assignment.")
+        
+        # We need file sizes to do this proportionally.
+        if en_toc_dir and es_toc_dir:
+            try:
+                # 1. Calculate Sizes
+                en_sizes = []
+                total_en_size = 0
+                for en in en_items:
+                    path = os.path.join(en_toc_dir, en['item']['src'].split('#')[0])
+                    size = os.path.getsize(path) if os.path.exists(path) else 1000
+                    en_sizes.append(size)
+                    total_en_size += size
+                
+                # 1. Discover ALL content files (handling hidden files like 51.xhtml)
+                print(f"DEBUG: Scanning {es_toc_dir} for hidden ES content files...")
+                found_es_files = []
+                try:
+                    for f in os.listdir(es_toc_dir):
+                        if f.lower().endswith('.xhtml') or f.lower().endswith('.html'):
+                             # Filter out explicit ignores if any?
+                             found_es_files.append(os.path.join(es_toc_dir, f))
+                    
+                    # Sort numerically if possible to respect reading order
+                    import re
+                    def mixed_sort_key(x):
+                        fname = os.path.basename(x)
+                        nums = re.findall(r'\d+', fname)
+                        if nums:
+                            return int(nums[0])
+                        return 99999
+                    
+                    found_es_files.sort(key=mixed_sort_key)
+                    print(f"DEBUG: Found {len(found_es_files)} total ES files: {[os.path.basename(f) for f in found_es_files]}")
+                except Exception as e:
+                    print(f"DEBUG: Error scanning ES dir: {e}")
+                    found_es_files = []
+
+                # If discovery found more files than TOC, use the discovered list
+                # This fixes 'Animal Farm' where TOC has 52, 53 but content is 50, 51, 52, 53
+                if len(found_es_files) > len(es_items):
+                     print("Using DISCOVERED file list for assignment instead of sparse TOC.")
+                     # Rebuild es_files list from hard drive
+                     es_files = []
+                     es_file_map = {}
+                     total_es_size = 0
+                     for i, path in enumerate(found_es_files):
+                         size = os.path.getsize(path)
+                         # Ignore tiny files (wrappers, covers) < 500 bytes?
+                         # Be careful, some text might be small. 
+                         # But 50.xhtml might be title.
+                         es_file_map[path] = i
+                         # Use relative path for src
+                         rel_src = os.path.basename(path) # Assuming flat structure or simplistic
+                         es_files.append({'idx': i, 'size': size, 'path': path, 'src': rel_src, 'cum_start': total_es_size})
+                         total_es_size += size
+                else:
+                    # Fallback to TOC items
+                    es_files = [] # (index, size, path)
+                    es_file_map = {} # path -> index
+                    total_es_size = 0
+                    
+                    # Get unique ES files in order 
+                    # (TOC might point to same file multiple times, but here usually they are distinct or missing)
+                    for i, es in enumerate(es_items):
+                        path = os.path.join(es_toc_dir, es['item']['src'].split('#')[0])
+                        if path not in es_file_map:
+                             size = os.path.getsize(path) if os.path.exists(path) else 1000
+                             es_file_map[path] = i
+                             es_files.append({'idx': i, 'size': size, 'path': path, 'src': es['item']['src'], 'cum_start': total_es_size})
+                             total_es_size += size
+                
+                # Update es_files with cum_end
+                current_cum = 0
+                for f in es_files:
+                    f['cum_start'] = current_cum
+                    current_cum += f['size']
+                    f['cum_end'] = current_cum
+                
+                # 2. Assign EN chapters to ES files based on cumulative position
+                cum_en = 0
+                final_pairs = [] # Rebuild final pairs
+                
+                for i, en_item in enumerate(en_items):
+                    label = en_item['item']['label']
+                    en_src = en_item['item']['src']
+                    level = en_item['item'].get('level', 0)
+                    size = en_sizes[i]
+                    
+                    # Calculate position: use center of chapter
+                    # to distribute evenly.
+                    check_pos = cum_en + (size * 0.5)
+                    check_ratio = check_pos / max(1, total_en_size)
+                    
+                    # Find corresponding ES file
+                    target_es_pos = check_ratio * total_es_size
+                    
+                    matched_es_file = None
+                    for f in es_files:
+                        if target_es_pos >= f['cum_start'] and target_es_pos < f['cum_end']:
+                            matched_es_file = f
+                            break
+                    
+                    # Edge case: if last chapter, map to last file
+                    if not matched_es_file and es_files:
+                        matched_es_file = es_files[-1]
+                        
+                    if matched_es_file:
+                        # es_item might not exist in original es_items if we used discovered list
+                        # So we construct the src directly
+                        final_pairs.append((label, en_src, matched_es_file['src'], level))
+                    else:
+                         final_pairs.append((label, en_src, None, level))
+                         
+                    cum_en += size
+                    
+                print(f"Proportional assignment completed. Generated {len(final_pairs)} pairs.")
+                return final_pairs
+
+            except Exception as e:
+                print(f"Proportional TOC assignment failed: {e}")
+                # Fall through to original return
+
     final_pairs = []
     for i, en_item in enumerate(en_items):
         label = en_item['item']['label']
@@ -4965,7 +5094,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     enrich_toc_from_content(es_toc, os.path.dirname(es_toc_path))
     
     # Use CACHED_ALIGNER if available to improve TOC alignment
-    pairs = align_tocs(en_toc, es_toc, aligner=CACHED_ALIGNER)
+    pairs = align_tocs(en_toc, es_toc, en_toc_dir=os.path.dirname(en_toc_path), es_toc_dir=os.path.dirname(es_toc_path), aligner=CACHED_ALIGNER)
     print(f"Identified {len(pairs)} chapters to align.")
     
     # Fallback: Detect if TOC alignment failed (most EN chapters have no ES match)

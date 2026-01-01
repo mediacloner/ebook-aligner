@@ -4,6 +4,8 @@
 
 This project aligns the English and Spanish editions of "Artificial Intelligence" by Melanie Mitchell to create a combined bilingual EPUB. The core logic handles structural parsing, paragraph-level alignment, and EPUB generation.
 
+> **Note**: For a detailed deep-dive into the architecture, algorithms (Neural Alignment, Gap Filling), and case studies, please refer to [TECHNICAL_REPORT.md](TECHNICAL_REPORT.md).
+
 ## Key Components
 
 ### 1. `align_book.py`

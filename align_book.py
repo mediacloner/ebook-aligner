@@ -5580,11 +5580,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             
             time.sleep(0.1)
             
-        pool.close()
-        pool.join()
+            # Wait for all futures to complete (handled by context manager exit)
+            pass
         
     except Exception as e:
-        pool.terminate()
+        print(f"Error during parallel processing: {e}")
+        # executor shuts down automatically
         raise e
         
     print("Alignment/Injection Complete.")

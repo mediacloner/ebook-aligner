@@ -2100,8 +2100,16 @@ def sync_headers(en_chunks, es_chunks, aligner):
         # Check if remaining are likely split titles
         def is_likely_header_part(c):
             t = c['text'].strip()
-            # It's a header if short OR tag is h1-h6
-            return len(t) < 100 or c.get('tag', '').startswith('h')
+            # 1. H-tags are always headers
+            if c.get('tag', '').startswith('h'): return True
+            
+            # 2. Length Check
+            if len(t) >= 100: return False
+            
+            # 3. Sentence Check: If it ends with period and is substantial length, likely a paragraph
+            if len(t) > 30 and t.endswith('.'): return False
+            
+            return True
             
         if all(is_likely_header_part(c) for c in filtered_head_es):
             print("  Merging split ES header chunks...")

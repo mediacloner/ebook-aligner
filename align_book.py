@@ -2007,6 +2007,112 @@ def is_standalone_numeric_header(text):
     
     return False
 
+def find_content_anchor(en_chunks, es_chunks, aligner):
+    """
+    Finds the first index pair (i, j) where EN and ES content chunks match with high confidence.
+    This serves as an 'Anchor' to separate Header/FrontMatter from Body Text.
+    """
+    if not aligner: return 0, 0
+    
+    # Heuristics for 'Body Text'
+    def is_body(c):
+        return len(c['text']) > 50 and c.get('tag') not in ['h1','h2','h3','h4','h5','h6']
+        
+    start_en = [i for i, c in enumerate(en_chunks[:20]) if is_body(c)]
+    start_es = [j for j, c in enumerate(es_chunks[:20]) if is_body(c)]
+    
+    if not start_en or not start_es:
+        return 0, 0
+        
+    # Check similarity of first candidates
+    import numpy as np
+    from scipy.spatial.distance import cosine
+    
+    best_pair = (start_en[0], start_es[0]) # Default to first body para
+    best_score = 0
+    
+    # Compare first 3 candidates
+    for i in start_en[:3]:
+        for j in start_es[:3]:
+            try:
+                emb_en = aligner.embed_chunks([{'text': en_chunks[i]['text']}])[0]
+                emb_es = aligner.embed_chunks([{'text': es_chunks[j]['text']}])[0]
+                sim = 1 - cosine(emb_en, emb_es)
+                
+                if sim > 0.75: # High confidence
+                     return i, j
+                     
+                if sim > best_score:
+                    best_score = sim
+                    best_pair = (i, j)
+            except:
+                pass
+                
+    # If no high confidence match, fallback to first body para
+    # BUT only if score is decent (>0.5). Else, maybe no anchor found?
+    if best_score > 0.5:
+        return best_pair
+        
+    return start_en[0], start_es[0]
+
+def sync_headers(en_chunks, es_chunks, aligner):
+    """
+    Synchronizes header structures before the first content anchor.
+    Merges split Spanish headers (Number + Title) if English header is combined.
+    """
+    if not en_chunks or not es_chunks:
+        return es_chunks
+        
+    # 1. Find Anchor
+    anchor_en, anchor_es = find_content_anchor(en_chunks, es_chunks, aligner)
+    
+    # If anchor is 0,0, nothing to sync (starts with content)
+    if anchor_en == 0 and anchor_es == 0:
+        return es_chunks
+        
+    # 2. Extract Header Zones
+    head_en = en_chunks[:anchor_en]
+    head_es = es_chunks[:anchor_es]
+    # Rest is body
+    body_es = es_chunks[anchor_es:]
+    
+    print(f"DEBUG: sync_headers | EN Head: {len(head_en)} chunks, ES Head: {len(head_es)} chunks")
+    
+    # 3. Analyze & Merge ES
+    # Focus: Blackwater case (EN=1, ES=2)
+    # Or generically: ES has MORE chunks than EN in the header zone
+    if len(head_es) > len(head_en):
+        
+        # Check if head_es are likely split titles
+        # (Short, no periods, maybe numbers)
+        def is_likely_header_part(c):
+            t = c['text'].strip()
+            # It's a header if short OR tag is h1-h6
+            return len(t) < 100 or c.get('tag', '').startswith('h')
+            
+        if all(is_likely_header_part(c) for c in head_es):
+            print("  Merging split ES header chunks...")
+            # MERGE ES chunks into one
+            merged_text = " ".join(c['text'].strip() for c in head_es)
+            
+            # Start with properties of the first chunk
+            new_chunk = head_es[0].copy()
+            new_chunk['text'] = merged_text
+            
+            # If any was a header tag, upgrade result to that tag
+            # Prefer H1, then H2, etc.
+            best_tag = 'p'
+            for c in head_es:
+                ct = c.get('tag', 'p')
+                if ct.startswith('h') and ct < best_tag or best_tag == 'p':
+                    best_tag = ct
+            new_chunk['tag'] = best_tag
+            
+            # Reconstruct ES list
+            return [new_chunk] + body_es
+            
+    return es_chunks
+
 
 def inject_translation(en_node, es_text, config, soup, en_text=None):
     if not en_node or not es_text:
@@ -2287,9 +2393,15 @@ def perform_injection(aligned_pairs, config, soup):
                 last_node = next_sib if next_sib else new_en_node
 
 def align_chunks(en_chunks, es_chunks):
-    aligned = []
+    # --- HEADER SYNC (Split Header Fix) ---
+    # Apply before standard alignment
+    # Check if we have an aligner available? (We need embeddedings for anchor)
+    # Assuming 'extract_content' doesn't pass aligner, but we can pass it via config or argument?
+    # Wait, align_chunks doesn't have aligner. We might need to rely on heuristic anchor (first long para) if no aligner.
+    # Actually, CACHED_ALIGNER is a global variable we can access if needed! 
+    if CACHED_ALIGNER:
+         es_chunks = sync_headers(en_chunks, es_chunks, CACHED_ALIGNER)
 
-    
     en_headers = get_header_indices(en_chunks)
     es_headers = get_header_indices(es_chunks)
     

@@ -551,6 +551,37 @@ def _restore_abbreviations(text):
     """Restore abbreviation periods from placeholder."""
     return text.replace('⌐ABBR⌐', '.')
 
+def _split_sentences_regex(text):
+    """
+    Splits text into sentences using simple regex (Legacy method).
+    Handles common abbreviations via protection.
+    """
+    if not text:
+        return []
+    
+    # Protect abbreviations before splitting
+    protected_text = _protect_abbreviations(text)
+    
+    # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start/Dash
+    # Added em-dash (—) and en-dash (–) to lookahead for Spanish dialogue
+    pattern = r'([.!?…]+(?:["\"\'\)\]»]*)\s+(?=[A-Z¿¡\"\'\-—–]))'
+    parts = re.split(pattern, protected_text)
+    sentences = []
+    current_sent = ""
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            current_sent += part
+        else:
+            current_sent += part
+            sentences.append(current_sent.strip())
+            current_sent = ""
+    if current_sent and current_sent.strip():
+        sentences.append(current_sent.strip())
+    
+    # Restore abbreviations in each sentence
+    return [_restore_abbreviations(s) for s in sentences]
+
+
 def split_sentences_helper(text, language='en'):
     """
     Splits text into sentences using Stanza NLP.
@@ -596,26 +627,29 @@ def split_sentences_helper(text, language='en'):
                 merged_sentences.append(curr)
                 i += 1
         
+                i += 1
+        
+        # HYBRID CHECK: If Stanza returns only 1 sentence, but Regex would find multiple
+        # substantial sentences (e.g., "Boxer... D. Trazaba..."), trust Regex.
+        # This handles cases where Stanza is too conservative about initials vs letters.
+        if len(merged_sentences) == 1:
+            try:
+                regex_sents = _split_sentences_regex(text)
+                # If regex found at least 2 sentences that are reasonably long (>8 chars),
+                # it's likely a valid split that Stanza missed.
+                substantial_count = sum(1 for s in regex_sents if len(s.strip()) > 8)
+                if substantial_count > 1:
+                    print(f"DEBUG: Stanza returned 1 sentence, Regex found {len(regex_sents)} (substantial). Using Regex.")
+                    return regex_sents
+            except Exception:
+                pass
+
         return merged_sentences if merged_sentences else sentences
         
     except Exception as e:
         # Fallback to regex-based splitting if Stanza fails
         print(f"Stanza failed, using regex fallback: {e}")
-        protected_text = _protect_abbreviations(text)
-        pattern = r'([.!?…]+(?:["\"\')\]»]*)\s+(?=[A-Z¿¡\"\'-—–]))'
-        parts = re.split(pattern, protected_text)
-        sentences = []
-        current_sent = ""
-        for j, part in enumerate(parts):
-            if j % 2 == 0:
-                current_sent += part
-            else:
-                current_sent += part
-                sentences.append(current_sent.strip())
-                current_sent = ""
-        if current_sent and current_sent.strip():
-            sentences.append(current_sent.strip())
-        return [_restore_abbreviations(s) for s in sentences]
+        return _split_sentences_regex(text)
 
 
 def distribute_spanish(aligner, en_chunks, es_text):
@@ -634,6 +668,15 @@ def distribute_spanish(aligner, en_chunks, es_text):
         
     en_texts = [c['text'] for c in en_chunks]
     es_sents = split_sentences_helper(es_text, language='es')
+    
+    # FALLBACK: If we have more English chunks than Spanish sentences,
+    # try the regex splitter which might capture "D. Trazaba" type splits that Stanza misses.
+    if len(es_sents) < len(en_chunks):
+        regex_sents = _split_sentences_regex(es_text)
+        # Use regex splits ONLY if they provide MORE chunks than Stanza (closer to target)
+        if len(regex_sents) > len(es_sents):
+            print(f"DEBUG: distribute_spanish fallback to regex! Stanza={len(es_sents)}, Regex={len(regex_sents)}")
+            es_sents = regex_sents
     
     if not es_sents:
         return [""] * len(en_chunks)
@@ -728,11 +771,12 @@ def save_cleaned_opf(soup, path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(content)
 
-def pre_split_long_paragraphs(chunks, threshold=400):
+def pre_split_long_paragraphs(chunks, threshold=150, language='en'):
     """
     Split long paragraphs (>threshold chars) into sentences BEFORE alignment.
     This enables better matching when EN has merged paragraphs but ES has them split.
     
+    Uses Stanza NLP for accurate sentence boundary detection.
     Each resulting chunk retains a reference to the original node for injection.
     """
     result = []
@@ -748,13 +792,10 @@ def pre_split_long_paragraphs(chunks, threshold=400):
         
         # Only split standard paragraphs, not headers/captions
         if len(text) > threshold and chunk_type == 'std':
-            # Protect abbreviations before splitting
-            protected_text = _protect_abbreviations(text)
-            # Split into sentences using regex
-            # Match sentence endings followed by whitespace
-            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z""\'])', protected_text)
-            # Restore abbreviations in each sentence
-            sentences = [_restore_abbreviations(s.strip()) for s in sentences if s.strip() and len(s.strip()) > 20]
+            # Use Stanza for sentence splitting (handles abbreviations correctly)
+            sentences = split_sentences_helper(text, language=language)
+            # Filter out very short sentences
+            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
             
             if len(sentences) > 1:
                 # Create a chunk for each sentence, preserving original node reference
@@ -4680,7 +4721,7 @@ def process_chapter_pair(args):
         # --- PRE-PROCESS: Split Massive English Chunks into Sentences ---
         # This enables better matching when EN source has merged paragraphs but ES has them split.
         # Lower threshold (400) catches more cases than original (600).
-        en_chunks = pre_split_long_paragraphs(en_chunks, threshold=400)
+        en_chunks = pre_split_long_paragraphs(en_chunks, threshold=400, language='en')
         print(f"DEBUG: {label} - Split EN chunks to {len(en_chunks)}")
         
         # 3. Parse Spanish Content
@@ -4759,7 +4800,7 @@ def process_chapter_pair(args):
         print(f"DEBUG: {label} - BEFORE split: {len(es_chunks)} ES chunks")
         for i, c in enumerate(es_chunks[:5]):  # Show first 5
             print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
-        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=400)
+        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=400, language='es')
         print(f"DEBUG: {label} - AFTER split: {len(es_chunks)} ES chunks")
         for i, c in enumerate(es_chunks[:10]):  # Show first 10 after split
             print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")

@@ -2016,7 +2016,9 @@ def find_content_anchor(en_chunks, es_chunks, aligner):
     
     # Heuristics for 'Body Text'
     def is_body(c):
-        return len(c['text']) > 50 and c.get('tag') not in ['h1','h2','h3','h4','h5','h6']
+        # Exclude divs as they are often wrappers in Calibre/epub structures
+        # We want atomic paragraphs (p) or blockquotes
+        return len(c['text']) > 50 and c.get('tag') in ['p', 'blockquote', 'li', 'dd']
         
     start_en = [i for i, c in enumerate(en_chunks[:20]) if is_body(c)]
     start_es = [j for j, c in enumerate(es_chunks[:20]) if is_body(c)]
@@ -2078,38 +2080,53 @@ def sync_headers(en_chunks, es_chunks, aligner):
     
     print(f"DEBUG: sync_headers | EN Head: {len(head_en)} chunks, ES Head: {len(head_es)} chunks")
     
+    # Filter out Wrapper Chunks from ES Header Zone
+    # If a chunk is very long (>150 chars) but we are in the 'Header Zone' (before anchor),
+    # it is almost certainly a container/wrapper that duplicates the content.
+    filtered_head_es = [c for c in head_es if len(c['text']) < 150]
+    
     # 3. Analyze & Merge ES
     # Focus: Blackwater case (EN=1, ES=2)
     # Or generically: ES has MORE chunks than EN in the header zone
-    if len(head_es) > len(head_en):
+    # Use filtered list for count check
+    if len(filtered_head_es) > len(head_en):
         
-        # Check if head_es are likely split titles
-        # (Short, no periods, maybe numbers)
+        # Check if remaining are likely split titles
         def is_likely_header_part(c):
             t = c['text'].strip()
             # It's a header if short OR tag is h1-h6
             return len(t) < 100 or c.get('tag', '').startswith('h')
             
-        if all(is_likely_header_part(c) for c in head_es):
+        if all(is_likely_header_part(c) for c in filtered_head_es):
             print("  Merging split ES header chunks...")
+            
+            # Simple Deduplication (Consecutive identical text)
+            deduped = []
+            seen_last = None
+            for c in filtered_head_es:
+                txt = c['text'].strip()
+                if txt != seen_last:
+                    deduped.append(c)
+                    seen_last = txt
+            
             # MERGE ES chunks into one
-            merged_text = " ".join(c['text'].strip() for c in head_es)
+            merged_text = " ".join(c['text'].strip() for c in deduped)
             
             # Start with properties of the first chunk
-            new_chunk = head_es[0].copy()
-            new_chunk['text'] = merged_text
-            
-            # If any was a header tag, upgrade result to that tag
-            # Prefer H1, then H2, etc.
-            best_tag = 'p'
-            for c in head_es:
-                ct = c.get('tag', 'p')
-                if ct.startswith('h') and ct < best_tag or best_tag == 'p':
-                    best_tag = ct
-            new_chunk['tag'] = best_tag
-            
-            # Reconstruct ES list
-            return [new_chunk] + body_es
+            if deduped:
+                new_chunk = deduped[0].copy()
+                new_chunk['text'] = merged_text
+                
+                # Best tag promotion
+                best_tag = 'p'
+                for c in deduped:
+                    ct = c.get('tag', 'p')
+                    if ct.startswith('h') and (ct < best_tag or best_tag == 'p'):
+                        best_tag = ct
+                new_chunk['tag'] = best_tag
+                
+                # Return NEW merged header + Original Body
+                return [new_chunk] + body_es
             
     return es_chunks
 

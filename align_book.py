@@ -2024,6 +2024,19 @@ def find_content_anchor(en_chunks, es_chunks, aligner):
     start_es = [j for j, c in enumerate(es_chunks[:20]) if is_body(c)]
     
     if not start_en or not start_es:
+        # Fallback: If first chunk looks like header, assume header zone = 1
+        def looks_like_header(c):
+            if c.get('type') == 'header': return True
+            if c.get('tag', '').startswith('h'): return True
+            t = c.get('text', '').strip()
+            if len(t) < 50 and t: return True # Short = likely header
+            return False
+            
+        en_has_header = len(en_chunks) > 0 and looks_like_header(en_chunks[0])
+        es_has_header = len(es_chunks) > 0 and looks_like_header(es_chunks[0])
+        
+        if en_has_header and es_has_header:
+            return 1, 1 # Header is first chunk, body starts at index 1
         return 0, 0
         
     # Check similarity of first candidates
@@ -2067,6 +2080,7 @@ def sync_headers(en_chunks, es_chunks, aligner):
         
     # 1. Find Anchor
     anchor_en, anchor_es = find_content_anchor(en_chunks, es_chunks, aligner)
+    print(f"DEBUG: sync_headers anchors: EN={anchor_en}, ES={anchor_es}")
     
     # If anchor is 0,0, nothing to sync (starts with content)
     if anchor_en == 0 and anchor_es == 0:
@@ -2190,6 +2204,12 @@ def sync_headers(en_chunks, es_chunks, aligner):
                 new_chunk['tag'] = best_tag
                 
                 final_head = [new_chunk]
+    
+    # TYPE PROMOTION FIX: Ensure ES header type matches EN for fingerprint
+    # Apply AFTER any merging to cover both merge and no-merge cases.
+    if head_en and head_en[0].get('type') == 'header' and final_head:
+        for h in final_head:
+            h['type'] = 'header'
             
     return final_head + body_es
 

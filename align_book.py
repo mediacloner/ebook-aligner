@@ -2080,16 +2080,72 @@ def sync_headers(en_chunks, es_chunks, aligner):
     
     print(f"DEBUG: sync_headers | EN Head: {len(head_en)} chunks, ES Head: {len(head_es)} chunks")
     
-    # Filter out Wrapper Chunks from ES Header Zone
-    # If a chunk is very long (>150 chars) but we are in the 'Header Zone' (before anchor),
-    # it is almost certainly a container/wrapper that duplicates the content.
-    # ALSO excluded tags: div, body, html (generic containers)
+    # Unified Processing Loop:
+    # 1. Filter Wrappers (Trash)
+    # 2. Detect Body (Stop header collection)
+    # 3. Collect Valid Header Parts
+    
+    final_header_parts = []
+    reclaimed_body = []
+    found_body_start = False
+    
+    # Helper to check validity
     def is_valid_header_chunk(c):
         if c.get('tag') in ['div', 'body', 'html', 'img']: return False
         if len(c['text']) >= 150: return False
         return True
 
-    filtered_head_es = [c for c in head_es if is_valid_header_chunk(c)]
+    # Helper for semantic match
+    def matches_anchor(c):
+        if not aligner or len(en_chunks) <= anchor_en: return False
+        if len(c['text']) < 20: return False # Too short to match reliably
+        try:
+            en_anchor_emb = aligner.embed_chunks([{'text': en_chunks[anchor_en]['text']}])[0]
+            
+            from scipy.spatial.distance import cosine
+            
+            for idx, c in enumerate(head_es):
+                # Don't check obvious short headers
+                if len(c['text']) < 20: continue
+                
+                # Check similarity
+                c_emb = aligner.embed_chunks([{'text': c['text']}])[0]
+                sim = 1 - cosine(en_anchor_emb, c_emb)
+                
+                # If match, this IS the body start
+                if sim > 0.7:
+                    print(f"  DEBUG: Reclaiming Header Chunk as Body (Sim: {sim:.2f}): {c['text'][:30]}...")
+                    real_body_start_idx = idx
+                    break
+        except Exception as e:
+            print(f"  Warning: Safety check failed: {e}")
+
+
+    for c in head_es:
+        if found_body_start:
+            reclaimed_body.append(c)
+            continue
+            
+        # 1. Wrapper Filter (Delete junk)
+        if not is_valid_header_chunk(c):
+            # It's a wrapper. Skip/Delete it.
+            continue
+            
+        # 2. Semantic / Sentence Body Check
+        # Check Sentence-like properties (period check) OR Semantic Match
+        # Also skip H-tags from body check (headers can be sentences sometimes? Rarely. But we already filtered them in is_sentence)
+        is_sentence = len(c['text']) > 30 and c['text'].strip().endswith('.') and not c.get('tag','').startswith('h')
+        
+        if is_sentence or matches_anchor(c):
+            found_body_start = True
+            reclaimed_body.append(c)
+            continue
+            
+        # 3. Valid Header Part
+        final_header_parts.append(c)
+    
+    filtered_head_es = final_header_parts
+    body_es = reclaimed_body + body_es # Prepend reclaimed body
     
     # 3. Analyze & Merge ES
     # Focus: Blackwater case (EN=1, ES=2)

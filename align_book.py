@@ -2083,7 +2083,13 @@ def sync_headers(en_chunks, es_chunks, aligner):
     # Filter out Wrapper Chunks from ES Header Zone
     # If a chunk is very long (>150 chars) but we are in the 'Header Zone' (before anchor),
     # it is almost certainly a container/wrapper that duplicates the content.
-    filtered_head_es = [c for c in head_es if len(c['text']) < 150]
+    # ALSO excluded tags: div, body, html (generic containers)
+    def is_valid_header_chunk(c):
+        if c.get('tag') in ['div', 'body', 'html', 'img']: return False
+        if len(c['text']) >= 150: return False
+        return True
+
+    filtered_head_es = [c for c in head_es if is_valid_header_chunk(c)]
     
     # 3. Analyze & Merge ES
     # Focus: Blackwater case (EN=1, ES=2)

@@ -2151,21 +2151,15 @@ def sync_headers(en_chunks, es_chunks, aligner):
     # Focus: Blackwater case (EN=1, ES=2)
     # Or generically: ES has MORE chunks than EN in the header zone
     # Use filtered list for count check
+    
+    final_head = filtered_head_es
+
     if len(filtered_head_es) > len(head_en):
         
         # Check if remaining are likely split titles
         def is_likely_header_part(c):
-            t = c['text'].strip()
-            # 1. H-tags are always headers
-            if c.get('tag', '').startswith('h'): return True
-            
-            # 2. Length Check
-            if len(t) >= 100: return False
-            
-            # 3. Sentence Check: If it ends with period and is substantial length, likely a paragraph
-            if len(t) > 30 and t.endswith('.'): return False
-            
-            return True
+             # We already filtered length/wrappers/sentences.
+             return True
             
         if all(is_likely_header_part(c) for c in filtered_head_es):
             print("  Merging split ES header chunks...")
@@ -2195,10 +2189,9 @@ def sync_headers(en_chunks, es_chunks, aligner):
                         best_tag = ct
                 new_chunk['tag'] = best_tag
                 
-                # Return NEW merged header + Original Body
-                return [new_chunk] + body_es
+                final_head = [new_chunk]
             
-    return es_chunks
+    return final_head + body_es
 
 
 def inject_translation(en_node, es_text, config, soup, en_text=None):

@@ -35,6 +35,23 @@ except ImportError:
 
 from splitter import Splitter
 
+# Stanza NLP for sentence tokenization (lazy loaded)
+import stanza
+_STANZA_PIPELINES = {}
+
+def _get_stanza_pipeline(lang='en'):
+    """Lazy-load Stanza pipeline for the given language."""
+    global _STANZA_PIPELINES
+    if lang not in _STANZA_PIPELINES:
+        try:
+            # Try to load existing model
+            _STANZA_PIPELINES[lang] = stanza.Pipeline(lang, processors='tokenize', verbose=False, download_method=None)
+        except Exception:
+            # Download if not available
+            stanza.download(lang, processors='tokenize', verbose=False)
+            _STANZA_PIPELINES[lang] = stanza.Pipeline(lang, processors='tokenize', verbose=False)
+    return _STANZA_PIPELINES[lang]
+
 CACHED_ALIGNER = None
 
 
@@ -295,8 +312,10 @@ def clone_match_rescue(aligned_pairs, es_chunks, aligner, label=""):
         for c in es_chunks:
             txt = c.get('text','').strip()
             if txt:
-                for s in re.split(r'(?<=[.!?])\s+', txt):
-                    if len(s.strip())>10: es_sents.append(s.strip())
+                protected_txt = _protect_abbreviations(txt)
+                for s in re.split(r'(?<=[.!?])\s+', protected_txt):
+                    restored = _restore_abbreviations(s.strip())
+                    if len(restored)>10: es_sents.append(restored)
         if not es_sents: return
         es_embs = aligner.embed_chunks([{'text':s} for s in es_sents])
         from scipy.spatial.distance import cosine
@@ -507,28 +526,97 @@ def normalize_label(label):
             
     return label
 
-def split_sentences_helper(text):
+# Common abbreviations that should NOT trigger sentence splits
+# English: Mr., Mrs., Ms., Dr., Prof., Sr., Jr., St., vs., No., Fig., etc.
+# Spanish: Sr., Sra., Srta., Dr., Dra., Prof., Lic., Ing., Arq., etc.
+ABBREVIATIONS = [
+    'Mr', 'Mrs', 'Ms', 'Dr', 'Prof', 'Sr', 'Jr', 'St', 'vs', 'No', 'Fig',
+    'Sra', 'Srta', 'Dra', 'Lic', 'Ing', 'Arq', 'Gral', 'Col', 'Cap',
+    'Rev', 'Gov', 'Gen', 'Lt', 'Sgt', 'Pvt', 'Cpl', 'Corp',
+    'Inc', 'Ltd', 'Co', 'Bros', 'Ave', 'Blvd', 'Rd', 'Mt',
+    'Vol', 'Ch', 'Pt', 'Ed', 'Ph', 'etc', 'al'
+]
+
+def _protect_abbreviations(text):
+    """Replace abbreviation periods with placeholder to prevent incorrect sentence splits."""
+    protected = text
+    for abbr in ABBREVIATIONS:
+        # Match abbreviation followed by period and space (case insensitive)
+        # e.g., "Mr. Jones" -> "Mr⌐ABBR⌐ Jones"
+        pattern = r'\b(' + re.escape(abbr) + r')\. '
+        protected = re.sub(pattern, r'\1⌐ABBR⌐ ', protected, flags=re.IGNORECASE)
+    return protected
+
+def _restore_abbreviations(text):
+    """Restore abbreviation periods from placeholder."""
+    return text.replace('⌐ABBR⌐', '.')
+
+def split_sentences_helper(text, language='en'):
     """
-    Splits text into sentences using simple regex.
+    Splits text into sentences using Stanza NLP.
+    
+    Stanza is a Stanford NLP library that uses neural models trained on 
+    Universal Dependencies for accurate sentence boundary detection. It 
+    correctly handles abbreviations like Mr., Dr., Sr., Sra., Dra., etc.
+    
+    Args:
+        text: The text to split into sentences
+        language: Language code ('en' for English, 'es' for Spanish)
+    
+    Returns:
+        List of sentence strings
     """
-    if not text:
+    if not text or not text.strip():
         return []
-    # Pattern: End punctuation + optional quotes + whitespace + Next is Upper/Start/Dash
-    # Added em-dash (—) and en-dash (–) to lookahead for Spanish dialogue
-    pattern = r'([.!?…]+(?:[”"’\'\)\]»]*)\s+(?=[A-Z¿¡"\'\-\—\–]))'
-    parts = re.split(pattern, text)
-    sentences = []
-    current_sent = ""
-    for i, part in enumerate(parts):
-        if i % 2 == 0:
-            current_sent += part
-        else:
-            current_sent += part
+    
+    try:
+        # Use Stanza for sentence segmentation
+        nlp = _get_stanza_pipeline(language)
+        doc = nlp(text)
+        sentences = [sent.text.strip() for sent in doc.sentences if sent.text.strip()]
+        
+        # Post-process: Stanza may still split on rare abbreviations (e.g., "Prof. Williams")
+        # Apply abbreviation protection as a safety net
+        merged_sentences = []
+        i = 0
+        while i < len(sentences):
+            curr = sentences[i]
+            # Check if current sentence ends with an abbreviation
+            ends_with_abbr = False
+            for abbr in ABBREVIATIONS:
+                if curr.rstrip().endswith(abbr + '.'):
+                    ends_with_abbr = True
+                    break
+            
+            if ends_with_abbr and i + 1 < len(sentences):
+                # Merge with next sentence
+                merged_sentences.append(curr + ' ' + sentences[i + 1])
+                i += 2
+            else:
+                merged_sentences.append(curr)
+                i += 1
+        
+        return merged_sentences if merged_sentences else sentences
+        
+    except Exception as e:
+        # Fallback to regex-based splitting if Stanza fails
+        print(f"Stanza failed, using regex fallback: {e}")
+        protected_text = _protect_abbreviations(text)
+        pattern = r'([.!?…]+(?:["\"\')\]»]*)\s+(?=[A-Z¿¡\"\'-—–]))'
+        parts = re.split(pattern, protected_text)
+        sentences = []
+        current_sent = ""
+        for j, part in enumerate(parts):
+            if j % 2 == 0:
+                current_sent += part
+            else:
+                current_sent += part
+                sentences.append(current_sent.strip())
+                current_sent = ""
+        if current_sent and current_sent.strip():
             sentences.append(current_sent.strip())
-            current_sent = ""
-    if current_sent and current_sent.strip():
-        sentences.append(current_sent.strip())
-    return sentences
+        return [_restore_abbreviations(s) for s in sentences]
+
 
 def distribute_spanish(aligner, en_chunks, es_text):
     """
@@ -545,7 +633,7 @@ def distribute_spanish(aligner, en_chunks, es_text):
         return [es_text]
         
     en_texts = [c['text'] for c in en_chunks]
-    es_sents = split_sentences_helper(es_text)
+    es_sents = split_sentences_helper(es_text, language='es')
     
     if not es_sents:
         return [""] * len(en_chunks)
@@ -660,10 +748,13 @@ def pre_split_long_paragraphs(chunks, threshold=400):
         
         # Only split standard paragraphs, not headers/captions
         if len(text) > threshold and chunk_type == 'std':
+            # Protect abbreviations before splitting
+            protected_text = _protect_abbreviations(text)
             # Split into sentences using regex
             # Match sentence endings followed by whitespace
-            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z""\'])', text)
-            sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z""\'])', protected_text)
+            # Restore abbreviations in each sentence
+            sentences = [_restore_abbreviations(s.strip()) for s in sentences if s.strip() and len(s.strip()) > 20]
             
             if len(sentences) > 1:
                 # Create a chunk for each sentence, preserving original node reference
@@ -727,11 +818,13 @@ def merge_bleeding_blocks(aligner, blocks):
         en_text = last_en_chunk['text'].strip()
         es_text = first_es_chunk['text'].strip()
         
-        en_sents = re.split(r'[.?!]\s+', en_text)
-        es_sents = re.split(r'[.?!]\s+', es_text)
+        protected_en = _protect_abbreviations(en_text)
+        protected_es = _protect_abbreviations(es_text)
+        en_sents = re.split(r'[.?!]\s+', protected_en)
+        es_sents = re.split(r'[.?!]\s+', protected_es)
         
-        candidate_en = en_sents[-1] if en_sents else en_text
-        candidate_es = es_sents[0] if es_sents else es_text
+        candidate_en = _restore_abbreviations(en_sents[-1]) if en_sents else en_text
+        candidate_es = _restore_abbreviations(es_sents[0]) if es_sents else es_text
         
         # Compute Sim
         try:
@@ -1206,7 +1299,7 @@ def split_sentences(text):
     Splits text into sentences using the helper regex function.
     Restored for Heuristic Alignment drill-down.
     """
-    return split_sentences_helper(text)
+    return split_sentences_helper(text, language='en')
 
 
 def split_sentences_aggressive(text):
@@ -5164,8 +5257,9 @@ def process_chapter_pair(args):
                              
                              # Split ES into sentences
                              es_text = pair['es']
-                             es_sentences = re.split(r'(?<=[.!?])\s+', es_text)
-                             es_sentences = [s.strip() for s in es_sentences if s.strip()]
+                             protected_es = _protect_abbreviations(es_text)
+                             es_sentences = re.split(r'(?<=[.!?])\s+', protected_es)
+                             es_sentences = [_restore_abbreviations(s.strip()) for s in es_sentences if s.strip()]
                              
                              if len(es_sentences) >= orphan_count + 1:
                                  # Collect EN paragraphs to redistribute to

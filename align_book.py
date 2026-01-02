@@ -6,6 +6,7 @@ import time
 import re
 import html
 import difflib
+from urllib.parse import unquote
 import concurrent.futures
 import multiprocessing
 from html.parser import HTMLParser
@@ -170,7 +171,7 @@ def parse_toc(toc_path):
         # Current node details
         label = find_text(node, './ncx:navLabel/ncx:text')
         content_node = node.find('./ncx:content', ns)
-        content = content_node.get('src') if content_node is not None else ""
+        content = unquote(content_node.get('src')) if content_node is not None else ""
         
         # Cleanup content
         if '#' in content:
@@ -905,11 +906,17 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None, m
 
     recursive_align(0, len(en_items), 0, len(es_items))
     
-    # --- GAP FILLING FOR SHARED/SPARSE ES FILES ---
+    # --- GAP FILLING / SEMANTIC RESCUE ---
     assigned_en_count = len(final_pairs_map)
     
-    if en_items and assigned_en_count < len(en_items) * 0.4 and len(es_items) < len(en_items) * 0.5:
-        print(f"Sparse ES TOC detected ({len(es_items)} items vs {len(en_items)} EN). Attempting Gap Filling.")
+    # Trigger if:
+    # 1. Sparse ES TOC (Original Animal Farm case)
+    # 2. OR Very Bad Alignment (< 20% matched) AND we have a Model (Blackwater case)
+    is_sparse = len(es_items) < len(en_items) * 0.5
+    is_poor_match = assigned_en_count < len(en_items) * 0.5
+    
+    if en_items and (is_sparse or (is_poor_match and model)):
+        print(f"Triggering Semantic Rescue: Sparse={is_sparse}, PoorMatch={is_poor_match} ({assigned_en_count}/{len(en_items)})")
         
         if en_toc_dir and es_toc_dir:
             try:
@@ -4131,7 +4138,7 @@ def parse_opf_as_toc(opf_path):
         for itemref in spine.findall('.//opf:itemref', ns) or spine.findall('.//itemref'):
             idref = itemref.get('idref')
             if idref in manifest:
-                href = manifest[idref]
+                href = unquote(manifest[idref])
                 # Use basename as label since we don't have real titles
                 label = os.path.splitext(os.path.basename(href))[0]
                 toc_items.append({'label': label, 'src': href, 'level': 0})

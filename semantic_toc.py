@@ -127,8 +127,6 @@ def align_tocs_semantically(en_items, es_items, en_toc_dir, es_toc_dir, model):
         # Threshold?
         if best_score > 0.4: # Loose threshold, context matching can be noisy
              en_matches[real_en_idx] = {'es_idx': best_es_idx, 'score': best_score}
-        else:
-             print(f"  Low confidence match for EN '{en_items[real_en_idx]['item']['label']}': {best_score:.3f}")
 
     # Reconstruct Full Pairs List in Order
     current_es_src = None
@@ -139,6 +137,7 @@ def align_tocs_semantically(en_items, es_items, en_toc_dir, es_toc_dir, model):
         level = en_item['item'].get('level', 0)
         
         match = en_matches.get(i)
+        
         if match:
              es_idx = match['es_idx']
              es_src = es_paths[es_idx]

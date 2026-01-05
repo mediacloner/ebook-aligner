@@ -112,6 +112,35 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
             # Add to main config
             config['bilingual'] = b_conf
             print(f"Applied bilingual config: {b_conf}")
+        
+        # LLM Verification - 3 modes: none, validate, validate_fix
+        verify_mode = user_config.get('verifyLLM', 'validate_fix') if user_config else 'validate_fix'
+        # Handle legacy boolean values
+        if verify_mode is True:
+            verify_mode = 'validate_fix'
+        elif verify_mode is False:
+            verify_mode = 'none'
+        
+        config['verify_llm'] = verify_mode != 'none'
+        config['verify_mode'] = verify_mode  # none, validate, validate_fix
+        config['verify_model'] = 'qwen2.5:7b'
+        
+        if verify_mode != 'none':
+            active_jobs[job_id]['message'] = f'Initializing LLM verification ({verify_mode})...'
+            # Auto-install model if needed
+            try:
+                from llm_verifier import AlignmentVerifier
+                verifier = AlignmentVerifier(model='qwen2.5:7b')
+                if verifier._ensure_ollama():
+                    print(f"LLM verification ready (mode: {verify_mode})")
+                else:
+                    print("LLM verification unavailable, continuing without it")
+                    config['verify_llm'] = False
+                    config['verify_mode'] = 'none'
+            except Exception as e:
+                print(f"LLM verification init failed: {e}")
+                config['verify_llm'] = False
+                config['verify_mode'] = 'none'
             
         def cancel_check():
             return active_jobs.get(job_id, {}).get('status') == 'cancelled'
@@ -167,11 +196,34 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
         saved_location_msg = ""
         if output_dir and os.path.isdir(output_dir):
             try:
+                # 1. Main EPUB
                 dest_path = os.path.join(output_dir, final_name)
                 shutil.copy2(output_path, dest_path)
-                saved_location_msg = f"Saved to {final_name}"
-            except Exception as copy_err:
-                print(f"Failed to copy to output_dir: {copy_err}")
+                saved_location_msg = f"Saved to {os.path.abspath(dest_path)}"
+                
+                # 2. Fixed EPUB (if exists)
+                fixed_src = output_path.replace('.epub', '_fixed.epub')
+                if os.path.exists(fixed_src):
+                    fixed_dest_name = final_name.replace('.epub', ' (Fixed).epub')
+                    fixed_dest = os.path.join(output_dir, fixed_dest_name)
+                    shutil.copy2(fixed_src, fixed_dest)
+                    saved_location_msg += f"\nFixed version: {fixed_dest_name}"
+                
+                # 3. Verification Report
+                flagged_pairs = result.get('flagged_pairs', []) if isinstance(result, dict) else []
+                if flagged_pairs:
+                    from llm_verifier import generate_report
+                    # Generate verification report
+                    report_path = generate_report(output_path, flagged_pairs, total_pairs=0)
+                    
+                    if report_path and os.path.exists(report_path):
+                         report_dest_name = final_name.replace('.epub', ' (Report).md')
+                         report_dest = os.path.join(output_dir, report_dest_name)
+                         shutil.copy2(report_path, report_dest)
+                         saved_location_msg += f"\nReport: {report_dest_name}"
+
+            except Exception as e:
+                print(f"Error copying to output dir: {e}")
 
         active_jobs[job_id]['status'] = 'completed'
         active_jobs[job_id]['progress'] = 100

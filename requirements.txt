@@ -4,3 +4,4 @@ numpy
 scipy
 beautifulsoup4
 pysbd
+ollama

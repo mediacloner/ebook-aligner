@@ -733,6 +733,7 @@ def distribute_spanish(aligner, en_chunks, es_text):
             # Bias slightly towards ratio ~ 1.0 - 1.5?
             # Add penalty for extreme ratios
             length_penalty = 0
+            ratio = len(current_es_str) / en_len if en_len > 0 else 1.0
             if ratio < 0.2: length_penalty = 0.5
             if ratio > 3.0: length_penalty = 0.5
             
@@ -771,7 +772,7 @@ def save_cleaned_opf(soup, path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write(content)
 
-def pre_split_long_paragraphs(chunks, threshold=150, language='en'):
+def pre_split_long_paragraphs(chunks, threshold=400, language='en'):
     """
     Split long paragraphs (>threshold chars) into sentences BEFORE alignment.
     This enables better matching when EN has merged paragraphs but ES has them split.
@@ -798,6 +799,8 @@ def pre_split_long_paragraphs(chunks, threshold=150, language='en'):
             sentences = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 20]
             
             if len(sentences) > 1:
+                # Generate a unique group ID for this split paragraph
+                group_id = id(chunk)
                 # Create a chunk for each sentence, preserving original node reference
                 for i, sent in enumerate(sentences):
                     # Robust filter: Skip short chunks that are just asterisms or punctuation
@@ -808,6 +811,7 @@ def pre_split_long_paragraphs(chunks, threshold=150, language='en'):
                     new_chunk['is_pre_split'] = True
                     new_chunk['pre_split_idx'] = i
                     new_chunk['pre_split_count'] = len(sentences)
+                    new_chunk['pre_split_group_id'] = group_id  # Track which paragraph this came from
                     # Keep reference to original node for injection
                     if 'node' in chunk:
                         new_chunk['original_node'] = chunk['node']
@@ -818,6 +822,119 @@ def pre_split_long_paragraphs(chunks, threshold=150, language='en'):
         result.append(chunk)
     
     return result
+
+
+def group_pre_split_chunks(chunks):
+    """
+    Groups consecutive pre-split chunks that came from the same original paragraph.
+    Returns a list of groups, where each group is either:
+    - A list of pre-split chunks (to be aligned atomically)
+    - A single regular chunk
+    
+    This prevents sentence-level drift by ensuring sentences from the same
+    paragraph are aligned together using proportional distribution.
+    """
+    groups = []
+    current_group = []
+    current_group_id = None
+    
+    for chunk in chunks:
+        if chunk.get('is_pre_split'):
+            group_id = chunk.get('pre_split_group_id')
+            if group_id == current_group_id:
+                # Same group, continue accumulating
+                current_group.append(chunk)
+            else:
+                # New group - save previous if exists
+                if current_group:
+                    groups.append({'type': 'pre_split_group', 'chunks': current_group})
+                current_group = [chunk]
+                current_group_id = group_id
+        else:
+            # Regular chunk - save any pending pre-split group
+            if current_group:
+                groups.append({'type': 'pre_split_group', 'chunks': current_group})
+                current_group = []
+                current_group_id = None
+            # Add regular chunk as its own group
+            groups.append({'type': 'single', 'chunk': chunk})
+    
+    # Don't forget the last group
+    if current_group:
+        groups.append({'type': 'pre_split_group', 'chunks': current_group})
+    
+    return groups
+
+
+def align_pre_split_group(en_group, es_text, aligner):
+    """
+    Aligns a pre-split EN group with combined ES text using proportional distribution.
+    Returns a list of (en_chunk, es_text) tuples.
+    """
+    if not en_group or not es_text:
+        return [(c, "") for c in en_group]
+    
+    # Use distribute_spanish to proportionally assign ES sentences to EN chunks
+    distributed = distribute_spanish(aligner, en_group, es_text)
+    
+    return list(zip(en_group, distributed))
+
+
+# --- SCENE BREAK DETECTION (Pattern 3: Paragraph Bleeding Fix) ---
+SCENE_BREAK_PATTERNS = [
+    r'^[\s]*⁂[\s]*$',           # Asterism
+    r'^[\s]*\*\s*\*\s*\*[\s]*$', # Three asterisks
+    r'^[\s]*\*{3,}[\s]*$',       # Three or more asterisks
+    r'^[\s]*§[\s]*$',            # Section sign
+    r'^[\s]*[-–—]{3,}[\s]*$',    # Three or more dashes
+    r'^[\s]*[_]{3,}[\s]*$',      # Three or more underscores
+]
+
+
+def is_scene_break(text):
+    """Check if text is a scene break marker (asterism, dashes, etc.)."""
+    if not text:
+        return False
+    text = text.strip()
+    if len(text) > 20:  # Scene breaks are short
+        return False
+    for pattern in SCENE_BREAK_PATTERNS:
+        if re.match(pattern, text):
+            return True
+    # Also check for single asterism character
+    if text == '⁂' or text == '*':
+        return True
+    return False
+
+
+def split_by_scene_breaks(chunks):
+    """
+    Split chunks into sections delimited by scene breaks (asterisms, etc.).
+    Returns a list of sections, where each section is a list of chunks.
+    Scene break chunks are kept as their own single-element sections.
+    
+    This prevents paragraph bleeding across scene breaks during alignment.
+    """
+    sections = []
+    current_section = []
+    
+    for chunk in chunks:
+        text = chunk.get('text', '')
+        if is_scene_break(text):
+            # Save current section if not empty
+            if current_section:
+                sections.append(current_section)
+                current_section = []
+            # Add scene break as its own section (preserves it in output)
+            sections.append([chunk])
+        else:
+            current_section.append(chunk)
+    
+    # Don't forget the last section
+    if current_section:
+        sections.append(current_section)
+    
+    return sections
 
 def merge_bleeding_blocks(aligner, blocks):
     """
@@ -1344,8 +1461,11 @@ def split_sentences(text):
 
 
 def split_sentences_aggressive(text):
-    """Deprecated: No longer splits."""
-    return split_sentences(text)
+    """
+    Aggressive splitting using Regex (ignores Stanza).
+    Used for recovery when Stanza under-splits.
+    """
+    return _split_sentences_regex(text)
 
 def find_opf_file(base_dir):
     """Recursively searches for the first .opf file in the directory."""
@@ -2556,6 +2676,14 @@ def perform_injection(aligned_pairs, config, soup):
         group = node_groups[node_id]
         if not group: continue
         
+        # Debug trace for missing text
+        if group and 'en' in group[0] and "So far as" in group[0]['en']:
+             print(f"DEBUG: Found 'So far' group. Len={len(group)}")
+             for k, gp in enumerate(group):
+                 print(f"  Item {k}: EN='{gp['en'][:50]}...' ES='{gp['es'][:50]}...'")
+                 
+        if not group: continue
+        
         original_node = group[0].get('node')
         if not original_node: continue
         
@@ -2636,6 +2764,132 @@ def align_chunks(en_chunks, es_chunks):
     if CACHED_ALIGNER:
          es_chunks = sync_headers(en_chunks, es_chunks, CACHED_ALIGNER)
 
+    # --- PRE-SPLIT GROUP HANDLING (Sentence Drift Fix) ---
+    # If EN has pre-split groups, we need to align them atomically
+    # to prevent sentence-level drift within paragraphs
+    has_pre_split = any(c.get('is_pre_split') for c in en_chunks)
+    
+    if has_pre_split and CACHED_ALIGNER:
+        print("DEBUG: align_chunks - Detected pre-split chunks, using group-based alignment")
+        en_groups = group_pre_split_chunks(en_chunks)
+        es_groups = group_pre_split_chunks(es_chunks)
+        
+        # Flatten chunks for fingerprinting, but track group boundaries
+        en_flat = []
+        en_group_map = []  # Maps flat index -> (group_idx, is_pre_split_group)
+        for gi, g in enumerate(en_groups):
+            if g['type'] == 'pre_split_group':
+                for c in g['chunks']:
+                    en_group_map.append((gi, True))
+                    en_flat.append(c)
+            else:
+                en_group_map.append((gi, False))
+                en_flat.append(g['chunk'])
+        
+        es_flat = []
+        es_group_map = []
+        for gi, g in enumerate(es_groups):
+            if g['type'] == 'pre_split_group':
+                for c in g['chunks']:
+                    es_group_map.append((gi, True))
+                    es_flat.append(c)
+            else:
+                es_group_map.append((gi, False))
+                es_flat.append(g['chunk'])
+        
+        # For pre-split groups: combine ES text and use distribute_spanish
+        # This ensures sentences within a paragraph are distributed proportionally
+        # We only do this if EN has more pre-split sentences than ES
+        en_pre_split_count = sum(1 for c in en_chunks if c.get('is_pre_split'))
+        es_pre_split_count = sum(1 for c in es_chunks if c.get('is_pre_split'))
+        
+        if en_pre_split_count > es_pre_split_count * 1.3:  # Significant asymmetry
+            print(f"DEBUG: Asymmetric pre-split: EN={en_pre_split_count}, ES={es_pre_split_count}")
+            # Combine ES pre-split groups back into single chunks for redistribution
+            es_combined = []
+            for g in es_groups:
+                if g['type'] == 'pre_split_group':
+                    combined_text = ' '.join(c['text'] for c in g['chunks'])
+                    # Use first chunk as template
+                    combined_chunk = g['chunks'][0].copy()
+                    combined_chunk['text'] = combined_text
+                    combined_chunk['is_pre_split'] = False  # Now it's combined
+                    es_combined.append(combined_chunk)
+                else:
+                    es_combined.append(g['chunk'])
+            es_chunks = es_combined
+            print(f"DEBUG: Combined ES chunks from {len(es_flat)} to {len(es_chunks)}")
+
+    # --- SCENE BREAK HANDLING (Pattern 3: Paragraph Bleeding Fix) ---
+    # Split content at scene breaks and align each section independently
+    # This prevents text from bleeding across asterisms
+    en_has_breaks = any(is_scene_break(c.get('text', '')) for c in en_chunks)
+    es_has_breaks = any(is_scene_break(c.get('text', '')) for c in es_chunks)
+    
+    if en_has_breaks or es_has_breaks:
+        print("DEBUG: align_chunks - Detected scene breaks, using section-level alignment")
+        en_sections = split_by_scene_breaks(en_chunks)
+        es_sections = split_by_scene_breaks(es_chunks)
+        
+        # Count non-break sections
+        en_content_sections = [s for s in en_sections if not (len(s) == 1 and is_scene_break(s[0].get('text', '')))]
+        es_content_sections = [s for s in es_sections if not (len(s) == 1 and is_scene_break(s[0].get('text', '')))]
+        
+        print(f"DEBUG: EN has {len(en_content_sections)} content sections, ES has {len(es_content_sections)}")
+        
+        # If section counts match, align section by section
+        if len(en_content_sections) == len(es_content_sections):
+            all_aligned = []
+            en_idx, es_idx = 0, 0
+            
+            for en_sec in en_sections:
+                # Check if this is a scene break section
+                if len(en_sec) == 1 and is_scene_break(en_sec[0].get('text', '')):
+                    # Scene break - find matching ES scene break or use empty
+                    es_break_text = ""
+                    while es_idx < len(es_sections):
+                        es_sec = es_sections[es_idx]
+                        if len(es_sec) == 1 and is_scene_break(es_sec[0].get('text', '')):
+                            es_break_text = es_sec[0].get('text', '')
+                            es_idx += 1
+                            break
+                        es_idx += 1
+                    
+                    all_aligned.append({
+                        'tag': en_sec[0].get('tag', 'p'),
+                        'classes': en_sec[0].get('classes', []),
+                        'en': en_sec[0].get('text', ''),
+                        'es': es_break_text,
+                        'node': en_sec[0].get('node'),
+                        'type': 'scene_break'
+                    })
+                else:
+                    # Content section - find matching ES content section
+                    es_sec = []
+                    while es_idx < len(es_sections):
+                        candidate = es_sections[es_idx]
+                        es_idx += 1
+                        if not (len(candidate) == 1 and is_scene_break(candidate[0].get('text', ''))):
+                            es_sec = candidate
+                            break
+                    
+                    # Simple positional alignment for this section
+                    # More sophisticated alignment happens in the main align_section later
+                    max_len = max(len(en_sec), len(es_sec)) if es_sec else len(en_sec)
+                    for k in range(max_len):
+                        en_item = en_sec[k] if k < len(en_sec) else None
+                        es_item = es_sec[k] if k < len(es_sec) else None
+                        all_aligned.append({
+                            'tag': en_item.get('tag', 'p') if en_item else 'p',
+                            'classes': en_item.get('classes', []) if en_item else [],
+                            'en': en_item.get('text', '') if en_item else '',
+                            'es': es_item.get('text', '') if es_item else '',
+                            'node': en_item.get('node') if en_item else None,
+                            'type': en_item.get('type', 'std') if en_item else 'std'
+                        })
+            
+            return all_aligned
+
     en_headers = get_header_indices(en_chunks)
     es_headers = get_header_indices(es_chunks)
     
@@ -2668,11 +2922,27 @@ def align_chunks(en_chunks, es_chunks):
              anchors_list = sorted(list(set(anchors_list))) # Re-sort with tokens       
         
         # Dialogue Anchor: Check for start chars
+        # UNIFIED DETECTION: Handle EN quotes (", ', "), ES em-dashes (—, –, -), 
+        # and Spanish inverted punctuation (¿, ¡) that often appears in dialogue
         is_dialog = False
         s = txt.strip()
         if s:
-             if s.startswith('“') or s.startswith('"'): is_dialog = True
-             elif s.startswith('—') or s.startswith('-') or s.startswith('–'): is_dialog = True
+            first_char = s[0]
+            # EN/ES quotes: " " ' ' " ' « »
+            if first_char in '""\'\'""«»': 
+                is_dialog = True
+            # ES em-dash and regular dash dialogue markers: — – -
+            elif first_char in '—–-': 
+                is_dialog = True
+            # Spanish inverted punctuation often starts dialogue
+            elif first_char in '¿¡':
+                is_dialog = True
+            # Check for dialogue tag pattern at END: ", he said." or "—dijo él."
+            if not is_dialog and len(s) > 20:
+                # Check if ends with dialogue attribution pattern
+                dialogue_end = re.search(r'[,"""\']\s*(he|she|said|asked|replied|dijo|preguntó|respondió)', s[-50:], re.IGNORECASE)
+                if dialogue_end:
+                    is_dialog = True
         
         anchor_sig = ""
         if anchors_list: anchor_sig = "ANCHOR:" + "|".join(anchors_list)
@@ -4659,10 +4929,12 @@ def filter_to_matching_headers(en_chunks, es_chunks):
 
 
 def process_chapter_pair(args):
-    # Unpack args (Support Variable Length with Model)
-    idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model = (None,) * 8
-    
-    if len(args) == 8:
+    # Unpack args (Support Variable Length with Model and Staging Info)
+    # Args format: (idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model, staging_info)
+    staging_info = None
+    if len(args) == 9:
+        idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model, staging_info = args
+    elif len(args) == 8:
         idx, en_path, es_path, es_opf_dir, config, label, chunk_range, model = args
     elif len(args) == 7:
         idx, en_path, es_path, es_opf_dir, config, label, chunk_range = args
@@ -4671,7 +4943,29 @@ def process_chapter_pair(args):
         idx, en_path, es_path, es_opf_dir, config, label = args
         chunk_range = None
 
+    flagged_pairs = []
+    
+    # Determine target paths
     target_path = en_path
+    fixed_target_path = None
+    
+    if staging_info:
+        staging_root, staging_fixed_root, en_base = staging_info
+        
+        # Scenario 1: en_path is already in staging (because we scanned staging TOC)
+        if staging_root and en_path.startswith(staging_root):
+             rel_path = os.path.relpath(en_path, staging_root)
+             target_path = en_path # It's already the target
+             if staging_fixed_root:
+                 fixed_target_path = os.path.join(staging_fixed_root, rel_path)
+        
+        # Scenario 2: en_path is in source directory (en_base)
+        elif en_base and en_path.startswith(en_base):
+            rel_path = os.path.relpath(en_path, en_base)
+            target_path = os.path.join(staging_root, rel_path)
+            if staging_fixed_root:
+                fixed_target_path = os.path.join(staging_fixed_root, rel_path)
+    
     es_rel = es_path
 
     print(f"DEBUG: Entering process_chapter_pair for {label}")
@@ -4679,12 +4973,12 @@ def process_chapter_pair(args):
     
     # Check bypass
     if config.get('bypass_alignment'):
-         return (idx, None, "Bypassed", None)
+         return (idx, None, "Bypassed", None, [])
 
     try:
         # 1. Parse Existing English File (DOM)
         if not os.path.exists(target_path):
-             return (idx, None, f"Target file not found: {target_path}", None)
+             return (idx, None, f"Target file not found: {target_path}", None, [])
 
         with open(target_path, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f.read(), 'lxml')
@@ -4696,7 +4990,7 @@ def process_chapter_pair(args):
         # Check if this is a navigation page (TOC, index, etc.) - skip alignment
         if is_navigation_page(soup):
             print(f"DEBUG: {label} - Detected as navigation page, skipping alignment")
-            return (idx, target_path, label, [])
+            return (idx, target_path, label, [], [])
             
         # --- PRE-PROCESS: Merge Consecutive Headers (Fixed for Atomic Habits) ---
         # Atomic Habits splits Chapter Num and Title into separate h2 tags.
@@ -4800,7 +5094,7 @@ def process_chapter_pair(args):
         print(f"DEBUG: {label} - BEFORE split: {len(es_chunks)} ES chunks")
         for i, c in enumerate(es_chunks[:5]):  # Show first 5
             print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
-        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=400, language='es')
+        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=150, language='es')
         print(f"DEBUG: {label} - AFTER split: {len(es_chunks)} ES chunks")
         for i, c in enumerate(es_chunks[:10]):  # Show first 10 after split
             print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
@@ -5358,9 +5652,111 @@ def process_chapter_pair(args):
              except Exception as e:
                  print(f"Splitting failed: {e}")
 
+             # --- LLM VERIFICATION AND AUTO-FIX ---
+             verify_mode = config.get('verify_mode', 'validate_fix' if config.get('verify_llm') else 'none')
+             fixed_pairs = None
+             
+             if config.get('verify_llm'):
+                 try:
+                     from llm_verifier import AlignmentVerifier
+                     verifier = AlignmentVerifier(model=config.get('verify_model', 'qwen2.5:7b'))
+                     print(f"DEBUG: {label} - Running LLM verification on {len(aligned_pairs)} pairs (mode: {verify_mode})...")
+                     
+                     if verify_mode == 'validate_fix' and fixed_target_path:
+                         import copy
+                         # Use shallow copy of list/dicts to preserve structure, but allow node replacement
+                         fixed_pairs = [p.copy() for p in aligned_pairs]
+                         # Use serialization/re-parsing to ensure a completely independent DOM tree
+                         # This avoids potential issues with copy.deepcopy retaining references or structure quirks
+                         soup_fixed = BeautifulSoup(str(soup), 'lxml')
+                         
+                         # CRITICAL: Map nodes from 'soup' (orig) to 'soup_fixed' (copy)
+                         # deepcopy(soup) creates new Tag objects. 
+                         # We must update fixed_pairs to point to these new Tags.
+                         # Since structure is identical, we can map by extraction order.
+                         # ROBUST MAPPING: Parallel traversal of descendants
+                         try:
+                             node_map = {}
+                             # deepcopy preserves order of descendants perfectly
+                             # Use list to check lengths and debug
+                             list_orig = list(soup.descendants)
+                             list_fixed = list(soup_fixed.descendants)
+                             print(f"DEBUG: Descendants check: Orig={len(list_orig)}, Fixed={len(list_fixed)}")
+                             
+                             if len(list_orig) != len(list_fixed):
+                                 print("WARNING: Descendants count mismatch! Mapping might fail.")
+                             
+                             for orig, fixed in zip(list_orig, list_fixed):
+                                 node_map[id(orig)] = fixed
+                             
+                             remapped_count = 0
+                             total_pairs_with_node = 0
+                             for p in fixed_pairs:
+                                 if 'node' in p:
+                                     total_pairs_with_node += 1
+                                     orig_id = id(p['node'])
+                                     if orig_id in node_map:
+                                         p['node'] = node_map[orig_id]
+                                         remapped_count += 1
+                                     else:
+                                         # This is critical failure for this node
+                                         # print(f"DEBUG: Failed to map pair node ID={orig_id}")
+                                         pass
+                             
+                             print(f"DEBUG: Remapped {remapped_count} / {total_pairs_with_node} nodes.")
+                         except Exception as map_err:
+                             print(f"DEBUG: Node mapping failed: {map_err}")
+                             import traceback
+                             traceback.print_exc()
+                     
+                     target_list = fixed_pairs if fixed_pairs else aligned_pairs
+                     flagged_count = 0
+                     
+                     for i, pair in enumerate(target_list):
+                         en = pair.get('en', '').strip()
+                         es = pair.get('es', '').strip()
+                         
+                         if en and es and len(en) > 30 and len(es) > 30:
+                             len_ratio = len(es) / len(en)
+                             if len_ratio < 0.3 or len_ratio > 3.0:
+                                 result = verifier.verify_pair(en, es)
+                                 if not result.get('is_match', True):
+                                     pair['llm_flagged'] = True
+                                     flagged_count += 1
+                                     conf = result.get('confidence')
+                                     pair['llm_confidence'] = conf
+                                     
+                                     if fixed_pairs and i < len(aligned_pairs):
+                                         aligned_pairs[i]['llm_flagged'] = True
+                                         aligned_pairs[i]['llm_confidence'] = conf
+                                     
+                                     if verify_mode == 'validate_fix' and fixed_pairs:
+                                          print(f"  Attempting repair for: {en[:30]}...")
+                                          new_es = verifier.repair_translation(en)
+                                          if new_es and not new_es.startswith('[Error'):
+                                              pair['_original_es'] = es
+                                              pair['es'] = new_es
+                                              pair['_was_fixed'] = True
+                                              if i < len(aligned_pairs):
+                                                  aligned_pairs[i]['_original_es'] = es
+                                                  aligned_pairs[i]['_was_fixed'] = True
+                     
+                     if flagged_count:
+                         print(f"DEBUG: {label} - LLM flagged {flagged_count} suspicious pairs")
+                         flagged_in_this_chapter = [p for p in target_list if p.get('llm_flagged')]
+                         flagged_pairs.extend(flagged_in_this_chapter)
+
+                 except Exception as e:
+                     print(f"LLM verification failed: {e}")
+
              # --- INJECTION ---
-             # Group by node to handle splits (1 Node -> Multiple Pairs)
              perform_injection(aligned_pairs, config, soup)
+             
+             # Inject into fixed output (if active)
+             if fixed_pairs and fixed_target_path and 'soup_fixed' in locals() and soup_fixed:
+                 perform_injection(fixed_pairs, config, soup_fixed)
+                 with open(fixed_target_path, 'w', encoding='utf-8') as f:
+                      f.write(str(soup_fixed))
              
         else:
              aligned_pairs = align_chunks(en_chunks, es_chunks)
@@ -5452,13 +5848,13 @@ def process_chapter_pair(args):
         # Collect images if any (extract from soup check?)
         # For now, we don't need to return images as we are preserving original structure
         # But if we did find new images (rare in this mode), we'd track them.
-        return (idx, target_path, label, [])
+        return (idx, target_path, label, [], flagged_pairs)
         
     except Exception as e:
         print(f"Error processing chapter {label}: {e}")
         import traceback
         traceback.print_exc()
-        return (idx, None, str(e), [])
+        return (idx, None, str(e), [], [])
                              
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     # Use a staging directory relative to the output path (job-specific)
@@ -5484,6 +5880,11 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     3. Modify chapters in place (Inject translation).
     """
     
+    # Normalize paths to avoid mismatches
+    en_base = os.path.abspath(en_base)
+    es_base = os.path.abspath(es_base)
+    staging_dir = os.path.abspath(staging_dir)
+    
     # 1. Copy Entire Structure
     print(f"--- Starting Fresh Execution for {os.path.basename(output_epub_path)} ---")
     if os.path.exists(staging_dir):
@@ -5491,6 +5892,20 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         
     print(f"Copying original structure from {en_base} to {staging_dir}...")
     shutil.copytree(en_base, staging_dir)
+
+    staging_dir_fixed = None
+    verify_mode = config.get('verify_mode')
+    if not verify_mode and config.get('verify_llm'):
+        verify_mode = 'validate_fix'
+
+    if config and verify_mode == 'validate_fix':
+        staging_dir_fixed = staging_dir + "_fixed"
+        if os.path.exists(staging_dir_fixed):
+            shutil.rmtree(staging_dir_fixed)
+        print(f"Copying structure for fixed version to {staging_dir_fixed}...")
+        shutil.copytree(en_base, staging_dir_fixed)
+    
+    staging_info = (staging_dir, staging_dir_fixed, en_base)
     
     # 2. Identify TOC and Pairs
     # We still need to align the structure to know what to inject where.
@@ -5897,7 +6312,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
                     print(f"  {label}: Will use {proportions_unused[position]*100:.1f}% of shared file {os.path.basename(es_abs)}")
             
             # Append arguments (including model)
-            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range, model) )
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range, model, staging_info) )
             
         # Replaces the original loop below
         
@@ -5923,7 +6338,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             if not es_rel: continue
             es_abs = os.path.normpath(os.path.join(es_toc_dir, es_rel))
             
-            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, None, model) )
+            args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, None, model, staging_info) )
 
     # 4. Process Chapters (In-Place)
     
@@ -5947,6 +6362,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # as we are modifying in place and the original EPUB structure is preserved.
     # However, process_chapter_pair still returns images, which might be useful for manifest updates.
     all_collected_images = set()
+    all_flagged_pairs = []
     
     try:
         count_done = 0
@@ -5958,9 +6374,11 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             for future in concurrent.futures.as_completed(future_to_idx):
                 i = future_to_idx[future]
                 try:
-                    res_idx, res_filename, res_label, res_images = future.result()
+                    res_idx, res_filename, res_label, res_images, res_flagged = future.result()
                     if res_images:
                         all_collected_images.update(res_images)
+                    if res_flagged:
+                        all_flagged_pairs.extend(res_flagged)
                 except Exception as exc:
                     print(f"Task {i} failed: {exc}")
                     import traceback; traceback.print_exc()
@@ -6066,7 +6484,38 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     
     print("Alignment/Generation Complete.")
     
-    return {'title': new_title, 'language': 'bilingual'}
+    # Pack fixed version if it exists
+    if staging_dir_fixed and os.path.exists(staging_dir_fixed):
+        fixed_out_path = output_epub_path.replace('.epub', '_fixed.epub')
+        print(f"Packing fixed version to {fixed_out_path}...")
+        
+        # Ensure mimetype and meta-inf exist in fixed staging
+        # We can just copy them from main staging if missing, or generate.
+        # But since we copied structure initially, they should be there (or generated by same logic if we duplicated it).
+        # To be safe, let's copy mimetype and container from staging_dir logic
+        # OR just assume they are there because we copied entire en_base which usually has them,
+        # AND we ran logic on them? 
+        # Actually logic only runs on staging_dir.
+        # So we should copy mimetype and META-INF from staging_dir to staging_dir_fixed to be sure.
+        shutil.copy(os.path.join(staging_dir, 'mimetype'), os.path.join(staging_dir_fixed, 'mimetype'))
+        if os.path.exists(os.path.join(staging_dir, 'META-INF')):
+             if os.path.exists(os.path.join(staging_dir_fixed, 'META-INF')): shutil.rmtree(os.path.join(staging_dir_fixed, 'META-INF'))
+             shutil.copytree(os.path.join(staging_dir, 'META-INF'), os.path.join(staging_dir_fixed, 'META-INF'))
+
+        with zipfile.ZipFile(fixed_out_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(os.path.join(staging_dir_fixed, 'mimetype'), 'mimetype', compress_type=zipfile.ZIP_STORED)
+            for root, dirs, files in os.walk(staging_dir_fixed):
+                for file in files:
+                    if file == 'mimetype': continue
+                    file_path = os.path.join(root, file)
+                    arc_name = os.path.relpath(file_path, staging_dir_fixed)
+                    zipf.write(file_path, arc_name)
+        
+        print(f"Fixed EPUB created at: {fixed_out_path}")
+        # Clean up fixed staging
+        shutil.rmtree(staging_dir_fixed)
+
+    return {'title': new_title, 'language': 'bilingual', 'flagged_pairs': all_flagged_pairs}
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a bilingual EPUB from extracted English and Spanish EPUB OEBPS directories.")
@@ -6094,8 +6543,14 @@ if __name__ == "__main__":
     parser.add_argument('--translation-color', type=str, default='grey',
                        help='Color for Spanish translation (e.g., #555555 or grey)')
     parser.add_argument('--preset', type=str, default=None,
-                       choices=['default', 'side_by_side', 'color_coded', 'spanish_first', 'spanish_only', 'learner_mode'],
-                       help='Use a preset configuration (overrides individual settings)')
+                        choices=['default', 'side_by_side', 'color_coded', 'spanish_first', 'spanish_only', 'learner_mode'],
+                        help='Use a preset configuration (overrides individual settings)')
+    
+    # LLM verification options
+    parser.add_argument('--verify', action='store_true',
+                        help='Use local LLM (Ollama) to verify and fix alignment errors')
+    parser.add_argument('--verify-model', type=str, default='qwen2.5:7b',
+                        help='Ollama model for verification (default: qwen2.5:7b)')
     
     args = parser.parse_args()
 
@@ -6128,6 +6583,9 @@ if __name__ == "__main__":
         'use_neural': args.local_ai,
         'split_length': args.split_length,
         'bilingual': bilingual_config,
+        'verify_llm': args.verify,
+        'verify_mode': 'validate_fix' if args.verify else 'none',
+        'verify_model': args.verify_model,
     }
     
     if args.local_ai:

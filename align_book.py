@@ -5730,59 +5730,78 @@ def process_chapter_pair(args):
                          en = pair.get('en', '').strip()
                          es = pair.get('es', '').strip()
                          
-                         if en and es and len(en) > 30 and len(es) > 30:
+                         # Skip very short pairs
+                         if not en or not es or len(en) < 30:
+                             continue
+                         
+                         # SEMANTIC VERIFICATION: Check if EN/ES are actually a good match
+                         should_flag = False
+                         semantic_score = None
+                         
+                         if model and es_embeddings is not None:
+                             try:
+                                 en_emb = model.encode(en, convert_to_tensor=True)
+                                 es_emb = model.encode(es, convert_to_tensor=True)
+                                 semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
+                                 
+                                 # Flag if LOW similarity (wrong content aligned)
+                                 if semantic_score < 0.70:
+                                     should_flag = True
+                             except Exception as e:
+                                 print(f"DEBUG: Semantic check failed: {e}")
+                         else:
+                             # Fallback to length ratio if no embeddings
                              len_ratio = len(es) / len(en)
                              if len_ratio < 0.3 or len_ratio > 3.0:
-                                 result = verifier.verify_pair(en, es)
-                                 if not result.get('is_match', True):
-                                     pair['llm_flagged'] = True
-                                     flagged_count += 1
-                                     conf = result.get('confidence')
-                                     pair['llm_confidence'] = conf
+                                 should_flag = True
+                         
+                         if should_flag:
+                             pair['llm_flagged'] = True
+                             flagged_count += 1
+                             pair['llm_confidence'] = semantic_score if semantic_score else 0.5
+                             
+                             if fixed_pairs and i < len(aligned_pairs):
+                                 aligned_pairs[i]['llm_flagged'] = True
+                                 aligned_pairs[i]['llm_confidence'] = pair['llm_confidence']
+                             
+                             # REPAIR: Try to find correct Spanish sentence
+                             if verify_mode == 'validate_fix' and fixed_pairs:
+                                 print(f"  Flagged (sim={semantic_score:.2f}): {en[:40]}...")
+                                 
+                                 new_es = None
+                                 method = "✨ LLM Repair"
+                                 
+                                 # Strategy 1: Vector Search
+                                 if es_embeddings is not None and model:
+                                     en_emb = model.encode(en, convert_to_tensor=True)
+                                     scores = util.cos_sim(en_emb, es_embeddings)[0]
+                                     best_idx = int(scores.argmax())
+                                     best_score = float(scores[best_idx])
                                      
-                                     if fixed_pairs and i < len(aligned_pairs):
-                                         aligned_pairs[i]['llm_flagged'] = True
-                                         aligned_pairs[i]['llm_confidence'] = conf
+                                     if best_score > 0.85:
+                                         print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
+                                         new_es = es_texts[best_idx]
+                                         method = f"🔍 Vector Search ({best_score:.2f})"
+                                 
+                                 # Strategy 2: LLM Fallback
+                                 if not new_es:
+                                     best_info = f"best: {best_score:.2f}" if 'best_score' in dir() else "no match"
+                                     print(f"    -> LLM Translation Fallback ({best_info})")
+                                     new_es = verifier.repair_translation(en)
+                                 
+                                 if new_es and not new_es.startswith('[Error'):
+                                     pair['_original_es'] = es
+                                     pair['es'] = new_es
+                                     pair['_was_fixed'] = True
+                                     pair['_repair_method'] = method
                                      
-                                     if verify_mode == 'validate_fix' and fixed_pairs:
-                                          print(f"  Attempting repair for: {en[:30]}...")
-                                          
-                                          # Strategy 1: Vector Search (The "First LLM Matrix" Method)
-                                          new_es = None
-                                          method = "✨ LLM Repair" # Default
-                                          
-                                          if es_embeddings is not None and model:
-                                              en_emb = model.encode(en, convert_to_tensor=True)
-                                              # Calculate cosine similarity against all ES chunks
-                                              scores = util.cos_sim(en_emb, es_embeddings)[0]
-                                              # Find best match
-                                              best_idx = int(scores.argmax())
-                                              best_score = float(scores[best_idx])
-                                              
-                                              if best_score > 0.85: # High confidence threshold
-                                                  print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
-                                                  new_es = es_texts[best_idx]
-                                                  method = f"🔍 Vector Search ({best_score:.2f})"
-                                          
-                                          # Strategy 2: LLM Translation Fallback
-                                          if not new_es:
-                                              best_info = f"best: {best_score:.2f}" if es_embeddings is not None else "no embeddings"
-                                              print(f"    -> LLM Translation Fallback ({best_info} < 0.85 threshold)")
-                                              new_es = verifier.repair_translation(en)
-                                          
-                                          if new_es and not new_es.startswith('[Error'):
-                                              pair['_original_es'] = es
-                                              pair['es'] = new_es
-                                              pair['_was_fixed'] = True
-                                              pair['_repair_method'] = method
-                                              
-                                              if i < len(aligned_pairs):
-                                                  aligned_pairs[i]['_original_es'] = es
-                                                  aligned_pairs[i]['_was_fixed'] = True
-                                                  aligned_pairs[i]['_repair_method'] = method
+                                     if i < len(aligned_pairs):
+                                         aligned_pairs[i]['_original_es'] = es
+                                         aligned_pairs[i]['_was_fixed'] = True
+                                         aligned_pairs[i]['_repair_method'] = method
                      
                      if flagged_count:
-                         print(f"DEBUG: {label} - LLM flagged {flagged_count} suspicious pairs")
+                         print(f"DEBUG: {label} - Flagged {flagged_count} pairs via semantic verification")
                          flagged_in_this_chapter = [p for p in target_list if p.get('llm_flagged')]
                          flagged_pairs.extend(flagged_in_this_chapter)
 

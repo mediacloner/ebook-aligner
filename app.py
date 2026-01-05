@@ -227,12 +227,13 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
                     shutil.copy2(fixed_src, fixed_dest)
                     saved_location_msg += f"\nFixed version: {fixed_dest_name}"
                 
-                # 3. Verification Report
+                # 3. Verification Report (always generate if verification was enabled)
                 flagged_pairs = result.get('flagged_pairs', []) if isinstance(result, dict) else []
-                if flagged_pairs:
+                total_pairs = result.get('total_pairs', 0) if isinstance(result, dict) else 0
+                if total_pairs > 0 or flagged_pairs:  # Generate report if we have any data
                     from llm_verifier import generate_report
-                    # Generate verification report
-                    report_path = generate_report(output_path, flagged_pairs, total_pairs=0)
+                    # Generate verification report with actual counts
+                    report_path = generate_report(output_path, flagged_pairs, total_pairs=total_pairs)
                     
                     if report_path and os.path.exists(report_path):
                          report_dest_name = final_name.replace('.epub', ' (Report).md')

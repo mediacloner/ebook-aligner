@@ -76,6 +76,11 @@ def install_ollama_package():
 class AlignmentVerifier:
     """Verifies bilingual alignment pairs using a local Ollama model."""
     
+    # Class-level cache to prevent repeated checks across instances/threads
+    _class_available = None
+    _class_ollama = None
+    _class_model_checked = set()  # Track which models have been verified
+    
     def __init__(self, model: str = 'qwen2.5:7b'):
         """
         Initialize the verifier.
@@ -92,13 +97,17 @@ class AlignmentVerifier:
     
     def _ensure_ollama(self):
         """Lazy-load ollama and check availability. Auto-starts server and installs model if needed."""
-        if self._available is not None:
+        # Check class-level cache first (shared across all instances/threads)
+        if AlignmentVerifier._class_available is not None and self.model in AlignmentVerifier._class_model_checked:
+            self._available = AlignmentVerifier._class_available
+            self._ollama = AlignmentVerifier._class_ollama
             return self._available
         
         if not check_ollama_installed():
             print("WARNING: Ollama not installed. Install with: brew install ollama")
             print("         Download from: https://ollama.com/download")
             self._available = False
+            AlignmentVerifier._class_available = False
             return False
         
         # Check if Ollama server is running, start if needed
@@ -107,29 +116,35 @@ class AlignmentVerifier:
             if not start_ollama():
                 print("WARNING: Could not start Ollama server. Please run: ollama serve")
                 self._available = False
+                AlignmentVerifier._class_available = False
                 return False
         
         try:
             install_ollama_package()
             import ollama
             self._ollama = ollama
+            AlignmentVerifier._class_ollama = ollama
             
             # Check if model is available, if not try to pull it
-            try:
-                models = ollama.list()
-                model_names = [m.get('name', '') for m in models.get('models', [])]
-                if not any(self.model in name for name in model_names):
-                    print(f"Model {self.model} not found. Downloading...")
-                    # Pull the model (this may take a while)
-                    ollama.pull(self.model)
-                    print(f"Model {self.model} downloaded successfully.")
-            except Exception as pull_err:
-                print(f"Warning: Could not verify/pull model: {pull_err}")
+            if self.model not in AlignmentVerifier._class_model_checked:
+                try:
+                    models = ollama.list()
+                    model_names = [m.get('name', '') for m in models.get('models', [])]
+                    if not any(self.model in name for name in model_names):
+                        print(f"Model {self.model} not found. Downloading...")
+                        # Pull the model (this may take a while)
+                        ollama.pull(self.model)
+                        print(f"Model {self.model} downloaded successfully.")
+                    AlignmentVerifier._class_model_checked.add(self.model)
+                except Exception as pull_err:
+                    print(f"Warning: Could not verify/pull model: {pull_err}")
             
             self._available = True
+            AlignmentVerifier._class_available = True
         except Exception as e:
             print(f"WARNING: Failed to load ollama: {e}")
             self._available = False
+            AlignmentVerifier._class_available = False
         
         return self._available
     
@@ -288,7 +303,16 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
     report_path = f"{base_path}_verification_report.md"
     
     # Build report content
+    # Build report content
     fixed_count = sum(1 for p in flagged_pairs if p.get('_was_fixed'))
+    
+    # Breakdown by method
+    fixed_vector = sum(1 for p in flagged_pairs if 'Vector Search' in p.get('_repair_method', ''))
+    fixed_llm = sum(1 for p in flagged_pairs if 'LLM Repair' in p.get('_repair_method', ''))
+    
+    pass_rate = "N/A"
+    if total_pairs > 0:
+        pass_rate = f"{((total_pairs - len(flagged_pairs)) / total_pairs * 100):.1f}%"
     
     report_lines = [
         "# Bilingual Alignment Verification Report",
@@ -301,7 +325,9 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
         f"- **Total pairs analyzed:** {total_pairs}",
         f"- **Flagged as suspicious:** {len(flagged_pairs)}",
         f"- **Automatically Fixed:** {fixed_count}",
-        f"- **Pass rate:** {((total_pairs - len(flagged_pairs)) / total_pairs * 100):.1f}%" if total_pairs else "N/A",
+        f"  - 🔍 Vector Search: {fixed_vector}",
+        f"  - ✨ LLM Repair: {fixed_llm}",
+        f"- **Pass rate:** {pass_rate}",
         "",
     ]
     

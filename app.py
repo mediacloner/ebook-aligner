@@ -36,6 +36,24 @@ def clean_old_uploads(max_age_seconds=7200): # 2 hours
 # Clean on startup
 clean_old_uploads()
 
+# Pre-load LLM Verifier Model at server startup
+def preload_llm_verifier():
+    """Load the Ollama model at startup so it's ready for first request."""
+    try:
+        from llm_verifier import AlignmentVerifier
+        print("🔄 Pre-loading LLM Verifier Model...")
+        verifier = AlignmentVerifier(model='qwen2.5:7b')
+        if verifier._ensure_ollama():
+            print("✅ LLM Verifier Model ready!")
+        else:
+            print("⚠️  LLM Verifier not available (Ollama not running?)")
+    except Exception as e:
+        print(f"⚠️  LLM pre-load failed: {e}")
+
+# Only pre-load in main process (skip Flask reloader child)
+if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+    threading.Thread(target=preload_llm_verifier, daemon=True).start()
+
 # Global dictionary to store job status
 # Format: job_id -> { 'status': 'queued'|'processing'|'completed'|'error', 'progress': 0, 'message': '', 'file': path }
 active_jobs = {}

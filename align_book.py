@@ -4973,12 +4973,12 @@ def process_chapter_pair(args):
     
     # Check bypass
     if config.get('bypass_alignment'):
-         return (idx, None, "Bypassed", None, [])
+         return (idx, None, "Bypassed", None, [], 0)
 
     try:
         # 1. Parse Existing English File (DOM)
         if not os.path.exists(target_path):
-             return (idx, None, f"Target file not found: {target_path}", None, [])
+             return (idx, None, f"Target file not found: {target_path}", None, [], 0)
 
         with open(target_path, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f.read(), 'lxml')
@@ -4990,7 +4990,7 @@ def process_chapter_pair(args):
         # Check if this is a navigation page (TOC, index, etc.) - skip alignment
         if is_navigation_page(soup):
             print(f"DEBUG: {label} - Detected as navigation page, skipping alignment")
-            return (idx, target_path, label, [], [])
+            return (idx, target_path, label, [], [], 0)
             
         # --- PRE-PROCESS: Merge Consecutive Headers (Fixed for Atomic Habits) ---
         # Atomic Habits splits Chapter Num and Title into separate h2 tags.
@@ -5022,7 +5022,7 @@ def process_chapter_pair(args):
         if not es_rel or not os.path.exists(es_rel):
             # No Spanish chapter to align with.
             # We just leave the English file as-is.
-            return (idx, target_path, label, [])
+            return (idx, target_path, label, [], [], 0)
             
         es_files = [es_rel] 
         # Verify config has 'es' key before parsing
@@ -5766,6 +5766,8 @@ def process_chapter_pair(args):
                                           
                                           # Strategy 2: LLM Translation Fallback
                                           if not new_es:
+                                              best_info = f"best: {best_score:.2f}" if es_embeddings is not None else "no embeddings"
+                                              print(f"    -> LLM Translation Fallback ({best_info} < 0.85 threshold)")
                                               new_es = verifier.repair_translation(en)
                                           
                                           if new_es and not new_es.startswith('[Error'):
@@ -5886,13 +5888,14 @@ def process_chapter_pair(args):
         # Collect images if any (extract from soup check?)
         # For now, we don't need to return images as we are preserving original structure
         # But if we did find new images (rare in this mode), we'd track them.
-        return (idx, target_path, label, [], flagged_pairs)
+        pair_count = len(aligned_pairs) if 'aligned_pairs' in locals() else 0
+        return (idx, target_path, label, [], flagged_pairs, pair_count)
         
     except Exception as e:
         print(f"Error processing chapter {label}: {e}")
         import traceback
         traceback.print_exc()
-        return (idx, None, str(e), [], [])
+        return (idx, None, str(e), [], [], 0)
                              
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     # Use a staging directory relative to the output path (job-specific)
@@ -6390,6 +6393,17 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # which is large and unpicklable (or slow to pickle) for Multiprocessing.
     # Since PyTorch releases GIL for heavy ops, threading is efficient here.
     
+    # Pre-load Verification Model if needed (prevents race conditions in threads)
+    if config.get('verify_llm'):
+         print("Pre-loading Verification Model...")
+         try:
+             from llm_verifier import AlignmentVerifier
+             # This triggers _ensure_ollama() which handles checking/pulling
+             AlignmentVerifier(model=config.get('verify_model', 'qwen2.5:7b'))._ensure_ollama()
+             print("Verification Model ready.")
+         except Exception as e:
+             print(f"Warning: Failed to pre-load verification model: {e}")
+    
     print(f"Executing {len(args_list)} content tasks...")
     import concurrent.futures
 
@@ -6401,6 +6415,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # However, process_chapter_pair still returns images, which might be useful for manifest updates.
     all_collected_images = set()
     all_flagged_pairs = []
+    total_pairs_count = 0
     
     try:
         count_done = 0
@@ -6412,11 +6427,12 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             for future in concurrent.futures.as_completed(future_to_idx):
                 i = future_to_idx[future]
                 try:
-                    res_idx, res_filename, res_label, res_images, res_flagged = future.result()
+                    res_idx, res_filename, res_label, res_images, res_flagged, res_count = future.result()
                     if res_images:
                         all_collected_images.update(res_images)
                     if res_flagged:
                         all_flagged_pairs.extend(res_flagged)
+                    total_pairs_count += res_count
                 except Exception as exc:
                     print(f"Task {i} failed: {exc}")
                     import traceback; traceback.print_exc()
@@ -6553,7 +6569,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         # Clean up fixed staging
         shutil.rmtree(staging_dir_fixed)
 
-    return {'title': new_title, 'language': 'bilingual', 'flagged_pairs': all_flagged_pairs}
+    return {'title': new_title, 'language': 'bilingual', 'flagged_pairs': all_flagged_pairs, 'total_pairs': total_pairs_count}
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a bilingual EPUB from extracted English and Spanish EPUB OEBPS directories.")
@@ -6639,4 +6655,15 @@ if __name__ == "__main__":
     if bilingual_config.translation_color:
         print(f"  Spanish color: {bilingual_config.translation_color}")
     
-    create_bilingual_epub(args.en, args.es, args.output, config)
+    result = create_bilingual_epub(args.en, args.es, args.output, config)
+    
+    # Generate verification report if verification was active
+    if config.get('verify_mode') in ['validate_fix', 'validate_only', 'validate']:
+        if result.get('flagged_pairs') is not None:
+             try:
+                 from llm_verifier import generate_report
+                 generate_report(args.output, result['flagged_pairs'], result.get('total_pairs', 0))
+             except ImportError:
+                 print("Warning: Could not import llm_verifier for report generation.")
+             except Exception as e:
+                 print(f"Warning: Report generation failed: {e}")

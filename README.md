@@ -77,3 +77,43 @@ BOOK_CONFIG = {
 
 - **Desynchronization**: If text is misaligned (e.g., Chapter 1 English text appearing next to Chapter 2 Spanish), check if the `BOOK_CONFIG` matches the class names in your specific EPUB files. You may need to inspect the source XHTML.
 - **Missing Fonts**: This tool creates a "clean" EPUB relying on the e-reader's default fonts for maximum compatibility.
+
+## LLM Verification & Auto-Fix [NEW]
+
+The tool now includes an advanced module to verify alignment quality and automatically fix errors using a local LLM.
+
+### Prerequisites for Verification
+
+1.  **Install Ollama**: [https://ollama.com/download](https://ollama.com/download)
+2.  **Pull the Model**:
+    ```bash
+    ollama pull qwen2.5:7b  # Recommended for EN/ES
+    ```
+3.  **Install Python Package**:
+    ```bash
+    pip install ollama sentence-transformers
+    ```
+
+### Verification Modes
+
+In the **Web Interface**, you will see a dropdown under "Advanced Options":
+
+1.  **No Verification** (Default): Fast alignment, no LLM check.
+2.  **Validation Only**:
+    - Analyzes the aligned book.
+    - Generates a `_verification_report.md` next to your output file.
+    - Flags suspicious pairs (missing text, severe misalignment).
+3.  **Validation + Auto-Fix**:
+    - **Smart Repair**: If a translation is missing, it first searches the original Spanish chapter using **Vector Embeddings** to find the lost sentence.
+    - **Translation Fallback**: If the sentence is truly missing, the LLM generates a fresh translation to maintain continuity.
+    - **Dual Output**: Generates two files:
+      - `Book (bilingual).epub` (Original alignment)
+      - `Book (bilingual) (Fixed).epub` (With repairs injected)
+
+### Viewing the Report
+
+After generation, open the `(Report).md` file. It will show:
+
+- ⚠️ **Flagged** issues.
+- ✅ **Fixed** issues (showing the "Before" and "After").
+- **Method Used**: `🔍 Vector Search` (Found original text) or `✨ LLM Repair` (Generated translation).

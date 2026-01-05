@@ -231,13 +231,21 @@ SPANISH:"""
             en = pair.get('en', '')
             es = pair.get('es', '')
             
-            # Skip empty pairs or very short texts
-            if not en or not es or len(en) < 20 or len(es) < 20:
+            # Skip if English is too short or empty
+            if not en or len(en) < 20:
                 continue
             
+            # CRITICAL CHECK: If English is present but Spanish is missing/empty, FLAG IT!
+            if not es or len(es) < 5:  # Allow very short Spanish if it's just "Sí" but usually < 5 is suspicious for a >20 char English sentence
+                 print(f"Flagging empty/missing translation for: {en[:30]}...")
+                 pair['llm_verified'] = False
+                 pair['llm_confidence'] = 1.0 # High confidence it's wrong
+                 flagged_count += 1
+                 continue
+
             # Only verify pairs that might be problematic
             # (e.g., very different lengths, no shared words)
-            len_ratio = len(es) / len(en) if en else 0
+            len_ratio = len(es) / len(en)
             if len_ratio < 0.3 or len_ratio > 3.0:
                 result = self.verify_pair(en, es)
                 pair['llm_verified'] = result['is_match']
@@ -326,8 +334,9 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
             ])
             
             if was_fixed:
+                method_label = pair.get('_repair_method', '✨ LLM Repair')
                 report_lines.extend([
-                     f"**✨ LLM Repair:** {es_current}{'...' if len(pair.get('es', '')) > 200 else ''}",
+                     f"**{method_label}:** {es_current}{'...' if len(pair.get('es', '')) > 200 else ''}",
                      ""
                 ])
                 

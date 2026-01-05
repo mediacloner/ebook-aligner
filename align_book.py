@@ -5709,8 +5709,22 @@ def process_chapter_pair(args):
                              import traceback
                              traceback.print_exc()
                      
+                     # Pre-compute ES embeddings for vector search repair
+                     es_embeddings = None
+                     es_texts = []
+                     if verify_mode == 'validate_fix' and es_chunks and model:
+                         print(f"DEBUG: Pre-computing embeddings for {len(es_chunks)} Spanish chunks...")
+                         es_texts = [c.get('text', '') for c in es_chunks]
+                         try:
+                             es_embeddings = model.encode(es_texts, convert_to_tensor=True)
+                         except Exception as e:
+                             print(f"DEBUG: Vector encoding failed: {e}")
+
                      target_list = fixed_pairs if fixed_pairs else aligned_pairs
                      flagged_count = 0
+                     
+                     # Import utility for cosine similarity
+                     from sentence_transformers import util
                      
                      for i, pair in enumerate(target_list):
                          en = pair.get('en', '').strip()
@@ -5732,14 +5746,38 @@ def process_chapter_pair(args):
                                      
                                      if verify_mode == 'validate_fix' and fixed_pairs:
                                           print(f"  Attempting repair for: {en[:30]}...")
-                                          new_es = verifier.repair_translation(en)
+                                          
+                                          # Strategy 1: Vector Search (The "First LLM Matrix" Method)
+                                          new_es = None
+                                          method = "✨ LLM Repair" # Default
+                                          
+                                          if es_embeddings is not None and model:
+                                              en_emb = model.encode(en, convert_to_tensor=True)
+                                              # Calculate cosine similarity against all ES chunks
+                                              scores = util.cos_sim(en_emb, es_embeddings)[0]
+                                              # Find best match
+                                              best_idx = int(scores.argmax())
+                                              best_score = float(scores[best_idx])
+                                              
+                                              if best_score > 0.85: # High confidence threshold
+                                                  print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
+                                                  new_es = es_texts[best_idx]
+                                                  method = f"🔍 Vector Search ({best_score:.2f})"
+                                          
+                                          # Strategy 2: LLM Translation Fallback
+                                          if not new_es:
+                                              new_es = verifier.repair_translation(en)
+                                          
                                           if new_es and not new_es.startswith('[Error'):
                                               pair['_original_es'] = es
                                               pair['es'] = new_es
                                               pair['_was_fixed'] = True
+                                              pair['_repair_method'] = method
+                                              
                                               if i < len(aligned_pairs):
                                                   aligned_pairs[i]['_original_es'] = es
                                                   aligned_pairs[i]['_was_fixed'] = True
+                                                  aligned_pairs[i]['_repair_method'] = method
                      
                      if flagged_count:
                          print(f"DEBUG: {label} - LLM flagged {flagged_count} suspicious pairs")

@@ -10,6 +10,7 @@ uploads/
 bilingual_epub_staging/
 temp_*/
 books/output/
+epub_analysis/
 
 # Build artifacts
 *.epub

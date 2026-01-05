@@ -98,6 +98,7 @@
       .option-group input[type="number"] {
         width: 100%;
         padding: 12px;
+        padding-right: 40px;
         border: 1px solid #e5e7eb;
         border-radius: 8px;
         font-size: 14px;
@@ -106,11 +107,20 @@
         transition: all 0.2s;
         box-sizing: border-box;
       }
+      .option-group select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 16px center;
+        cursor: pointer;
+      }
       .option-group select:focus,
       .option-group input:focus {
         outline: none;
         border-color: #4f46e5;
-        background: white;
+        background-color: white;
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
       }
 
@@ -383,6 +393,17 @@
               Preserve SVG, Math, Code blocks during alignment
             </p>
           </div>
+          <div class="option-group">
+            <label for="verifyLLM">🤖 LLM Verification</label>
+            <select id="verifyLLM">
+              <option value="none">No Verification</option>
+              <option value="validate">Validation Only</option>
+              <option value="validate_fix" selected>Validation + Fix</option>
+            </select>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0">
+              Use local AI (Ollama) to verify and fix alignment errors
+            </p>
+          </div>
         </div>
 
         <div class="actions">
@@ -405,6 +426,7 @@
         elementTypeFormatting: false,
         preserveLineBreaks: false,
         usePlaceholder: true,
+        verifyLLM: "validate_fix", // Options: none, validate, validate_fix
       };
 
       const PRESETS = {
@@ -514,6 +536,8 @@
           bilingualConfig.usePlaceholder !== undefined
             ? bilingualConfig.usePlaceholder
             : true;
+        document.getElementById("verifyLLM").value =
+          bilingualConfig.verifyLLM || "validate_fix";
 
         // Update active preset
         document
@@ -540,6 +564,7 @@
           document.getElementById("preserveLineBreaks").checked;
         bilingualConfig.usePlaceholder =
           document.getElementById("usePlaceholder").checked;
+        bilingualConfig.verifyLLM = document.getElementById("verifyLLM").value;
 
         localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
       }

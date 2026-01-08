@@ -880,6 +880,79 @@ def align_pre_split_group(en_group, es_text, aligner):
     return list(zip(en_group, distributed))
 
 
+def compute_semantic_anchors(en_chunks, es_chunks, aligner, threshold=0.90, min_length=50):
+    """
+    Compute semantic anchor points - paragraph pairs with very high similarity.
+    
+    These anchors act as "guideposts" for DTW alignment, preventing the algorithm
+    from drifting off-track when there are paragraph count mismatches.
+    
+    Args:
+        en_chunks: List of English chunks
+        es_chunks: List of Spanish chunks  
+        aligner: NeuralAligner instance for embedding
+        threshold: Minimum cosine similarity to consider an anchor (default 0.90)
+        min_length: Minimum text length to consider for anchoring (default 50)
+        
+    Returns:
+        List of (en_idx, es_idx, {'soft': False}) constraint tuples
+    """
+    if not en_chunks or not es_chunks or not aligner:
+        return []
+    
+    from scipy.spatial.distance import cosine
+    
+    # Filter chunks by minimum length (short chunks have unreliable embeddings)
+    en_candidates = [(i, c) for i, c in enumerate(en_chunks) 
+                     if len(c.get('text', '')) >= min_length and c.get('type', 'std') == 'std']
+    es_candidates = [(j, c) for j, c in enumerate(es_chunks)
+                     if len(c.get('text', '')) >= min_length and c.get('type', 'std') == 'std']
+    
+    if not en_candidates or not es_candidates:
+        return []
+    
+    # Embed candidates
+    en_texts = [{'text': c['text']} for _, c in en_candidates]
+    es_texts = [{'text': c['text']} for _, c in es_candidates]
+    
+    try:
+        en_embs = aligner.embed_chunks(en_texts)
+        es_embs = aligner.embed_chunks(es_texts)
+    except Exception as e:
+        print(f"Anchor embedding failed: {e}")
+        return []
+    
+    anchors = []
+    used_es = set()  # Track used ES indices to maintain monotonicity
+    last_es_idx = -1  # For monotonicity enforcement
+    
+    for en_pos, (en_idx, en_chunk) in enumerate(en_candidates):
+        best_es_idx = -1
+        best_es_pos = -1
+        best_score = 0
+        
+        for es_pos, (es_idx, es_chunk) in enumerate(es_candidates):
+            # Enforce monotonicity: ES index must be greater than last matched
+            if es_idx <= last_es_idx:
+                continue
+            if es_idx in used_es:
+                continue
+                
+            sim = 1 - cosine(en_embs[en_pos], es_embs[es_pos])
+            
+            if sim > best_score and sim >= threshold:
+                best_score = sim
+                best_es_idx = es_idx
+                best_es_pos = es_pos
+        
+        if best_es_idx >= 0:
+            anchors.append((en_idx, best_es_idx, {'soft': False}))  # Hard constraint
+            used_es.add(best_es_idx)
+            last_es_idx = best_es_idx
+    
+    return anchors
+
+
 # --- SCENE BREAK DETECTION (Pattern 3: Paragraph Bleeding Fix) ---
 SCENE_BREAK_PATTERNS = [
     r'^[\s]*⁂[\s]*$',           # Asterism
@@ -5394,8 +5467,29 @@ def process_chapter_pair(args):
                          except Exception as e:
                              print(f"Header constraint generation failed: {e}")
                       
+                     # --- SEMANTIC ANCHOR CONSTRAINTS ---
+                     # Identify high-confidence paragraph pairs to anchor the alignment
+                     try:
+                         anchor_constraints = compute_semantic_anchors(
+                             en_filtered, es_filtered, aligner, 
+                             threshold=0.90, min_length=50
+                         )
+                         if anchor_constraints:
+                             # Add anchors that don't conflict with existing constraints
+                             existing_en = {c[0] for c in constraints}
+                             existing_es = {c[1] for c in constraints}
+                             new_anchors = 0
+                             for anchor in anchor_constraints:
+                                 if anchor[0] not in existing_en and anchor[1] not in existing_es:
+                                     constraints.append(anchor)
+                                     new_anchors += 1
+                             if new_anchors:
+                                 print(f"DEBUG: {label} - Added {new_anchors} semantic anchor constraints")
+                     except Exception as e:
+                         print(f"Semantic anchor generation failed: {e}")
+                      
                      with open("/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/constraints.log", "a") as f:
-                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs + Headers)\n")
+                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs + Headers + Anchors)\n")
                          for c in constraints: f.write(f"  {c}\n")
 
                  # Run Alignment on Filtered Sequences
@@ -5745,7 +5839,7 @@ def process_chapter_pair(args):
                                  semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
                                  
                                  # Flag if LOW similarity (wrong content aligned)
-                                 if semantic_score < 0.70:
+                                 if semantic_score < 0.60:
                                      should_flag = True
                              except Exception as e:
                                  print(f"DEBUG: Semantic check failed: {e}")

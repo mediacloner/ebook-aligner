@@ -1023,12 +1023,27 @@ def compute_cascading_anchors(en_chunks, es_chunks, aligner, primary_anchors,
     return secondary_anchors
 
 
-# --- METADATA DETECTION ---
+# --- METADATA/FRONTMATTER DETECTION ---
+# These sections will never align correctly between different editions
 METADATA_PATTERNS = [
-    r'copyright\s*©?', r'\bisbn\b', r'first\s*(avon\s*)?printing',
+    # Copyright/Legal
+    r'copyright\s*©?', r'\bisbn\b', r'first\s*(avon\s*)?(printing|edition)',
     r'trademark', r'library\s*of\s*congress', r'published\s*by',
+    r'marca\s*registrada', r'all\s*rights?\s*reserved', r'derechos?\s*reservados?',
+    # Publisher/Web
     r'www\.', r'\.org\b', r'\.com\b', r'maquetación', r'edición\s*digital',
-    r'marca\s*registrada', r'all\s*rights?\s*reserved', r'derechos?\s*reservados?'
+    # Credits/Index/TOC
+    r'\bcréditos\b', r'\bcredits\b', r'\bíndice\b', r'\bindex\b',
+    r'\btable\s*of\s*contents\b', r'\bcontents\b', r'nota\s*del\s*(autor|editor)',
+    r"author'?s?\s*note", r"editor'?s?\s*note",
+    # Frontmatter
+    r'\bportada\b', r'\bcover\b', r'\btitle\s*page\b', r'\bdedication\b',
+    r'\bdedicatoria\b', r'\bepígrafe\b', r'\bepigraph\b',
+    # Navigation markers (TOC entries)
+    r'primera\s*parte', r'segunda\s*parte', r'tercera\s*parte',
+    r'part\s*one', r'part\s*two', r'part\s*three',
+    # Map/illustration references
+    r'\bsite\s*of\s*levee\b', r'\bpop\.\s*\d', r'alabama\s*\n.*pop\.',
 ]
 
 def is_metadata_content(text):
@@ -5924,6 +5939,16 @@ def process_chapter_pair(args):
                      if verify_mode == 'validate_fix' and es_chunks and model:
                          print(f"DEBUG: Pre-computing embeddings for {len(es_chunks)} Spanish chunks...")
                          es_texts = [c.get('text', '') for c in es_chunks]
+                         
+                         # Add merged chunks (window of 2) to rescue split paragraphs
+                         # This handles cases where 1 EN paragraph = 2 ES paragraphs
+                         if len(es_chunks) > 1:
+                             for k in range(len(es_chunks) - 1):
+                                 t1 = es_chunks[k].get('text', '').strip()
+                                 t2 = es_chunks[k+1].get('text', '').strip()
+                                 if t1 and t2:
+                                     es_texts.append(f"{t1} {t2}")
+                         
                          try:
                              es_embeddings = model.encode(es_texts, convert_to_tensor=True)
                          except Exception as e:

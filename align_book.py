@@ -5984,7 +5984,7 @@ def process_chapter_pair(args):
                                  semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
                                  
                                  # Flag if LOW similarity (wrong content aligned)
-                                 if semantic_score < 0.50:
+                                 if semantic_score < 0.45:
                                      should_flag = True
                              except Exception as e:
                                  print(f"DEBUG: Semantic check failed: {e}")
@@ -6017,7 +6017,7 @@ def process_chapter_pair(args):
                                      best_idx = int(scores.argmax())
                                      best_score = float(scores[best_idx])
                                      
-                                     if best_score > 0.65:
+                                     if best_score > 0.60:
                                          print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
                                          new_es = es_texts[best_idx]
                                          method = f"🔍 Vector Search ({best_score:.2f})"
@@ -6618,6 +6618,11 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             
             # Append arguments (including model)
             args_list.append( (idx, en_abs, es_abs, es_opf_dir, config, label, chunk_range, model, staging_info) )
+            
+            # --- DEBUG LIMIT REMOVED ---
+            # if len(args_list) >= 6:
+            #     print("DEBUG: Limiting to first 6 chapters for verification.")
+            #     break
             
         # Replaces the original loop below
         

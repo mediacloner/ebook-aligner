@@ -17,6 +17,28 @@ Usage:
 import subprocess
 import sys
 import time
+import re
+
+
+def is_valid_spanish(text: str) -> bool:
+    """
+    Check if text is valid Spanish (no Chinese/Japanese/Korean characters).
+    
+    Detects when the LLM outputs metadata or non-Spanish text instead of translation.
+    """
+    if not text:
+        return False
+    # Chinese characters
+    if re.search(r'[\u4e00-\u9fff]', text):
+        return False
+    # Japanese hiragana and katakana
+    if re.search(r'[\u3040-\u309f\u30a0-\u30ff]', text):
+        return False
+    # Korean hangul
+    if re.search(r'[\uac00-\ud7af]', text):
+        return False
+    return True
+
 
 # Check if ollama is available
 def check_ollama_installed():
@@ -205,27 +227,86 @@ Reply with ONLY "YES" or "NO" followed by a confidence percentage (0-100%)."""
             en_text: English text to translate
             
         Returns:
-            str: Corrected Spanish translation
+            str: Corrected Spanish translation with ± marker
         """
         if not self._ensure_ollama():
             return "[Error: LLM not available for repair]"
-            
-        try:
-            response = self._ollama.chat(model=self.model, messages=[{
-                'role': 'user',
-                'content': f"""Translate the following English text to Spanish. 
+        
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Progressive prompting strategy
+                if attempt == 0:
+                    messages = [{
+                        'role': 'user',
+                        'content': f"""Translate the following English text to Spanish. 
 Maintain the tone and style of a literary book.
 Do not add any notes, just provide the translation.
 
 ENGLISH: {en_text}
 
 SPANISH:"""
-            }])
-            
-            return response['message']['content'].strip()
-        except Exception as e:
-            print(f"Repair failed: {e}")
-            return f"[Repair Failed: {en_text[:50]}...]"
+                    }]
+                elif attempt == 1:
+                    # Stricter prompt with system message
+                    messages = [
+                        {
+                            'role': 'system',
+                            'content': 'You are a professional translator. You ONLY output Spanish text. Never output Chinese, Japanese, or any other language.'
+                        },
+                        {
+                            'role': 'user',
+                            'content': f"""Translate to Spanish ONLY:
+
+{en_text}"""
+                        }
+                    ]
+                else:
+                    # Last resort: most explicit prompt
+                    messages = [
+                        {
+                            'role': 'system',
+                            'content': 'Eres un traductor profesional de inglés a español. Solo respondes en español.'
+                        },
+                        {
+                            'role': 'user',
+                            'content': f"""Traduce este texto al español:
+
+"{en_text}"
+
+Traducción:"""
+                        }
+                    ]
+                
+                response = self._ollama.chat(model=self.model, messages=messages)
+                translation = response['message']['content'].strip()
+                
+                # Clean up common issues
+                # Remove "Traducción:" prefix if present
+                if translation.lower().startswith('traducción:'):
+                    translation = translation[11:].strip()
+                
+                # Validate the output
+                if is_valid_spanish(translation):
+                    return f"{translation} ±"  # Mark as LLM-generated
+                else:
+                    print(f"Invalid translation detected (attempt {attempt + 1}/{max_retries}): contains non-Spanish characters")
+                    if attempt < max_retries - 1:
+                        continue  # Retry with stricter prompt
+                    else:
+                        # Last attempt failed, return partial translation with error note
+                        # Try to extract any valid Spanish portion
+                        clean = ''.join(c for c in translation if ord(c) < 0x3000 or ord(c) > 0xFFFF)
+                        if clean.strip():
+                            return f"{clean.strip()} [partial] ±"
+                        return f"[Translation Error: {en_text[:50]}...] ±"
+                        
+            except Exception as e:
+                print(f"Repair failed: {e}")
+                return f"[Repair Failed: {en_text[:50]}...] ±"
+        
+        return f"[Translation Error] ±"
 
     def batch_verify(self, pairs: list, threshold: float = 0.6) -> list:
         """
@@ -314,6 +395,13 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
     if total_pairs > 0:
         pass_rate = f"{((total_pairs - len(flagged_pairs)) / total_pairs * 100):.1f}%"
     
+    # Calculate pass rate with vector search (naturally passing + vector search fixes)
+    vector_search_rate = "N/A"
+    if total_pairs > 0:
+        # Pairs that passed naturally + pairs fixed via vector search
+        passed_naturally = total_pairs - len(flagged_pairs)
+        vector_search_rate = f"{((passed_naturally + fixed_vector) / total_pairs * 100):.1f}%"
+    
     report_lines = [
         "# Bilingual Alignment Verification Report",
         "",
@@ -328,6 +416,7 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
         f"  - 🔍 Vector Search: {fixed_vector}",
         f"  - ✨ LLM Repair: {fixed_llm}",
         f"- **Pass rate:** {pass_rate}",
+        f"- **Pass rate with Vector Search:** {vector_search_rate}",
         "",
     ]
     
@@ -361,6 +450,15 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
             
             if was_fixed:
                 method_label = pair.get('_repair_method', '✨ LLM Repair')
+                
+                # For LLM repairs, show what the vector search found (for threshold analysis)
+                vector_score = pair.get('_vector_score')
+                if vector_score is not None and 'LLM Repair' in method_label:
+                    report_lines.extend([
+                         f"**🔍 Vector Search ({vector_score:.2f}):** {es_original}{'...' if len(pair.get('_original_es', '')) > 200 else ''}",
+                         ""
+                    ])
+                
                 report_lines.extend([
                      f"**{method_label}:** {es_current}{'...' if len(pair.get('es', '')) > 200 else ''}",
                      ""

@@ -5778,16 +5778,22 @@ def process_chapter_pair(args):
                                      best_idx = int(scores.argmax())
                                      best_score = float(scores[best_idx])
                                      
-                                     if best_score > 0.85:
+                                     if best_score > 0.80:
                                          print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
                                          new_es = es_texts[best_idx]
                                          method = f"🔍 Vector Search ({best_score:.2f})"
                                  
                                  # Strategy 2: LLM Fallback
                                  if not new_es:
-                                     best_info = f"best: {best_score:.2f}" if 'best_score' in dir() else "no match"
+                                     vector_score = best_score if 'best_score' in dir() else None
+                                     best_info = f"best: {vector_score:.2f}" if vector_score else "no match"
                                      print(f"    -> LLM Translation Fallback ({best_info})")
                                      new_es = verifier.repair_translation(en)
+                                     # Store the vector search score even when using LLM repair
+                                     if vector_score is not None:
+                                         pair['_vector_score'] = vector_score
+                                         if i < len(aligned_pairs):
+                                             aligned_pairs[i]['_vector_score'] = vector_score
                                  
                                  if new_es and not new_es.startswith('[Error'):
                                      pair['_original_es'] = es

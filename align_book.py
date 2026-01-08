@@ -953,6 +953,100 @@ def compute_semantic_anchors(en_chunks, es_chunks, aligner, threshold=0.90, min_
     return anchors
 
 
+def find_anchor_gaps(anchors, total_en, total_es, max_gap=5):
+    """
+    Find sections with large gaps between anchors.
+    
+    Returns list of (en_start, en_end, es_start, es_end) tuples for gaps > max_gap.
+    """
+    if not anchors:
+        return [(0, total_en, 0, total_es)]
+    
+    # Sort anchors by EN index
+    sorted_anchors = sorted(anchors, key=lambda x: x[0])
+    
+    gaps = []
+    prev_en = 0
+    prev_es = 0
+    
+    for en_idx, es_idx, _ in sorted_anchors:
+        if en_idx - prev_en > max_gap:
+            gaps.append((prev_en, en_idx, prev_es, es_idx))
+        prev_en = en_idx + 1
+        prev_es = es_idx + 1
+    
+    # Check final gap
+    if total_en - prev_en > max_gap:
+        gaps.append((prev_en, total_en, prev_es, total_es))
+    
+    return gaps
+
+
+def compute_cascading_anchors(en_chunks, es_chunks, aligner, primary_anchors, 
+                               secondary_threshold=0.85, max_gap=5):
+    """
+    Fill gaps in anchor coverage with secondary anchors using lower threshold.
+    
+    This addresses "anchor-sparse" sections where no paragraph has >0.90 similarity
+    but there are still good matches at 0.85+.
+    """
+    if not en_chunks or not es_chunks or not aligner:
+        return []
+    
+    gaps = find_anchor_gaps(primary_anchors, len(en_chunks), len(es_chunks), max_gap)
+    
+    if not gaps:
+        return []
+    
+    secondary_anchors = []
+    
+    for en_start, en_end, es_start, es_end in gaps:
+        # Get chunks in this gap
+        gap_en = en_chunks[en_start:en_end]
+        gap_es = es_chunks[es_start:es_end]
+        
+        if not gap_en or not gap_es:
+            continue
+        
+        # Compute anchors with lower threshold
+        gap_anchors = compute_semantic_anchors(
+            gap_en, gap_es, aligner,
+            threshold=secondary_threshold, min_length=40
+        )
+        
+        # Adjust indices back to global
+        for en_idx, es_idx, options in gap_anchors:
+            global_en = en_start + en_idx
+            global_es = es_start + es_idx
+            secondary_anchors.append((global_en, global_es, options))
+    
+    return secondary_anchors
+
+
+# --- METADATA DETECTION ---
+METADATA_PATTERNS = [
+    r'copyright\s*©?', r'\bisbn\b', r'first\s*(avon\s*)?printing',
+    r'trademark', r'library\s*of\s*congress', r'published\s*by',
+    r'www\.', r'\.org\b', r'\.com\b', r'maquetación', r'edición\s*digital',
+    r'marca\s*registrada', r'all\s*rights?\s*reserved', r'derechos?\s*reservados?'
+]
+
+def is_metadata_content(text):
+    """
+    Detect if text is metadata/frontmatter that shouldn't be flagged.
+    
+    Metadata from different editions will never align correctly
+    (different publishers, dates, ISBNs, etc.)
+    """
+    if not text or len(text) > 500:  # Metadata is usually short
+        return False
+    
+    text_lower = text.lower()
+    match_count = sum(1 for p in METADATA_PATTERNS if re.search(p, text_lower))
+    
+    # Require at least 1 strong match for short text, 2 for longer
+    return match_count >= 1 if len(text) < 150 else match_count >= 2
+
 # --- SCENE BREAK DETECTION (Pattern 3: Paragraph Bleeding Fix) ---
 SCENE_BREAK_PATTERNS = [
     r'^[\s]*⁂[\s]*$',           # Asterism
@@ -5472,7 +5566,7 @@ def process_chapter_pair(args):
                      try:
                          anchor_constraints = compute_semantic_anchors(
                              en_filtered, es_filtered, aligner, 
-                             threshold=0.90, min_length=50
+                             threshold=0.85, min_length=50
                          )
                          if anchor_constraints:
                              # Add anchors that don't conflict with existing constraints
@@ -5488,8 +5582,29 @@ def process_chapter_pair(args):
                      except Exception as e:
                          print(f"Semantic anchor generation failed: {e}")
                       
+                     # --- CASCADING ANCHORS ---
+                     # Fill gaps in anchor-sparse sections with lower threshold
+                     try:
+                         cascading = compute_cascading_anchors(
+                             en_filtered, es_filtered, aligner, 
+                             anchor_constraints if 'anchor_constraints' in dir() else [],
+                             secondary_threshold=0.80, max_gap=3
+                         )
+                         if cascading:
+                             existing_en = {c[0] for c in constraints}
+                             existing_es = {c[1] for c in constraints}
+                             new_cascading = 0
+                             for anchor in cascading:
+                                 if anchor[0] not in existing_en and anchor[1] not in existing_es:
+                                     constraints.append(anchor)
+                                     new_cascading += 1
+                             if new_cascading:
+                                 print(f"DEBUG: {label} - Added {new_cascading} cascading anchor constraints")
+                     except Exception as e:
+                         print(f"Cascading anchor generation failed: {e}")
+                      
                      with open("/Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/constraints.log", "a") as f:
-                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs + Headers + Anchors)\n")
+                         f.write(f"DEBUG: Ch Pair generated {len(constraints)} constraints (Start + Refs + Headers + Anchors + Cascading)\n")
                          for c in constraints: f.write(f"  {c}\n")
 
                  # Run Alignment on Filtered Sequences
@@ -5828,6 +5943,11 @@ def process_chapter_pair(args):
                          if not en or not es or len(en) < 30:
                              continue
                          
+                         # Skip metadata/frontmatter - different editions will never match
+                         if is_metadata_content(en) or is_metadata_content(es):
+                             pair['_metadata'] = True
+                             continue
+                         
                          # SEMANTIC VERIFICATION: Check if EN/ES are actually a good match
                          should_flag = False
                          semantic_score = None
@@ -5839,7 +5959,7 @@ def process_chapter_pair(args):
                                  semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
                                  
                                  # Flag if LOW similarity (wrong content aligned)
-                                 if semantic_score < 0.60:
+                                 if semantic_score < 0.50:
                                      should_flag = True
                              except Exception as e:
                                  print(f"DEBUG: Semantic check failed: {e}")
@@ -5872,7 +5992,7 @@ def process_chapter_pair(args):
                                      best_idx = int(scores.argmax())
                                      best_score = float(scores[best_idx])
                                      
-                                     if best_score > 0.80:
+                                     if best_score > 0.65:
                                          print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
                                          new_es = es_texts[best_idx]
                                          method = f"🔍 Vector Search ({best_score:.2f})"

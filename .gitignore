@@ -9,7 +9,7 @@ env/
 uploads/
 bilingual_epub_staging/
 temp_*/
-# books/output/
+books/output/
 epub_analysis/
 
 # Build artifacts

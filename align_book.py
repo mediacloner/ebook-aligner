@@ -80,8 +80,10 @@ PROFILES = {
             'header_merge_targets': ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
         },
         'es': {
+            'SPLIT_TRIGGER_CHARS': 200,
             'header_tags': ['h1', 'h2', 'h3', 'p', 'div'],
             'header_indicators': [
+                'CAPITULOLO', 'LADILLOS',
                 'Capitulos_Capitulo_Numero', 
                 'Capitulos_Capitulo_1_Linea', 
                 'Subcapitulos_subcapitulo', 
@@ -2517,6 +2519,9 @@ def sync_headers(en_chunks, es_chunks, aligner):
     # 1. Find Anchor
     anchor_en, anchor_es = find_content_anchor(en_chunks, es_chunks, aligner)
     print(f"DEBUG: sync_headers anchors: EN={anchor_en}, ES={anchor_es}")
+    if anchor_es > 0:
+        print(f"DEBUG: ES Head candidate: {es_chunks[0].get('text')[:30]}")
+
     
     # If anchor is 0,0, nothing to sync (starts with content)
     if anchor_en == 0 and anchor_es == 0:
@@ -2682,6 +2687,7 @@ def inject_translation(en_node, es_text, config, soup, en_text=None):
     is_header = en_node.name.lower() in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']
     
     if is_header:
+        print(f"DEBUG: Injecting header translation '{es_text[:20]}...' into '{en_node.string[:20] if en_node.string else ''}'")
         # Inline mode: Append Spanish to the same header element
         # Separator: Use <br> for new line (User request)
         separator = soup.new_tag("br")
@@ -5959,91 +5965,154 @@ def process_chapter_pair(args):
                      
                      # Import utility for cosine similarity
                      from sentence_transformers import util
-                     
                      for i, pair in enumerate(target_list):
-                         en = pair.get('en', '').strip()
-                         es = pair.get('es', '').strip()
-                         
-                         # Skip very short pairs
-                         if not en or not es or len(en) < 30:
-                             continue
-                         
-                         # Skip metadata/frontmatter - different editions will never match
-                         if is_metadata_content(en) or is_metadata_content(es):
-                             pair['_metadata'] = True
-                             continue
-                         
-                         # SEMANTIC VERIFICATION: Check if EN/ES are actually a good match
-                         should_flag = False
-                         semantic_score = None
-                         
-                         if model and es_embeddings is not None:
-                             try:
-                                 en_emb = model.encode(en, convert_to_tensor=True)
-                                 es_emb = model.encode(es, convert_to_tensor=True)
-                                 semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
-                                 
-                                 # Flag if LOW similarity (wrong content aligned)
-                                 if semantic_score < 0.45:
-                                     should_flag = True
-                             except Exception as e:
-                                 print(f"DEBUG: Semantic check failed: {e}")
-                         else:
-                             # Fallback to length ratio if no embeddings
-                             len_ratio = len(es) / len(en)
-                             if len_ratio < 0.3 or len_ratio > 3.0:
-                                 should_flag = True
-                         
-                         if should_flag:
-                             pair['llm_flagged'] = True
-                             flagged_count += 1
-                             pair['llm_confidence'] = semantic_score if semantic_score else 0.5
-                             
-                             if fixed_pairs and i < len(aligned_pairs):
-                                 aligned_pairs[i]['llm_flagged'] = True
-                                 aligned_pairs[i]['llm_confidence'] = pair['llm_confidence']
-                             
-                             # REPAIR: Try to find correct Spanish sentence
-                             if verify_mode == 'validate_fix' and fixed_pairs:
-                                 print(f"  Flagged (sim={semantic_score:.2f}): {en[:40]}...")
-                                 
-                                 new_es = None
-                                 method = "✨ LLM Repair"
-                                 
-                                 # Strategy 1: Vector Search
-                                 if es_embeddings is not None and model:
-                                     en_emb = model.encode(en, convert_to_tensor=True)
-                                     scores = util.cos_sim(en_emb, es_embeddings)[0]
-                                     best_idx = int(scores.argmax())
-                                     best_score = float(scores[best_idx])
-                                     
-                                     if best_score > 0.60:
-                                         print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
-                                         new_es = es_texts[best_idx]
-                                         method = f"🔍 Vector Search ({best_score:.2f})"
-                                 
-                                 # Strategy 2: LLM Fallback
-                                 if not new_es:
-                                     vector_score = best_score if 'best_score' in dir() else None
-                                     best_info = f"best: {vector_score:.2f}" if vector_score else "no match"
-                                     print(f"    -> LLM Translation Fallback ({best_info})")
-                                     new_es = verifier.repair_translation(en)
-                                     # Store the vector search score even when using LLM repair
-                                     if vector_score is not None:
-                                         pair['_vector_score'] = vector_score
-                                         if i < len(aligned_pairs):
-                                             aligned_pairs[i]['_vector_score'] = vector_score
-                                 
-                                 if new_es and not new_es.startswith('[Error'):
-                                     pair['_original_es'] = es
-                                     pair['es'] = new_es
-                                     pair['_was_fixed'] = True
-                                     pair['_repair_method'] = method
-                                     
-                                     if i < len(aligned_pairs):
-                                         aligned_pairs[i]['_original_es'] = es
-                                         aligned_pairs[i]['_was_fixed'] = True
-                                         aligned_pairs[i]['_repair_method'] = method
+                          en = pair.get('en', '').strip()
+                          es = pair.get('es', '').strip()
+                          
+                          # GAP FIX #1: Detect MISSING translations (EN exists but ES is empty/very short)
+                          if en and len(en) > 20 and (not es or len(es) < 5):
+                              pair['llm_flagged'] = True
+                              pair['llm_confidence'] = 0.05  # Very low confidence = definite error
+                              pair['_missing_translation'] = True
+                              flagged_count += 1
+                              print(f"  Flagged MISSING translation: {en[:50]}...")
+                              if fixed_pairs and i < len(aligned_pairs):
+                                  aligned_pairs[i]['llm_flagged'] = True
+                                  aligned_pairs[i]['llm_confidence'] = 0.05
+                                  aligned_pairs[i]['_missing_translation'] = True
+                              
+                              # REPAIR: Generate fresh translation for missing pairs
+                              if verify_mode == 'validate_fix' and fixed_pairs:
+                                  print(f"    -> Generating from scratch (no source Spanish)")
+                                  new_es = verifier.repair_translation(en)
+                                  if new_es and not new_es.startswith('[Error'):
+                                      pair['_original_es'] = es if es else "(empty)"
+                                      pair['es'] = new_es
+                                      pair['_was_fixed'] = True
+                                      pair['_repair_method'] = "🆕 LLM Generated"
+                                      if i < len(aligned_pairs):
+                                          aligned_pairs[i]['_original_es'] = es if es else "(empty)"
+                                          aligned_pairs[i]['es'] = new_es
+                                          aligned_pairs[i]['_was_fixed'] = True
+                                          aligned_pairs[i]['_repair_method'] = "🆕 LLM Generated"
+                              continue
+                          
+                          # Skip very short pairs (but we already caught missing translations above)
+                          if not en or not es or len(en) < 30:
+                              continue
+                          
+                          # Skip metadata/frontmatter - different editions will never match
+                          if is_metadata_content(en) or is_metadata_content(es):
+                              pair['_metadata'] = True
+                              continue
+                          
+                          # GAP FIX #2: Detect OVER-LONG translations (ES is much longer than EN)
+                          # This catches cases where Spanish covers multiple English sentences
+                          len_ratio = len(es) / len(en) if len(en) > 0 else 0
+                          if len_ratio > 4.0:
+                              pair['llm_flagged'] = True
+                              pair['llm_confidence'] = 0.15  # Low confidence = likely error
+                              pair['_overlong_translation'] = True
+                              flagged_count += 1
+                              print(f"  Flagged OVER-LONG translation (ratio={len_ratio:.1f}): {en[:40]}...")
+                              if fixed_pairs and i < len(aligned_pairs):
+                                  aligned_pairs[i]['llm_flagged'] = True
+                                  aligned_pairs[i]['llm_confidence'] = 0.15
+                                  aligned_pairs[i]['_overlong_translation'] = True
+                              
+                              # REPAIR: Generate correct translation for over-long pairs
+                              if verify_mode == 'validate_fix' and fixed_pairs:
+                                  print(f"    -> Regenerating (original too long: {len(es)} chars)")
+                                  new_es = verifier.repair_translation(en)
+                                  if new_es and not new_es.startswith('[Error'):
+                                      pair['_original_es'] = es[:100] + "..." if len(es) > 100 else es
+                                      pair['es'] = new_es
+                                      pair['_was_fixed'] = True
+                                      pair['_repair_method'] = "📏 LLM Resized"
+                                      if i < len(aligned_pairs):
+                                          aligned_pairs[i]['_original_es'] = es[:100] + "..." if len(es) > 100 else es
+                                          aligned_pairs[i]['es'] = new_es
+                                          aligned_pairs[i]['_was_fixed'] = True
+                                          aligned_pairs[i]['_repair_method'] = "📏 LLM Resized"
+                              continue
+                          
+                          # SEMANTIC VERIFICATION: Check if EN/ES are actually a good match
+                          should_flag = False
+                          semantic_score = None
+                          
+                          if model and es_embeddings is not None:
+                              try:
+                                  en_emb = model.encode(en, convert_to_tensor=True)
+                                  es_emb = model.encode(es, convert_to_tensor=True)
+                                  semantic_score = float(util.cos_sim(en_emb, es_emb)[0][0])
+                                  
+                                  # GAP FIX #3: Lower threshold for poetry/songs (detect by newlines or short lines)
+                                  # Poetry often has embedded newlines and short phrases
+                                  is_poetic = '\n' in en or (len(en) < 100 and en.count(',') >= 3)
+                                  threshold = 0.40 if is_poetic else 0.45
+                                  
+                                  # Flag if LOW similarity (wrong content aligned)
+                                  if semantic_score < threshold:
+                                      should_flag = True
+                                      if is_poetic:
+                                          print(f"  Flagged POETIC content (sim={semantic_score:.2f}, threshold={threshold}): {en[:40]}...")
+                              except Exception as e:
+                                  print(f"DEBUG: Semantic check failed: {e}")
+                          else:
+                              # Fallback to length ratio if no embeddings
+                              if len_ratio < 0.3 or len_ratio > 3.0:
+                                  should_flag = True
+                          
+                          if should_flag:
+                              pair['llm_flagged'] = True
+                              flagged_count += 1
+                              pair['llm_confidence'] = semantic_score if semantic_score else 0.5
+                              
+                              if fixed_pairs and i < len(aligned_pairs):
+                                  aligned_pairs[i]['llm_flagged'] = True
+                                  aligned_pairs[i]['llm_confidence'] = pair['llm_confidence']
+                              
+                              # REPAIR: Try to find correct Spanish sentence
+                              if verify_mode == 'validate_fix' and fixed_pairs:
+                                  print(f"  Flagged (sim={semantic_score:.2f}): {en[:40]}...")
+                                  
+                                  new_es = None
+                                  method = "✨ LLM Repair"
+                                  
+                                  # Strategy 1: Vector Search
+                                  if es_embeddings is not None and model:
+                                      en_emb = model.encode(en, convert_to_tensor=True)
+                                      scores = util.cos_sim(en_emb, es_embeddings)[0]
+                                      best_idx = int(scores.argmax())
+                                      best_score = float(scores[best_idx])
+                                      
+                                      if best_score > 0.60:
+                                          print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
+                                          new_es = es_texts[best_idx]
+                                          method = f"🔍 Vector Search ({best_score:.2f})"
+                                  
+                                  # Strategy 2: LLM Fallback
+                                  if not new_es:
+                                      vector_score = best_score if 'best_score' in dir() else None
+                                      best_info = f"best: {vector_score:.2f}" if vector_score else "no match"
+                                      print(f"    -> LLM Translation Fallback ({best_info})")
+                                      new_es = verifier.repair_translation(en)
+                                      # Store the vector search score even when using LLM repair
+                                      if vector_score is not None:
+                                          pair['_vector_score'] = vector_score
+                                          if i < len(aligned_pairs):
+                                              aligned_pairs[i]['_vector_score'] = vector_score
+                                  
+                                  if new_es and not new_es.startswith('[Error'):
+                                      pair['_original_es'] = es
+                                      pair['es'] = new_es
+                                      pair['_was_fixed'] = True
+                                      pair['_repair_method'] = method
+                                      
+                                      if i < len(aligned_pairs):
+                                          aligned_pairs[i]['_original_es'] = es
+                                          aligned_pairs[i]['_was_fixed'] = True
+                                          aligned_pairs[i]['_repair_method'] = method
                      
                      if flagged_count:
                          print(f"DEBUG: {label} - Flagged {flagged_count} pairs via semantic verification")

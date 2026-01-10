@@ -342,6 +342,16 @@ Traducción:"""
             # Only verify pairs that might be problematic
             # (e.g., very different lengths, no shared words)
             len_ratio = len(es) / len(en)
+            
+            # GAP FIX: Detect OVER-LONG translations (ES is much longer than EN)
+            if len_ratio > 4.0:
+                print(f"Flagging over-long translation (ratio={len_ratio:.1f}): {en[:30]}...")
+                pair['llm_verified'] = False
+                pair['llm_confidence'] = 0.15
+                pair['_overlong_translation'] = True
+                flagged_count += 1
+                continue
+            
             if len_ratio < 0.3 or len_ratio > 3.0:
                 result = self.verify_pair(en, es)
                 pair['llm_verified'] = result['is_match']

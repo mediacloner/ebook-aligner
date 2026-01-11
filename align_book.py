@@ -669,15 +669,33 @@ def distribute_spanish(aligner, en_chunks, es_text):
         return [es_text]
         
     en_texts = [c['text'] for c in en_chunks]
-    es_sents = split_sentences_helper(es_text, language='es')
+    
+    # DIALOGUE DETECTION: Spanish uses em-dashes (—) to mark dialogue.
+    # Stanza NLP often incorrectly merges or drops dialogue sentences.
+    # When dialogue is detected, prefer regex which handles it correctly.
+    has_dialogue = '—' in es_text or '«' in es_text or '»' in es_text
+    
+    if has_dialogue:
+        # Use regex for dialogue-heavy text (Stanza loses dialogue with em-dashes)
+        es_sents = _split_sentences_regex(es_text)
+        print(f"DEBUG: distribute_spanish using regex for dialogue text ({len(es_sents)} sentences)")
+    else:
+        es_sents = split_sentences_helper(es_text, language='es')
+    
+    # VALIDATION: Check if Stanza lost significant content
+    # Compare combined length of sentences vs original text
+    combined_len = sum(len(s) for s in es_sents)
+    if combined_len < len(es_text) * 0.85:  # Lost >15% of content
+        print(f"DEBUG: distribute_spanish Stanza lost content! ({combined_len} vs {len(es_text)} chars), using regex")
+        es_sents = _split_sentences_regex(es_text)
     
     # FALLBACK: If we have more English chunks than Spanish sentences,
-    # try the regex splitter which might capture "D. Trazaba" type splits that Stanza misses.
+    # try the regex splitter which might capture "D. Trazaba" type splits.
     if len(es_sents) < len(en_chunks):
         regex_sents = _split_sentences_regex(es_text)
-        # Use regex splits ONLY if they provide MORE chunks than Stanza (closer to target)
+        # Use regex splits ONLY if they provide MORE chunks than current
         if len(regex_sents) > len(es_sents):
-            print(f"DEBUG: distribute_spanish fallback to regex! Stanza={len(es_sents)}, Regex={len(regex_sents)}")
+            print(f"DEBUG: distribute_spanish fallback to regex! Current={len(es_sents)}, Regex={len(regex_sents)}")
             es_sents = regex_sents
     
     if not es_sents:
@@ -717,13 +735,6 @@ def distribute_spanish(aligner, en_chunks, es_text):
             sent = es_sents[idx]
             current_es_str += (" " + sent) if current_es_str else sent
             
-            # Length Ratio Guard (looser than Splitter)
-            # If ratio is too small, keep adding. If too big, stop?
-            # English might be 50 chars ("Figure 35") and Spanish 200 chars ("La Figura 35 muestra...")
-            # So ratio can be high.
-            # But "The idea is..." (short) vs "Se trata..." (short).
-            # Let's rely mainly on cosine.
-            
             # Vector Aggregation
             relevant_vecs = es_embs[es_idx : idx+1]
             if not isinstance(relevant_vecs, np.ndarray):
@@ -732,14 +743,24 @@ def distribute_spanish(aligner, en_chunks, es_text):
             
             dist = cosine(en_vec, cand_vec)
             
-            # Bias slightly towards ratio ~ 1.0 - 1.5?
-            # Add penalty for extreme ratios
+            # Length Ratio Guard - improved to favor closer matches
             length_penalty = 0
             ratio = len(current_es_str) / en_len if en_len > 0 else 1.0
-            if ratio < 0.2: length_penalty = 0.5
-            if ratio > 3.0: length_penalty = 0.5
+            if ratio < 0.3: length_penalty = 0.6  # Too short, keep adding
+            elif ratio < 0.6: length_penalty = 0.3  # Still short
+            elif ratio > 2.5: length_penalty = 0.4  # Getting too long
+            elif ratio > 3.5: length_penalty = 0.8  # Way too long, stop
             
-            final_score = dist + length_penalty
+            # DIALOGUE BOUNDARY BONUS: Prefer cutting where next sentence
+            # starts a new speaker (em-dash at start marks narrative shift)
+            dialogue_bonus = 0
+            if idx + 1 < len(es_sents):
+                next_sent = es_sents[idx + 1].strip()
+                # If next sentence starts with em-dash, it's a natural break point
+                if next_sent.startswith('—') or next_sent.startswith('-'):
+                    dialogue_bonus = -0.15  # Prefer cutting here (lower score is better)
+            
+            final_score = dist + length_penalty + dialogue_bonus
             
             if final_score < best_score:
                 best_score = final_score
@@ -2941,8 +2962,59 @@ def perform_injection(aligned_pairs, config, soup):
 
                 next_sib = new_en_node.find_next_sibling()
                 last_node = next_sib if next_sib else new_en_node
+def distribute_chunks(en_chunks, es_chunks, tolerance=0.25):
+    """
+    Recursively group chunks based on character length ratios.
+    Used to resolve structural mismatches (e.g. 2 EN paragraphs vs 1 ES paragraph).
+    Returns a list of tuples: [ ( [en_sub], [es_sub] ), ... ]
+    """
+    # Base cases
+    if not en_chunks and not es_chunks:
+        return []
+    if not en_chunks or not es_chunks:
+        return [(en_chunks, es_chunks)]
 
-def align_chunks(en_chunks, es_chunks):
+    total_en = sum(len(c.get('text', '')) for c in en_chunks)
+    total_es = sum(len(c.get('text', '')) for c in es_chunks)
+    
+    if total_es == 0:
+        return [(en_chunks, es_chunks)]
+        
+    target_ratio = total_en / total_es
+    
+    # We want to find the first split (i, j) that approximates the target ratio
+    # Prefer smaller splits to keep granularity
+    for i in range(1, len(en_chunks) + 1):
+        for j in range(1, len(es_chunks) + 1):
+            # Skip the full-block case until the end (it's the fallback)
+            if i == len(en_chunks) and j == len(es_chunks):
+                continue
+                
+            sub_en_len = sum(len(c.get('text', '')) for c in en_chunks[:i])
+            sub_es_len = sum(len(c.get('text', '')) for c in es_chunks[:j])
+            
+            if sub_es_len == 0: continue
+            
+            ratio = sub_en_len / sub_es_len
+            
+            # Check if ratio is within tolerance (using log difference for symmetry)
+            # log(1.25) ~ 0.22. tolerance=0.25 allows ~28% deviation.
+            import math
+            try:
+                error = abs(math.log(ratio / target_ratio))
+            except ValueError:
+                error = float('inf')
+            
+            if error < tolerance:
+                # Found a good split! Recurse on the remainder
+                remainder = distribute_chunks(en_chunks[i:], es_chunks[j:], tolerance)
+                return [(en_chunks[:i], es_chunks[:j])] + remainder
+
+    # Fallback: If no good internal split found, return the whole block as one pair
+    return [(en_chunks, es_chunks)]
+
+
+def align_chunks(en_chunks, es_chunks, config=None):
     # --- HEADER SYNC (Split Header Fix) ---
     # Apply before standard alignment
     # Check if we have an aligner available? (We need embeddedings for anchor)
@@ -3320,6 +3392,38 @@ def align_chunks(en_chunks, es_chunks):
                     local_res.append(item_data)
             elif tag == 'replace':
                 # Block mismatch. Drill down by splitting text into sentences.
+                if config and config.get('preserve_paragraphs'):
+                     # Paragraph mode: Simple positional/linear alignment (avoid splitting)
+                     sub_en = en_sec[i1:i2]
+                     sub_es = es_sec[j1:j2]
+                     
+                     # If counts match, 1:1 mapping
+                     # If mismatch, map 1:1 as far as possible. 
+                     # The user prefers LLM to fix missing parts rather than bad alignment.
+                     # Use ratio-based distribution to handle structural mismatches
+                     # e.g. 2 English paragraphs vs 1 merged Spanish paragraph
+                     groups = distribute_chunks(sub_en, sub_es)
+                     print(f"DEBUG distribute_chunks: {len(sub_en)} EN, {len(sub_es)} ES -> {len(groups)} groups")
+                     
+                     for g_en, g_es in groups:
+                         if not g_en: continue
+                         
+                         # Merge English text (space separated)
+                         en_text_combined = " ".join([c['text'] for c in g_en]).strip()
+                         # Merge Spanish text
+                         es_text_combined = " ".join([c['text'] for c in g_es]).strip() if g_es else ""
+                         
+                         # Use the first English node as the anchor for the translation
+                         item_data = g_en[0].copy()
+                         item_data.update({
+                             'en': en_text_combined,
+                             'es': es_text_combined,
+                             'raw_html': None,  # Structure modified, clear raw html
+                             'node': g_en[0]['node']
+                         })
+                         local_res.append(item_data)
+                     continue
+
                 sub_en = en_sec[i1:i2]
                 sub_es = es_sec[j1:j2]
                 
@@ -5161,12 +5265,12 @@ def process_chapter_pair(args):
     
     # Check bypass
     if config.get('bypass_alignment'):
-         return (idx, None, "Bypassed", None, [], 0)
+         return (idx, None, "Bypassed", None, [], {'count': 0, 'en_chars': 0, 'es_chars': 0})
 
     try:
         # 1. Parse Existing English File (DOM)
         if not os.path.exists(target_path):
-             return (idx, None, f"Target file not found: {target_path}", None, [], 0)
+             return (idx, None, f"Target file not found: {target_path}", None, [], {'count': 0, 'en_chars': 0, 'es_chars': 0})
 
         with open(target_path, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f.read(), 'lxml')
@@ -5178,7 +5282,7 @@ def process_chapter_pair(args):
         # Check if this is a navigation page (TOC, index, etc.) - skip alignment
         if is_navigation_page(soup):
             print(f"DEBUG: {label} - Detected as navigation page, skipping alignment")
-            return (idx, target_path, label, [], [], 0)
+            return (idx, target_path, label, [], [], {'count': 0, 'en_chars': 0, 'es_chars': 0})
             
         # --- PRE-PROCESS: Merge Consecutive Headers (Fixed for Atomic Habits) ---
         # Atomic Habits splits Chapter Num and Title into separate h2 tags.
@@ -5203,14 +5307,17 @@ def process_chapter_pair(args):
         # --- PRE-PROCESS: Split Massive English Chunks into Sentences ---
         # This enables better matching when EN source has merged paragraphs but ES has them split.
         # Lower threshold (400) catches more cases than original (600).
-        en_chunks = pre_split_long_paragraphs(en_chunks, threshold=400, language='en')
-        print(f"DEBUG: {label} - Split EN chunks to {len(en_chunks)}")
+        if not config.get('preserve_paragraphs'):
+            en_chunks = pre_split_long_paragraphs(en_chunks, threshold=400, language='en')
+            print(f"DEBUG: {label} - Split EN chunks to {len(en_chunks)}")
+        else:
+            print(f"DEBUG: {label} - Preserving EN paragraphs ({len(en_chunks)} chunks)")
         
         # 3. Parse Spanish Content
         if not es_rel or not os.path.exists(es_rel):
             # No Spanish chapter to align with.
             # We just leave the English file as-is.
-            return (idx, target_path, label, [], [], 0)
+            return (idx, target_path, label, [], [], {'count': 0, 'en_chars': 0, 'es_chars': 0})
             
         es_files = [es_rel] 
         # Verify config has 'es' key before parsing
@@ -5279,13 +5386,16 @@ def process_chapter_pair(args):
         # --- PRE-PROCESS: Split Massive Spanish Chunks ---
         # Apply the same pre-splitting logic as English to ensure consistent behavior.
         # This fixes issues like Sapiens where Spanish paragraphs combine multiple English sentences.
-        print(f"DEBUG: {label} - BEFORE split: {len(es_chunks)} ES chunks")
-        for i, c in enumerate(es_chunks[:5]):  # Show first 5
-            print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
-        es_chunks = pre_split_long_paragraphs(es_chunks, threshold=150, language='es')
-        print(f"DEBUG: {label} - AFTER split: {len(es_chunks)} ES chunks")
-        for i, c in enumerate(es_chunks[:10]):  # Show first 10 after split
-            print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
+        if not config.get('preserve_paragraphs'):
+            print(f"DEBUG: {label} - BEFORE split: {len(es_chunks)} ES chunks")
+            for i, c in enumerate(es_chunks[:5]):  # Show first 5
+                print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
+            es_chunks = pre_split_long_paragraphs(es_chunks, threshold=150, language='es')
+            print(f"DEBUG: {label} - AFTER split: {len(es_chunks)} ES chunks")
+            for i, c in enumerate(es_chunks[:10]):  # Show first 10 after split
+                print(f"  ES[{i}]: ({len(c.get('text', ''))} chars) {c.get('text', '')[:60]}...")
+        else:
+            print(f"DEBUG: {label} - Preserving ES paragraphs ({len(es_chunks)} chunks)")
         
         print(f"DEBUG: {label} - use_neural={config.get('use_neural')}")
              
@@ -5731,7 +5841,7 @@ def process_chapter_pair(args):
                          })
              except Exception as e:
                  print(f"Neural alignment failed: {e}. Fallback to heuristic.")
-                 aligned_pairs = align_chunks(en_chunks, es_chunks)
+                 aligned_pairs = align_chunks(en_chunks, es_chunks, config=config)
                  
              # --- RESCUE PASS: Handle Reordered Paragraphs ---
              # Detect English paragraphs with empty/missing translations and
@@ -5874,13 +5984,16 @@ def process_chapter_pair(args):
                  print(f"Redistribution pass failed: {e}")
                 
              # --- SPLITTING LOGIC ---
-             try:
-                 # Local import removed to prevent UnboundLocalError
-                 # Use global aligner for semantic splitting if available
-                 splitter = Splitter(aligner=CACHED_ALIGNER, trigger_length=config.get('SPLIT_TRIGGER_CHARS', 240))
-                 aligned_pairs = splitter.process_all(aligned_pairs)
-             except Exception as e:
-                 print(f"Splitting failed: {e}")
+             if not config.get('preserve_paragraphs'):
+                 try:
+                     # Local import removed to prevent UnboundLocalError
+                     # Use global aligner for semantic splitting if available
+                     splitter = Splitter(aligner=CACHED_ALIGNER, trigger_length=config.get('SPLIT_TRIGGER_CHARS', 240))
+                     aligned_pairs = splitter.process_all(aligned_pairs)
+                 except Exception as e:
+                     print(f"Splitting failed: {e}")
+             else:
+                 print(f"DEBUG: {label} - Skipping post-alignment splitting (Preserve Paragraphs enabled)")
 
              # --- LLM VERIFICATION AND AUTO-FIX ---
              verify_mode = config.get('verify_mode', 'validate_fix' if config.get('verify_llm') else 'none')
@@ -5889,7 +6002,7 @@ def process_chapter_pair(args):
              if config.get('verify_llm'):
                  try:
                      from llm_verifier import AlignmentVerifier
-                     verifier = AlignmentVerifier(model=config.get('verify_model', 'qwen2.5:7b'))
+                     verifier = AlignmentVerifier(model=config.get('verify_model', 'mistral-nemo'))
                      print(f"DEBUG: {label} - Running LLM verification on {len(aligned_pairs)} pairs (mode: {verify_mode})...")
                      
                      if verify_mode == 'validate_fix' and fixed_target_path:
@@ -6090,6 +6203,39 @@ def process_chapter_pair(args):
                                           print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
                                           new_es = es_texts[best_idx]
                                           method = f"🔍 Vector Search ({best_score:.2f})"
+                                          
+                                          # Check if this ES spans multiple EN paragraphs
+                                          # (i.e., also matches the NEXT English paragraph)
+                                          if i + 1 < len(target_list):
+                                              next_en = target_list[i + 1].get('en', '')
+                                              if next_en and len(next_en) > 30:
+                                                  # Check semantic similarity with next paragraph
+                                                  next_en_emb = model.encode(next_en, convert_to_tensor=True)
+                                                  found_es_emb = model.encode(new_es, convert_to_tensor=True)
+                                                  next_score = float(util.cos_sim(next_en_emb, found_es_emb)[0][0])
+                                                  
+                                                  if next_score > 0.55:  # ES also matches next paragraph
+                                                      print(f"    -> Multi-paragraph ES detected (next_score={next_score:.2f})")
+                                                      # Split the ES text proportionally using existing distribute_spanish
+                                                      if CACHED_ALIGNER:
+                                                          chunks = [{'text': en}, {'text': next_en}]
+                                                          distributed = distribute_spanish(CACHED_ALIGNER, chunks, new_es)
+                                                          new_es = distributed[0]  # First portion for current
+                                                          
+                                                          # Pre-set the next paragraph's ES (avoid LLM later)
+                                                          target_list[i + 1]['es'] = distributed[1]
+                                                          target_list[i + 1]['_was_fixed'] = True
+                                                          target_list[i + 1]['_repair_method'] = "🔍 Vector Search (split)"
+                                                          target_list[i + 1]['llm_flagged'] = False  # Un-flag since we fixed it
+                                                          
+                                                          # Also update aligned_pairs if in range
+                                                          if i + 1 < len(aligned_pairs):
+                                                              aligned_pairs[i + 1]['es'] = distributed[1]
+                                                              aligned_pairs[i + 1]['_was_fixed'] = True
+                                                              aligned_pairs[i + 1]['_repair_method'] = "🔍 Vector Search (split)"
+                                                          
+                                                          method = f"🔍 Vector Search (split, {best_score:.2f})"
+                                                          print(f"    -> Split ES: [{len(distributed[0])} chars] + [{len(distributed[1])} chars]")
                                   
                                   # Strategy 2: LLM Fallback
                                   if not new_es:
@@ -6111,6 +6257,7 @@ def process_chapter_pair(args):
                                       
                                       if i < len(aligned_pairs):
                                           aligned_pairs[i]['_original_es'] = es
+                                          aligned_pairs[i]['es'] = new_es  # CRITICAL: Also update es in aligned_pairs!
                                           aligned_pairs[i]['_was_fixed'] = True
                                           aligned_pairs[i]['_repair_method'] = method
                      
@@ -6118,21 +6265,107 @@ def process_chapter_pair(args):
                          print(f"DEBUG: {label} - Flagged {flagged_count} pairs via semantic verification")
                          flagged_in_this_chapter = [p for p in target_list if p.get('llm_flagged')]
                          flagged_pairs.extend(flagged_in_this_chapter)
+                     
+                     # --- POST-FIX DUPLICATE CLEANUP ---
+                     # ALWAYS run after Vector Search fixes (not just when flagged_count > 0)
+                     import sys
+                     print(f"DEBUG: {label} - Running post-fix duplicate cleanup on {len(target_list)} pairs...", flush=True)
+                     duplicate_fixes = 0
+                     for idx in range(1, len(target_list)):
+                         curr_es = target_list[idx].get('es', '')
+                         prev_es = target_list[idx-1].get('es', '')
+                         curr_en = target_list[idx].get('en', '')
+                         
+                         # Skip short texts
+                         if not curr_es or len(curr_es) < 50 or not prev_es or len(prev_es) < 50:
+                             continue
+                         
+                         # Detect exact duplicate or significant overlap
+                         is_duplicate = curr_es == prev_es
+                         is_overlap = len(curr_es) > 100 and (
+                             curr_es.startswith(prev_es[:100]) or 
+                             prev_es.startswith(curr_es[:100])
+                         )
+                         # Also detect if one is CONTAINED within the other (common in merged paragraphs)
+                         is_contained = (len(curr_es) > 100 and len(prev_es) > 100 and 
+                                        (curr_es in prev_es or prev_es in curr_es))
+                         
+                         # Debug: Log specific pairs we're interested in
+                         if 'None of the women' in curr_en or 'Bray shuddered' in curr_en or 'Bray shuddered' in target_list[idx-1].get('en', ''):
+                             print(f"    DEBUG TRACE at idx {idx}:")
+                             print(f"      prev_en: {target_list[idx-1].get('en', '')[:50]}...")
+                             print(f"      curr_en: {curr_en[:50]}...")
+                             print(f"      prev_es len: {len(prev_es)}, curr_es len: {len(curr_es)}")
+                             print(f"      is_duplicate: {is_duplicate}, is_overlap: {is_overlap}, is_contained: {is_contained}")
+                         
+                         if is_duplicate or is_overlap or is_contained:
+                             print(f"    Duplicate detected at idx {idx}: {curr_en[:40]}...")
+                             # Generate fresh translation for the duplicate
+                             try:
+                                 new_es = verifier.repair_translation(curr_en)
+                                 if new_es and not new_es.startswith('[Error'):
+                                     target_list[idx]['_original_es'] = curr_es
+                                     target_list[idx]['es'] = new_es
+                                     target_list[idx]['_was_fixed'] = True
+                                     target_list[idx]['_repair_method'] = '🔁 Duplicate Fix'
+                                     target_list[idx]['_duplicate_translation'] = True
+                                     duplicate_fixes += 1
+                                     
+                                     # Also update fixed_pairs if it exists
+                                     if fixed_pairs and idx < len(fixed_pairs):
+                                         fixed_pairs[idx]['_original_es'] = curr_es
+                                         fixed_pairs[idx]['es'] = new_es
+                                         fixed_pairs[idx]['_was_fixed'] = True
+                                         fixed_pairs[idx]['_repair_method'] = '🔁 Duplicate Fix'
+                             except Exception as e:
+                                 print(f"    Duplicate fix failed: {e}")
+                     
+                     if duplicate_fixes:
+                         print(f"DEBUG: {label} - Fixed {duplicate_fixes} duplicate translations")
 
                  except Exception as e:
                      print(f"LLM verification failed: {e}")
 
              # --- INJECTION ---
+             # Duplicate fix on aligned_pairs before injection
+             for idx in range(1, len(aligned_pairs)):
+                 curr_es = aligned_pairs[idx].get('es', '')
+                 prev_es = aligned_pairs[idx-1].get('es', '')
+                 if curr_es and prev_es and len(curr_es) > 50 and curr_es == prev_es:
+                     curr_en = aligned_pairs[idx].get('en', '')
+                     print(f"DUP FIX: {curr_en[:40]}...", flush=True)
+                     try:
+                         from llm_verifier import AlignmentVerifier
+                         v = AlignmentVerifier(model=config.get('verify_model', 'mistral-nemo'))
+                         new_es = v.repair_translation(curr_en)
+                         if new_es and not new_es.startswith('[Error'):
+                             aligned_pairs[idx]['es'] = new_es
+                     except: pass
              perform_injection(aligned_pairs, config, soup)
              
+             print(f"DEBUG INJECT: fp={bool(fixed_pairs)}, ftp={bool(fixed_target_path)}", flush=True)
              # Inject into fixed output (if active)
              if fixed_pairs and fixed_target_path and 'soup_fixed' in locals() and soup_fixed:
+                 # FINAL duplicate check
+                 for idx in range(1, len(fixed_pairs)):
+                     curr_es = fixed_pairs[idx].get('es', '')
+                     prev_es = fixed_pairs[idx-1].get('es', '')
+                     if curr_es and prev_es and len(curr_es) > 50 and curr_es == prev_es:
+                         curr_en = fixed_pairs[idx].get('en', '')
+                         print(f"FINAL DUP: {curr_en[:40]}...", flush=True)
+                         try:
+                             from llm_verifier import AlignmentVerifier
+                             v = AlignmentVerifier(model=config.get('verify_model', 'mistral-nemo'))
+                             new_es = v.repair_translation(curr_en)
+                             if new_es and not new_es.startswith('[Error'):
+                                 fixed_pairs[idx]['es'] = new_es
+                         except: pass
                  perform_injection(fixed_pairs, config, soup_fixed)
                  with open(fixed_target_path, 'w', encoding='utf-8') as f:
                       f.write(str(soup_fixed))
              
         else:
-             aligned_pairs = align_chunks(en_chunks, es_chunks)
+             aligned_pairs = align_chunks(en_chunks, es_chunks, config=config)
              # --- INJECTION ---
              # Group by node to handle splits (1 Node -> Multiple Pairs)
              from itertools import groupby
@@ -6222,13 +6455,16 @@ def process_chapter_pair(args):
         # For now, we don't need to return images as we are preserving original structure
         # But if we did find new images (rare in this mode), we'd track them.
         pair_count = len(aligned_pairs) if 'aligned_pairs' in locals() else 0
-        return (idx, target_path, label, [], flagged_pairs, pair_count)
+        en_chars = sum(len(p.get('en', '')) for p in aligned_pairs) if 'aligned_pairs' in locals() else 0
+        es_chars = sum(len(p.get('es', '')) for p in aligned_pairs) if 'aligned_pairs' in locals() else 0
+        stats = {'count': pair_count, 'en_chars': en_chars, 'es_chars': es_chars}
+        return (idx, target_path, label, [], flagged_pairs, stats)
         
     except Exception as e:
         print(f"Error processing chapter {label}: {e}")
         import traceback
         traceback.print_exc()
-        return (idx, None, str(e), [], [], 0)
+        return (idx, None, str(e), [], [], {'count': 0, 'en_chars': 0, 'es_chars': 0})
                              
 def create_bilingual_epub(en_base, es_base, output_epub_path, config=None, progress_callback=None, cancel_check=None):
     # Use a staging directory relative to the output path (job-specific)
@@ -6753,7 +6989,9 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
     # However, process_chapter_pair still returns images, which might be useful for manifest updates.
     all_collected_images = set()
     all_flagged_pairs = []
-    total_pairs_count = 0
+    all_collected_images = set()
+    all_flagged_pairs = []
+    total_stats = {'count': 0, 'en_chars': 0, 'es_chars': 0}
     
     try:
         count_done = 0
@@ -6765,12 +7003,18 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
             for future in concurrent.futures.as_completed(future_to_idx):
                 i = future_to_idx[future]
                 try:
-                    res_idx, res_filename, res_label, res_images, res_flagged, res_count = future.result()
+                    res_idx, res_filename, res_label, res_images, res_flagged, res_stats = future.result()
                     if res_images:
                         all_collected_images.update(res_images)
                     if res_flagged:
                         all_flagged_pairs.extend(res_flagged)
-                    total_pairs_count += res_count
+                    
+                    if isinstance(res_stats, dict):
+                        total_stats['count'] += res_stats.get('count', 0)
+                        total_stats['en_chars'] += res_stats.get('en_chars', 0)
+                        total_stats['es_chars'] += res_stats.get('es_chars', 0)
+                    else:
+                        total_stats['count'] += res_stats
                 except Exception as exc:
                     print(f"Task {i} failed: {exc}")
                     import traceback; traceback.print_exc()
@@ -6907,7 +7151,7 @@ def _process_epub_generation(en_base, es_base, output_epub_path, staging_dir, co
         # Clean up fixed staging
         shutil.rmtree(staging_dir_fixed)
 
-    return {'title': new_title, 'language': 'bilingual', 'flagged_pairs': all_flagged_pairs, 'total_pairs': total_pairs_count}
+    return {'title': new_title, 'language': 'bilingual', 'flagged_pairs': all_flagged_pairs, 'total_pairs': total_stats['count'], 'stats': total_stats}
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Create a bilingual EPUB from extracted English and Spanish EPUB OEBPS directories.")
@@ -6941,8 +7185,8 @@ if __name__ == "__main__":
     # LLM verification options
     parser.add_argument('--verify', action='store_true',
                         help='Use local LLM (Ollama) to verify and fix alignment errors')
-    parser.add_argument('--verify-model', type=str, default='qwen2.5:7b',
-                        help='Ollama model for verification (default: qwen2.5:7b)')
+    parser.add_argument('--verify-model', type=str, default='mistral-nemo',
+                        help='Ollama model for verification (default: mistral-nemo)')
     
     args = parser.parse_args()
 

@@ -323,13 +323,39 @@ Traducción:"""
             return pairs
         
         flagged_count = 0
+        previous_es = None  # Track previous Spanish text for duplicate detection
+        
         for i, pair in enumerate(pairs):
             en = pair.get('en', '')
             es = pair.get('es', '')
             
             # Skip if English is too short or empty
             if not en or len(en) < 20:
+                previous_es = es
                 continue
+            
+            # DUPLICATE DETECTION: Flag if Spanish is identical to previous row
+            if previous_es and es and len(es) > 50:
+                # Check for exact match
+                if es == previous_es:
+                    print(f"Flagging DUPLICATE translation: {en[:40]}...")
+                    pair['llm_verified'] = False
+                    pair['llm_confidence'] = 0.05  # Very low confidence
+                    pair['_duplicate_translation'] = True
+                    flagged_count += 1
+                    previous_es = es
+                    continue
+                # Also check if current ES is a substring of previous (partial duplicate)
+                elif len(es) > 100 and (previous_es.startswith(es[:100]) or es.startswith(previous_es[:100])):
+                    print(f"Flagging OVERLAPPING translation: {en[:40]}...")
+                    pair['llm_verified'] = False
+                    pair['llm_confidence'] = 0.10
+                    pair['_overlapping_translation'] = True
+                    flagged_count += 1
+                    previous_es = es
+                    continue
+            
+            previous_es = es  # Update tracking for next iteration
             
             # CRITICAL CHECK: If English is present but Spanish is missing/empty, FLAG IT!
             if not es or len(es) < 5:  # Allow very short Spanish if it's just "Sí" but usually < 5 is suspicious for a >20 char English sentence
@@ -374,7 +400,7 @@ def verify_translation(en_text: str, es_text: str, model: str = 'qwen2.5:7b') ->
     return result['is_match']
 
 
-def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> str:
+def generate_report(output_path: str, flagged_pairs: list, total_pairs: int, alignment_mode: str = None, stats: dict = None) -> str:
     """
     Generate a verification report and save it next to the output EPUB.
     
@@ -382,6 +408,8 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
         output_path: Path to the output EPUB file
         flagged_pairs: List of flagged pairs with 'en', 'es', 'llm_confidence' keys
         total_pairs: Total number of pairs processed
+        alignment_mode: Optional alignment mode indicator ('split' or 'preserve')
+        stats: Optional dictionary with 'en_chars', 'es_chars', 'count' for metrics
     
     Returns:
         Path to the generated report file
@@ -417,6 +445,7 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
         "",
         f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"**Output File:** `{os.path.basename(output_path)}`",
+        f"**Alignment Mode:** {'📝 Preserve Paragraphs' if alignment_mode == 'preserve' else '✂️ Split into Sentences'}",
         "",
         "## Summary",
         "",
@@ -429,6 +458,14 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
         f"- **Pass rate with Vector Search:** {vector_search_rate}",
         "",
     ]
+    
+    if stats and stats.get('count', 0) > 0:
+        avg_en = stats.get('en_chars', 0) / stats.get('count', 1)
+        avg_es = stats.get('es_chars', 0) / stats.get('count', 1)
+        # Check alignment balance (ratio of chars)
+        ratio = avg_es / avg_en if avg_en > 0 else 0
+        report_lines.insert(14, f"- **Avg Chunk Length:** EN: {avg_en:.1f} chars | ES: {avg_es:.1f} chars (Ratio: {ratio:.2f})")
+
     
     if flagged_pairs:
         report_lines.extend([
@@ -448,6 +485,14 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int) -> 
             conf = pair.get('llm_confidence', 'N/A')
             
             status_icon = "✅ FIXED" if was_fixed else "⚠️ FLAGGED"
+            
+            # Special labeling for duplicate issues
+            if pair.get('_duplicate_translation'):
+                status_icon = "🔁 DUPLICATE" if not was_fixed else "🔁 DUPLICATE (FIXED)"
+            elif pair.get('_overlapping_translation'):
+                status_icon = "🔀 OVERLAPPING" if not was_fixed else "🔀 OVERLAPPING (FIXED)"
+            elif pair.get('_overlong_translation'):
+                status_icon = "📏 OVER-LONG" if not was_fixed else "📏 OVER-LONG (FIXED)"
             
             report_lines.extend([
                 f"### Issue {i} {status_icon}",

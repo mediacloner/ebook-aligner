@@ -131,6 +131,12 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
             config['bilingual'] = b_conf
             print(f"Applied bilingual config: {b_conf}")
         
+        # Preserve Paragraphs mode
+        if user_config:
+            config['preserve_paragraphs'] = user_config.get('preserveParagraphs', False)
+            if config['preserve_paragraphs']:
+                print("📝 Preserve Paragraphs mode enabled")
+        
         # LLM Verification - 3 modes: none, validate, validate_fix
         verify_mode = user_config.get('verifyLLM', 'validate_fix') if user_config else 'validate_fix'
         # Handle legacy boolean values
@@ -141,14 +147,17 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
         
         config['verify_llm'] = verify_mode != 'none'
         config['verify_mode'] = verify_mode  # none, validate, validate_fix
-        config['verify_model'] = 'qwen2.5:7b'
+        
+        # Get model choice (default to mistral-nemo)
+        verify_model = user_config.get('verifyModel', 'mistral-nemo')
+        config['verify_model'] = verify_model
         
         if verify_mode != 'none':
-            active_jobs[job_id]['message'] = f'Initializing LLM verification ({verify_mode})...'
+            active_jobs[job_id]['message'] = f'Initializing LLM verification ({verify_mode}) with {verify_model}...'
             # Auto-install model if needed
             try:
                 from llm_verifier import AlignmentVerifier
-                verifier = AlignmentVerifier(model='qwen2.5:7b')
+                verifier = AlignmentVerifier(model=verify_model)
                 if verifier._ensure_ollama():
                     print(f"LLM verification ready (mode: {verify_mode})")
                 else:
@@ -232,8 +241,11 @@ def process_job_worker(job_id, en_path, es_path, job_dir, use_local_ai, output_d
                 total_pairs = result.get('total_pairs', 0) if isinstance(result, dict) else 0
                 if total_pairs > 0 or flagged_pairs:  # Generate report if we have any data
                     from llm_verifier import generate_report
+                    # Determine alignment mode for report
+                    alignment_mode = 'preserve' if config.get('preserve_paragraphs') else 'split'
+                    stats = result.get('stats') if isinstance(result, dict) else None
                     # Generate verification report with actual counts
-                    report_path = generate_report(output_path, flagged_pairs, total_pairs=total_pairs)
+                    report_path = generate_report(output_path, flagged_pairs, total_pairs=total_pairs, alignment_mode=alignment_mode, stats=stats)
                     
                     if report_path and os.path.exists(report_path):
                          report_dest_name = final_name.replace('.epub', ' (Report).md')

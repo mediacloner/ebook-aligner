@@ -404,6 +404,42 @@
               Use local AI (Ollama) to verify and fix alignment errors
             </p>
           </div>
+
+          <div class="option-group" id="verifyModelGroup">
+            <label for="verifyModel">🧠 Verification Model</label>
+            <select id="verifyModel">
+              <option value="mistral-nemo" selected>
+                Mistral Nemo 12B (Recommended)
+              </option>
+              <option value="qwen2.5:14b">Qwen 2.5 14B</option>
+              <option value="gemma2:9b">Gemma 2 9B</option>
+              <option value="qwen2.5:7b">Qwen 2.5 7B (Legacy)</option>
+            </select>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0">
+              Select the LLM to use for verification (requires download)
+            </p>
+          </div>
+
+          <div class="option-group">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                cursor: pointer;
+              "
+            >
+              <input
+                type="checkbox"
+                id="preserveParagraphs"
+                style="width: auto; cursor: pointer"
+              />
+              <span>Preserve Original Paragraphs</span>
+            </label>
+            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
+              Align paragraph-by-paragraph without splitting into sentences
+            </p>
+          </div>
         </div>
 
         <div class="actions">
@@ -427,6 +463,8 @@
         preserveLineBreaks: false,
         usePlaceholder: true,
         verifyLLM: "validate_fix", // Options: none, validate, validate_fix
+        verifyModel: "mistral-nemo",
+        preserveParagraphs: false,
       };
 
       const PRESETS = {
@@ -509,6 +547,12 @@
         document.getElementById("columnGap").addEventListener("input", (e) => {
           document.getElementById("gapValue").innerText = e.target.value + "%";
         });
+
+        // Listener for verifyLLM to toggle model group
+        document.getElementById("verifyLLM").addEventListener("change", (e) => {
+          const group = document.getElementById("verifyModelGroup");
+          group.style.display = e.target.value === "none" ? "none" : "block";
+        });
       }
 
       function updateConfigForm() {
@@ -538,6 +582,14 @@
             : true;
         document.getElementById("verifyLLM").value =
           bilingualConfig.verifyLLM || "validate_fix";
+        document.getElementById("verifyModel").value =
+          bilingualConfig.verifyModel || "mistral-nemo";
+        document.getElementById("preserveParagraphs").checked =
+          bilingualConfig.preserveParagraphs || false;
+
+        // Toggle visibility
+        document.getElementById("verifyModelGroup").style.display =
+          bilingualConfig.verifyLLM === "none" ? "none" : "block";
 
         // Update active preset
         document
@@ -565,6 +617,10 @@
         bilingualConfig.usePlaceholder =
           document.getElementById("usePlaceholder").checked;
         bilingualConfig.verifyLLM = document.getElementById("verifyLLM").value;
+        bilingualConfig.verifyModel =
+          document.getElementById("verifyModel").value;
+        bilingualConfig.preserveParagraphs =
+          document.getElementById("preserveParagraphs").checked;
 
         localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
       }

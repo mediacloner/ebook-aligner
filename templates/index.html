@@ -591,6 +591,7 @@
         enColor: "#000000",
         esColor: "#666666",
         styleMode: "class",
+        preserveParagraphs: false,
       };
 
       const PRESETS = {
@@ -634,11 +635,15 @@
       function updatePreview() {
         const prev = document.getElementById("settingsPreview");
         if (prev) {
-          prev.innerHTML = `
+          let tags = `
                   <span class="setting-tag">📐 ${bilingualConfig.layoutMode}</span>
                   <span class="setting-tag"><span style="color:${bilingualConfig.enColor}">●</span> EN</span>
                   <span class="setting-tag"><span style="color:${bilingualConfig.esColor}">●</span> ES</span>
               `;
+          if (bilingualConfig.preserveParagraphs) {
+            tags += `<span class="setting-tag">📝 Paragraphs</span>`;
+          }
+          prev.innerHTML = tags;
         }
       }
 

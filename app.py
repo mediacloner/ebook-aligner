@@ -15,7 +15,7 @@ log = logging.getLogger('werkzeug')
 log.setLevel(logging.WARNING)
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(24).hex())
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 

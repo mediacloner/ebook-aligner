@@ -493,6 +493,8 @@ def generate_report(output_path: str, flagged_pairs: list, total_pairs: int, ali
                 status_icon = "🔀 OVERLAPPING" if not was_fixed else "🔀 OVERLAPPING (FIXED)"
             elif pair.get('_overlong_translation'):
                 status_icon = "📏 OVER-LONG" if not was_fixed else "📏 OVER-LONG (FIXED)"
+            elif pair.get('_multi_paragraph_es'):
+                status_icon = "🔀 MULTI-PARA" if not was_fixed else "🔀 MULTI-PARA (FIXED)"
             
             report_lines.extend([
                 f"### Issue {i} {status_icon}",

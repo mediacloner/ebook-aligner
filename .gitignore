@@ -9,7 +9,10 @@ env/
 uploads/
 bilingual_epub_staging/
 temp_*/
-books/output/
+!temp_debug_bw/
+books/output/*
+!books/output/*.md
+!books/output/backup_blackwater/
 epub_analysis/
 
 # Build artifacts

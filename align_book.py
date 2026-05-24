@@ -6203,39 +6203,6 @@ def process_chapter_pair(args):
                                           print(f"    -> Found via Vector Search (Score: {best_score:.2f})")
                                           new_es = es_texts[best_idx]
                                           method = f"🔍 Vector Search ({best_score:.2f})"
-                                          
-                                          # Check if this ES spans multiple EN paragraphs
-                                          # (i.e., also matches the NEXT English paragraph)
-                                          if i + 1 < len(target_list):
-                                              next_en = target_list[i + 1].get('en', '')
-                                              if next_en and len(next_en) > 30:
-                                                  # Check semantic similarity with next paragraph
-                                                  next_en_emb = model.encode(next_en, convert_to_tensor=True)
-                                                  found_es_emb = model.encode(new_es, convert_to_tensor=True)
-                                                  next_score = float(util.cos_sim(next_en_emb, found_es_emb)[0][0])
-                                                  
-                                                  if next_score > 0.55:  # ES also matches next paragraph
-                                                      print(f"    -> Multi-paragraph ES detected (next_score={next_score:.2f})")
-                                                      # Split the ES text proportionally using existing distribute_spanish
-                                                      if CACHED_ALIGNER:
-                                                          chunks = [{'text': en}, {'text': next_en}]
-                                                          distributed = distribute_spanish(CACHED_ALIGNER, chunks, new_es)
-                                                          new_es = distributed[0]  # First portion for current
-                                                          
-                                                          # Pre-set the next paragraph's ES (avoid LLM later)
-                                                          target_list[i + 1]['es'] = distributed[1]
-                                                          target_list[i + 1]['_was_fixed'] = True
-                                                          target_list[i + 1]['_repair_method'] = "🔍 Vector Search (split)"
-                                                          target_list[i + 1]['llm_flagged'] = False  # Un-flag since we fixed it
-                                                          
-                                                          # Also update aligned_pairs if in range
-                                                          if i + 1 < len(aligned_pairs):
-                                                              aligned_pairs[i + 1]['es'] = distributed[1]
-                                                              aligned_pairs[i + 1]['_was_fixed'] = True
-                                                              aligned_pairs[i + 1]['_repair_method'] = "🔍 Vector Search (split)"
-                                                          
-                                                          method = f"🔍 Vector Search (split, {best_score:.2f})"
-                                                          print(f"    -> Split ES: [{len(distributed[0])} chars] + [{len(distributed[1])} chars]")
                                   
                                   # Strategy 2: LLM Fallback
                                   if not new_es:

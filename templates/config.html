@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Style Configuration - Bilingual Ebook Aligner</title>
+    <title>Configuration - Tandem Reader</title>
+    <link rel="icon" type="image/png" href="/static/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,6 +20,8 @@
         --text-main: #1f2937;
         --text-sub: #6b7280;
         --border: #e5e7eb;
+        --success: #10b981;
+        --danger: #ef4444;
       }
       body {
         font-family: "Outfit", sans-serif;
@@ -44,37 +47,35 @@
       }
 
       @keyframes scaleIn {
-        from {
-          opacity: 0;
-          transform: scale(0.95);
-        }
-        to {
-          opacity: 1;
-          transform: scale(1);
-        }
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
       }
 
+      .brand-logo {
+        display: block;
+        margin: 0 auto 0.5rem;
+        width: 56px;
+        height: auto;
+        opacity: 0.95;
+      }
       h1 {
         font-size: 2rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         margin-top: 0;
         text-align: center;
-        background: linear-gradient(to right, #4f46e5, #ec4899);
+        background: linear-gradient(135deg, #7bb7bd 0%, #3a5b9c 100%);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
       }
-
       p.subtitle {
         color: var(--text-sub);
-        margin-bottom: 2.5rem;
+        margin-bottom: 2rem;
         text-align: center;
       }
 
-      .config-section {
-        margin-bottom: 28px;
-      }
+      .config-section { margin-bottom: 24px; }
       .config-section h3 {
         font-size: 14px;
         color: #6b7280;
@@ -84,105 +85,58 @@
         font-weight: 600;
       }
 
-      .option-group {
-        margin-bottom: 20px;
-      }
-      .option-group label {
-        display: block;
-        font-size: 14px;
-        color: #374151;
-        margin-bottom: 8px;
-        font-weight: 500;
-      }
-      .option-group select,
-      .option-group input[type="number"] {
-        width: 100%;
-        padding: 12px;
-        padding-right: 40px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        font-size: 14px;
-        background: #f9fafb;
-        font-family: inherit;
-        transition: all 0.2s;
-        box-sizing: border-box;
-      }
-      .option-group select {
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 16px center;
-        cursor: pointer;
-      }
-      .option-group select:focus,
-      .option-group input:focus {
-        outline: none;
-        border-color: #4f46e5;
-        background-color: white;
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-      }
-
-      .color-picker-group {
+      .toggle-row {
         display: flex;
+        align-items: flex-start;
         gap: 12px;
-        align-items: center;
+        padding: 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #f9fafb;
+        margin-bottom: 12px;
       }
-      .color-picker-group input[type="color"] {
-        width: 48px;
-        height: 44px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
+      .toggle-row input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        margin-top: 2px;
         cursor: pointer;
-        background: white;
-        padding: 2px;
       }
-      .color-picker-group input[type="text"] {
-        flex: 1;
-        padding: 12px;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        font-size: 14px;
-        font-family: monospace;
+      .toggle-row .toggle-label { font-weight: 600; color: #374151; }
+      .toggle-row .toggle-hint {
+        display: block;
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+        font-weight: 400;
       }
 
-      .preset-buttons {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
-      }
-      .preset-btn {
-        padding: 14px;
-        border: 1px solid #e5e7eb;
-        background: white;
+      .status-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
         border-radius: 10px;
-        cursor: pointer;
-        font-size: 14px;
-        font-family: inherit;
-        font-weight: 500;
-        transition: all 0.2s;
-        color: #4b5563;
+        background: #f3f4f6;
+        border: 1px solid var(--border);
+        font-size: 13px;
+        color: #374151;
+        margin-bottom: 16px;
       }
-      .preset-btn:hover {
-        border-color: #4f46e5;
-        background: #eef2ff;
-        color: #4f46e5;
-        transform: translateY(-1px);
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--text-sub);
+        flex-shrink: 0;
       }
-      .preset-btn.active {
-        border-color: #4f46e5;
-        background: #4f46e5;
-        color: white;
-        box-shadow: 0 4px 6px rgba(79, 70, 229, 0.2);
-      }
+      .status-dot.ok { background: var(--success); }
+      .status-dot.off { background: var(--danger); }
 
       .actions {
         display: flex;
         gap: 12px;
-        margin-top: 32px;
+        margin-top: 28px;
       }
-
       button.action-btn {
         flex: 1;
         padding: 14px;
@@ -192,17 +146,10 @@
         font-size: 1rem;
         cursor: pointer;
         transition: all 0.2s;
+        font-family: inherit;
       }
-
-      .btn-secondary {
-        background: #f3f4f6;
-        color: #4b5563;
-      }
-      .btn-secondary:hover {
-        background: #e5e7eb;
-        color: #1f2937;
-      }
-
+      .btn-secondary { background: #f3f4f6; color: #4b5563; }
+      .btn-secondary:hover { background: #e5e7eb; color: #1f2937; }
       .btn-primary {
         background: linear-gradient(to right, #4f46e5, #ec4899);
         color: white;
@@ -213,430 +160,138 @@
         transform: translateY(-2px);
         box-shadow: 0 8px 15px -3px rgba(79, 70, 229, 0.3);
       }
-
-      /* Preview Tags */
-      .current-settings {
-        margin-top: -10px;
-        margin-bottom: 24px;
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 8px;
-      }
-      .setting-tag {
-        display: inline-flex;
-        align-items: center;
-        background: #f3f4f6;
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #4b5563;
-        border: 1px solid #e5e7eb;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
     </style>
   </head>
   <body>
     <div class="config-container">
-      <h1>Style Configuration</h1>
-      <p class="subtitle">Customize your reading experience</p>
+      <img src="/static/logo.png" alt="Tandem Reader" class="brand-logo" />
+      <h1>Configuration</h1>
+      <p class="subtitle">Tandem pipeline settings</p>
 
-      <div class="current-settings" id="settingsPreview">
-        <!-- Settings tags will appear here -->
+      <div class="config-section">
+        <h3>🔌 Adjudicator</h3>
+        <div class="status-banner" id="adjudicatorStatus">
+          <span class="status-dot"></span>
+          <span id="adjudicatorStatusText">Checking…</span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-sub); margin: -8px 0 0 0">
+          The OpenAI adjudicator resolves low-confidence pairs. Configure
+          <code>OPENAI_API_KEY</code> and <code>ALIGNER_USE_LLM</code> in
+          <code>.env</code> to control it.
+        </p>
       </div>
 
-      <div class="config-body">
-        <!-- Presets -->
-        <div class="config-section">
-          <h3>📋 Quick Presets</h3>
-          <div class="preset-buttons">
-            <button class="preset-btn" data-preset="default">Default</button>
-            <button class="preset-btn" data-preset="side_by_side">
-              Side-by-Side
-            </button>
-            <button class="preset-btn" data-preset="color_coded">
-              Color Coded
-            </button>
-            <button class="preset-btn" data-preset="learner_mode">
-              Learner Mode
-            </button>
-          </div>
-        </div>
+      <div class="config-section">
+        <h3>⚙️ Pipeline</h3>
 
-        <!-- Layout Mode -->
-        <div class="config-section">
-          <h3>📐 Layout</h3>
-          <div class="option-group">
-            <label for="layoutMode">Layout Mode</label>
-            <select id="layoutMode">
-              <option value="below">Spanish Below English</option>
-              <option value="above">Spanish Above English</option>
-              <option value="side">Side-by-Side</option>
-              <option value="only">Spanish Only</option>
-            </select>
-          </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="useNeural" checked />
+          <span>
+            <span class="toggle-label">Use Neural Alignment (LaBSE)</span>
+            <span class="toggle-hint">
+              Load the LaBSE embedding model for cross-lingual paragraph
+              alignment. Recommended. Disable for a faster, lower-quality run.
+            </span>
+          </span>
+        </label>
 
-          <div class="option-group" id="columnGapGroup" style="display: none">
-            <label for="columnGap"
-              >Column Gap: <span id="gapValue">10%</span></label
-            >
-            <input
-              type="range"
-              id="columnGap"
-              min="5"
-              max="30"
-              value="10"
-              style="width: 100%; padding: 0; cursor: pointer"
-            />
-          </div>
-        </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="localMode" />
+          <span>
+            <span class="toggle-label">Local Mode (no OpenAI)</span>
+            <span class="toggle-hint">
+              Run alignment fully offline. Skips the OpenAI adjudicator pass
+              for low-confidence pairs — nothing leaves your machine.
+            </span>
+          </span>
+        </label>
 
-        <!-- Colors -->
-        <div class="config-section">
-          <h3>🎨 Colors</h3>
-          <div class="option-group">
-            <label>English Text Color</label>
-            <div class="color-picker-group">
-              <input type="color" id="enColor" value="#000000" />
-              <input type="text" id="enColorText" value="#000000" />
-            </div>
-          </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="bypassAlignment" />
+          <span>
+            <span class="toggle-label">Bypass Alignment (diagnostic)</span>
+            <span class="toggle-hint">
+              Skip alignment entirely and output the English EPUB unchanged.
+              Use this to isolate alignment issues from EPUB packaging.
+            </span>
+          </span>
+        </label>
+      </div>
 
-          <div class="option-group">
-            <label>Spanish Text Color</label>
-            <div class="color-picker-group">
-              <input type="color" id="esColor" value="#666666" />
-              <input type="text" id="esColorText" value="#666666" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Style Mode -->
-        <div class="config-section">
-          <h3>💅 Style Mode</h3>
-          <div class="option-group">
-            <label for="styleMode">CSS Application</label>
-            <select id="styleMode">
-              <option value="class">CSS Classes (Default)</option>
-              <option value="inline">Inline Styles</option>
-              <option value="hybrid">Hybrid (Both)</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Advanced Features (Phase 4) -->
-        <div class="config-section">
-          <h3>🔧 Advanced Features</h3>
-
-          <div class="option-group">
-            <label
-              style="
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                cursor: pointer;
-              "
-            >
-              <input
-                type="checkbox"
-                id="elementTypeFormatting"
-                style="width: auto; cursor: pointer"
-              />
-              <span>Smart Element Formatting</span>
-            </label>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
-              Inline text stays inline, lists/tables stack vertically
-            </p>
-          </div>
-
-          <div class="option-group">
-            <label
-              style="
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                cursor: pointer;
-              "
-            >
-              <input
-                type="checkbox"
-                id="preserveLineBreaks"
-                style="width: auto; cursor: pointer"
-              />
-              <span>Poetry/Code Mode</span>
-            </label>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
-              Align line-by-line for formatted content
-            </p>
-          </div>
-
-          <div class="option-group">
-            <label
-              style="
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                cursor: pointer;
-              "
-            >
-              <input
-                type="checkbox"
-                id="usePlaceholder"
-                checked
-                style="width: auto; cursor: pointer"
-              />
-              <span>Protect Complex Elements</span>
-            </label>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
-              Preserve SVG, Math, Code blocks during alignment
-            </p>
-          </div>
-          <div class="option-group">
-            <label for="verifyLLM">🤖 LLM Verification</label>
-            <select id="verifyLLM">
-              <option value="none">No Verification</option>
-              <option value="validate">Validation Only</option>
-              <option value="validate_fix" selected>Validation + Fix</option>
-            </select>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0">
-              Use local AI (Ollama) to verify and fix alignment errors
-            </p>
-          </div>
-
-          <div class="option-group" id="verifyModelGroup">
-            <label for="verifyModel">🧠 Verification Model</label>
-            <select id="verifyModel">
-              <option value="mistral-nemo" selected>
-                Mistral Nemo 12B (Recommended)
-              </option>
-              <option value="qwen2.5:14b">Qwen 2.5 14B</option>
-              <option value="gemma2:9b">Gemma 2 9B</option>
-              <option value="qwen2.5:7b">Qwen 2.5 7B (Legacy)</option>
-            </select>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 0">
-              Select the LLM to use for verification (requires download)
-            </p>
-          </div>
-
-          <div class="option-group">
-            <label
-              style="
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                cursor: pointer;
-              "
-            >
-              <input
-                type="checkbox"
-                id="preserveParagraphs"
-                style="width: auto; cursor: pointer"
-              />
-              <span>Preserve Original Paragraphs</span>
-            </label>
-            <p style="font-size: 12px; color: #6b7280; margin: 4px 0 0 24px">
-              Align paragraph-by-paragraph without splitting into sentences
-            </p>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="action-btn btn-secondary" id="cancelBtn">Back</button>
-          <button class="action-btn btn-primary" id="saveBtn">
-            Save Changes
-          </button>
-        </div>
+      <div class="actions">
+        <button class="action-btn btn-secondary" id="cancelBtn">Back</button>
+        <button class="action-btn btn-primary" id="saveBtn">Save</button>
       </div>
     </div>
 
     <script>
       let bilingualConfig = {
-        layoutMode: "below",
-        columnGap: 10,
-        enColor: "#000000",
-        esColor: "#666666",
-        styleMode: "class",
-        // Phase 4 Advanced Features
-        elementTypeFormatting: false,
-        preserveLineBreaks: false,
-        usePlaceholder: true,
-        verifyLLM: "validate_fix", // Options: none, validate, validate_fix
-        verifyModel: "mistral-nemo",
-        preserveParagraphs: false,
+        useNeural: true,
+        localMode: false,
+        bypassAlignment: false,
       };
 
-      const PRESETS = {
-        default: {
-          layoutMode: "below",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#666666",
-          styleMode: "class",
-        },
-        side_by_side: {
-          layoutMode: "side",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#000000",
-          styleMode: "class",
-        },
-        color_coded: {
-          layoutMode: "below",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#555555",
-          styleMode: "inline",
-        },
-        learner_mode: {
-          layoutMode: "side",
-          columnGap: 15,
-          enColor: "#000000",
-          esColor: "#0066cc",
-          styleMode: "inline",
-        },
-      };
-
-      function initConfig() {
+      function loadConfig() {
         const saved = localStorage.getItem("epubConfig");
-        if (saved) bilingualConfig = JSON.parse(saved);
-
-        updateConfigForm();
-        updatePreview();
-
-        // Attach listeners
-        document.getElementById("saveBtn").addEventListener("click", () => {
-          saveConfigFromForm();
-          window.location.href = "/"; // Go back to main page
-        });
-
-        document.getElementById("cancelBtn").addEventListener("click", () => {
-          window.location.href = "/"; // Just go back
-        });
-
-        // Live inputs
-        document.querySelectorAll(".preset-btn").forEach((btn) => {
-          btn.addEventListener("click", () => {
-            const p = PRESETS[btn.dataset.preset];
-            if (p) {
-              bilingualConfig = { ...p };
-              updateConfigForm();
-            }
-          });
-        });
-
-        document
-          .getElementById("layoutMode")
-          .addEventListener("change", (e) => {
-            document.getElementById("columnGapGroup").style.display =
-              e.target.value === "side" ? "block" : "none";
-          });
-
-        ["enColor", "esColor"].forEach((id) => {
-          document.getElementById(id).addEventListener("input", (e) => {
-            document.getElementById(id + "Text").value = e.target.value;
-          });
-          document
-            .getElementById(id + "Text")
-            .addEventListener("input", (e) => {
-              document.getElementById(id).value = e.target.value;
-            });
-        });
-
-        document.getElementById("columnGap").addEventListener("input", (e) => {
-          document.getElementById("gapValue").innerText = e.target.value + "%";
-        });
-
-        // Listener for verifyLLM to toggle model group
-        document.getElementById("verifyLLM").addEventListener("change", (e) => {
-          const group = document.getElementById("verifyModelGroup");
-          group.style.display = e.target.value === "none" ? "none" : "block";
-        });
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            bilingualConfig = {
+              useNeural: parsed.useNeural !== false,
+              localMode: !!parsed.localMode,
+              bypassAlignment: !!parsed.bypassAlignment,
+            };
+          } catch (_) {}
+        }
+        document.getElementById("useNeural").checked = bilingualConfig.useNeural;
+        document.getElementById("localMode").checked = bilingualConfig.localMode;
+        document.getElementById("bypassAlignment").checked =
+          bilingualConfig.bypassAlignment;
       }
 
-      function updateConfigForm() {
-        document.getElementById("layoutMode").value =
-          bilingualConfig.layoutMode;
-        document.getElementById("columnGap").value = bilingualConfig.columnGap;
-        document.getElementById("gapValue").innerText =
-          bilingualConfig.columnGap + "%";
-        document.getElementById("columnGapGroup").style.display =
-          bilingualConfig.layoutMode === "side" ? "block" : "none";
-
-        document.getElementById("enColor").value = bilingualConfig.enColor;
-        document.getElementById("enColorText").value = bilingualConfig.enColor;
-        document.getElementById("esColor").value = bilingualConfig.esColor;
-        document.getElementById("esColorText").value = bilingualConfig.esColor;
-
-        document.getElementById("styleMode").value = bilingualConfig.styleMode;
-
-        // Phase 4 Advanced Features
-        document.getElementById("elementTypeFormatting").checked =
-          bilingualConfig.elementTypeFormatting || false;
-        document.getElementById("preserveLineBreaks").checked =
-          bilingualConfig.preserveLineBreaks || false;
-        document.getElementById("usePlaceholder").checked =
-          bilingualConfig.usePlaceholder !== undefined
-            ? bilingualConfig.usePlaceholder
-            : true;
-        document.getElementById("verifyLLM").value =
-          bilingualConfig.verifyLLM || "validate_fix";
-        document.getElementById("verifyModel").value =
-          bilingualConfig.verifyModel || "mistral-nemo";
-        document.getElementById("preserveParagraphs").checked =
-          bilingualConfig.preserveParagraphs || false;
-
-        // Toggle visibility
-        document.getElementById("verifyModelGroup").style.display =
-          bilingualConfig.verifyLLM === "none" ? "none" : "block";
-
-        // Update active preset
-        document
-          .querySelectorAll(".preset-btn")
-          .forEach((btn) => btn.classList.remove("active"));
-        updatePreview();
-      }
-
-      function saveConfigFromForm() {
-        bilingualConfig.layoutMode =
-          document.getElementById("layoutMode").value;
-        bilingualConfig.columnGap = parseInt(
-          document.getElementById("columnGap").value
-        );
-        bilingualConfig.enColor = document.getElementById("enColor").value;
-        bilingualConfig.esColor = document.getElementById("esColor").value;
-        bilingualConfig.styleMode = document.getElementById("styleMode").value;
-
-        // Phase 4 Advanced Features
-        bilingualConfig.elementTypeFormatting = document.getElementById(
-          "elementTypeFormatting"
-        ).checked;
-        bilingualConfig.preserveLineBreaks =
-          document.getElementById("preserveLineBreaks").checked;
-        bilingualConfig.usePlaceholder =
-          document.getElementById("usePlaceholder").checked;
-        bilingualConfig.verifyLLM = document.getElementById("verifyLLM").value;
-        bilingualConfig.verifyModel =
-          document.getElementById("verifyModel").value;
-        bilingualConfig.preserveParagraphs =
-          document.getElementById("preserveParagraphs").checked;
-
-        localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
-      }
-
-      function updatePreview() {
-        const prev = document.getElementById("settingsPreview");
-        if (prev) {
-          prev.innerHTML = `
-                  <span class="setting-tag">📐 ${bilingualConfig.layoutMode}</span>
-                  <span class="setting-tag"><span style="color:${bilingualConfig.enColor}">●</span> EN</span>
-                  <span class="setting-tag"><span style="color:${bilingualConfig.esColor}">●</span> ES</span>
-              `;
+      async function fetchStatus() {
+        const dot = document.querySelector("#adjudicatorStatus .status-dot");
+        const text = document.getElementById("adjudicatorStatusText");
+        try {
+          const res = await fetch("/status");
+          if (!res.ok) throw new Error("status fetch failed");
+          const s = await res.json();
+          if (s.adjudicator) {
+            dot.classList.add("ok");
+            text.innerText = `Adjudicator on — ${s.openai_model || "openai"}`;
+          } else {
+            dot.classList.add("off");
+            const reasons = [];
+            if (!s.openai_key) reasons.push("OPENAI_API_KEY missing");
+            if (!s.aligner_use_llm) reasons.push("ALIGNER_USE_LLM=false");
+            text.innerText = `Adjudicator off${
+              reasons.length ? " — " + reasons.join(", ") : ""
+            }`;
+          }
+        } catch (_) {
+          text.innerText = "Adjudicator status unavailable";
         }
       }
 
-      window.addEventListener("load", initConfig);
+      document.getElementById("saveBtn").addEventListener("click", () => {
+        bilingualConfig.useNeural =
+          document.getElementById("useNeural").checked;
+        bilingualConfig.localMode =
+          document.getElementById("localMode").checked;
+        bilingualConfig.bypassAlignment =
+          document.getElementById("bypassAlignment").checked;
+        localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
+        window.location.href = "/";
+      });
+
+      document.getElementById("cancelBtn").addEventListener("click", () => {
+        window.location.href = "/";
+      });
+
+      window.addEventListener("load", () => {
+        loadConfig();
+        fetchStatus();
+      });
     </script>
   </body>
 </html>

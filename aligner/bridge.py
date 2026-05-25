@@ -120,6 +120,7 @@ def run_chapter_pair(args):
             soup,
             chapter_id=chapter_id,
             install_onboarding=install_onboarding,
+            local_mode=bool(config.get("local_mode")),
         )
 
         with open(target_path, "w", encoding="utf-8") as fh:

@@ -5,3 +5,4 @@ scipy
 beautifulsoup4
 pysbd
 openai>=1.50.0
+stanza

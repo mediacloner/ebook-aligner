@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import shutil
@@ -10,6 +11,7 @@ import zipfile
 from flask import Flask, jsonify, redirect, render_template, request, send_file, url_for
 
 from align_book import create_bilingual_epub
+from aligner.config import AlignerConfig
 
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
@@ -54,7 +56,14 @@ def find_oebps(root_dir: str) -> str:
     return root_dir
 
 
-def process_job_worker(job_id: str, en_path: str, es_path: str, job_dir: str, output_dir: str | None) -> None:
+def process_job_worker(
+    job_id: str,
+    en_path: str,
+    es_path: str,
+    job_dir: str,
+    output_dir: str | None,
+    user_config: dict | None = None,
+) -> None:
     try:
         active_jobs[job_id]["status"] = "processing"
         active_jobs[job_id]["message"] = "Unzipping files..."
@@ -77,7 +86,12 @@ def process_job_worker(job_id: str, en_path: str, es_path: str, job_dir: str, ou
         def cancel_check():
             return active_jobs.get(job_id, {}).get("status") == "cancelled"
 
-        config = {"use_neural": True}
+        user_config = user_config or {}
+        config = {
+            "use_neural": user_config.get("useNeural", True) is not False,
+            "bypass_alignment": bool(user_config.get("bypassAlignment", False)),
+            "local_mode": bool(user_config.get("localMode", False)),
+        }
         result = create_bilingual_epub(
             en_oebps, es_oebps, output_path, config=config,
             progress_callback=update_progress, cancel_check=cancel_check,
@@ -143,6 +157,17 @@ def config_page():
     return render_template("config.html")
 
 
+@app.route("/status", methods=["GET"])
+def status():
+    cfg = AlignerConfig.from_env()
+    return jsonify({
+        "openai_key": bool(cfg.openai_api_key),
+        "openai_model": cfg.openai_model,
+        "aligner_use_llm": cfg.adjudicator_enabled,
+        "adjudicator": cfg.has_llm(),
+    })
+
+
 @app.route("/upload", methods=["POST"])
 def upload_files():
     if "en_file" not in request.files or "es_file" not in request.files:
@@ -151,6 +176,16 @@ def upload_files():
     en_file = request.files["en_file"]
     es_file = request.files["es_file"]
     output_dir = request.form.get("output_dir")
+
+    user_config: dict = {}
+    raw_config = request.form.get("bilingual_config")
+    if raw_config:
+        try:
+            parsed = json.loads(raw_config)
+            if isinstance(parsed, dict):
+                user_config = parsed
+        except json.JSONDecodeError:
+            pass
 
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(UPLOAD_FOLDER, job_id)
@@ -164,7 +199,7 @@ def upload_files():
     active_jobs[job_id] = {"status": "queued", "progress": 0, "message": "Queued...", "file": None}
     thread = threading.Thread(
         target=process_job_worker,
-        args=(job_id, en_path, es_path, job_dir, output_dir),
+        args=(job_id, en_path, es_path, job_dir, output_dir, user_config),
     )
     thread.start()
     return jsonify({"job_id": job_id})

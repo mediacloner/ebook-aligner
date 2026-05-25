@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bilingual Ebook Aligner</title>
+    <title>Tandem Reader</title>
+    <link rel="icon" type="image/png" href="/static/logo.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -69,13 +70,20 @@
         transform: rotateY(180deg);
       }
 
+      .brand-logo {
+        display: block;
+        margin: 0 auto 0.5rem;
+        width: 56px;
+        height: auto;
+        opacity: 0.95;
+      }
       h1 {
         font-size: 2rem;
         font-weight: 700;
         margin-bottom: 0.5rem;
         margin-top: 0;
         text-align: center;
-        background: linear-gradient(to right, #4f46e5, #ec4899);
+        background: linear-gradient(135deg, #7bb7bd 0%, #3a5b9c 100%);
         -webkit-background-clip: text;
         background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -365,8 +373,9 @@
     <div class="card-wrapper" id="cardWrapper">
       <!-- FRONT FACE: Single Mode -->
       <div class="card-face card-front">
-        <h1>Single Mode</h1>
-        <p class="subtitle">Align one book pair at a time</p>
+        <img src="/static/logo.png" alt="Tandem Reader" class="brand-logo" />
+        <h1>Tandem Reader</h1>
+        <p class="subtitle">Single Mode · align one book pair at a time</p>
 
         <div class="current-settings" id="settingsPreview">
           <!-- Settings tags will appear here -->
@@ -448,8 +457,9 @@
 
       <!-- BACK FACE: Batch Mode -->
       <div class="card-face card-back">
-        <h1>Batch Mode</h1>
-        <p class="subtitle">Queue multiple books for processing</p>
+        <img src="/static/logo.png" alt="Tandem Reader" class="brand-logo" />
+        <h1>Tandem Reader</h1>
+        <p class="subtitle">Batch Mode · queue multiple books for processing</p>
 
         <div
           style="
@@ -586,65 +596,57 @@
 
       // --- Configuration Logic ---
       let bilingualConfig = {
-        layoutMode: "below",
-        columnGap: 10,
-        enColor: "#000000",
-        esColor: "#666666",
-        styleMode: "class",
-        preserveParagraphs: false,
-      };
-
-      const PRESETS = {
-        default: {
-          layoutMode: "below",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#666666",
-          styleMode: "class",
-        },
-        side_by_side: {
-          layoutMode: "side",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#000000",
-          styleMode: "class",
-        },
-        color_coded: {
-          layoutMode: "below",
-          columnGap: 10,
-          enColor: "#000000",
-          esColor: "#555555",
-          styleMode: "inline",
-        },
-        learner_mode: {
-          layoutMode: "side",
-          columnGap: 15,
-          enColor: "#000000",
-          esColor: "#0066cc",
-          styleMode: "inline",
-        },
+        useNeural: true,
+        localMode: false,
+        bypassAlignment: false,
       };
 
       function initConfig() {
         const saved = localStorage.getItem("epubConfig");
-        if (saved) bilingualConfig = JSON.parse(saved);
-
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            bilingualConfig = {
+              useNeural: parsed.useNeural !== false,
+              localMode: !!parsed.localMode,
+              bypassAlignment: !!parsed.bypassAlignment,
+            };
+          } catch (_) {}
+        }
         updatePreview();
+        fetchStatus();
+      }
+
+      async function fetchStatus() {
+        if (bilingualConfig.localMode) return;
+        try {
+          const res = await fetch("/status");
+          if (!res.ok) return;
+          const status = await res.json();
+          const prev = document.getElementById("settingsPreview");
+          if (!prev) return;
+          const tag = document.createElement("span");
+          tag.className = "setting-tag";
+          tag.innerHTML = status.adjudicator
+            ? '<span style="color:#10b981">●</span> Adjudicator'
+            : '<span style="color:#ef4444">●</span> No Adjudicator';
+          prev.appendChild(tag);
+        } catch (_) {}
       }
 
       function updatePreview() {
         const prev = document.getElementById("settingsPreview");
-        if (prev) {
-          let tags = `
-                  <span class="setting-tag">📐 ${bilingualConfig.layoutMode}</span>
-                  <span class="setting-tag"><span style="color:${bilingualConfig.enColor}">●</span> EN</span>
-                  <span class="setting-tag"><span style="color:${bilingualConfig.esColor}">●</span> ES</span>
-              `;
-          if (bilingualConfig.preserveParagraphs) {
-            tags += `<span class="setting-tag">📝 Paragraphs</span>`;
-          }
-          prev.innerHTML = tags;
+        if (!prev) return;
+        let tags = bilingualConfig.useNeural
+          ? '<span class="setting-tag">🧠 Neural</span>'
+          : '<span class="setting-tag">⚡ Fast</span>';
+        if (bilingualConfig.localMode) {
+          tags += '<span class="setting-tag">🔒 Local</span>';
         }
+        if (bilingualConfig.bypassAlignment) {
+          tags += '<span class="setting-tag">⏭️ Bypass</span>';
+        }
+        prev.innerHTML = tags;
       }
 
       // Initialize on load

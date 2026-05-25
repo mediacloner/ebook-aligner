@@ -2,7 +2,23 @@
   "permissions": {
     "allow": [
       "Bash(git stash *)",
-      "Bash(git reset *)"
+      "Bash(git reset *)",
+      "WebSearch",
+      "Bash(git checkout *)",
+      "Bash(git check-ignore *)",
+      "Bash(awk 'NR>=5223 && /^def / && NR>5223 {print NR\": \"$0; exit} NR>=5223' /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks/align_book.py)",
+      "Bash(python3 *)",
+      "Read(//opt/homebrew/Cellar/python@3.14/3.14.0_1/Frameworks/Python.framework/Versions/3.14/bin/**)",
+      "Bash(venv/bin/python3 *)",
+      "Bash(ALIGNER_USE_LLM=false venv/bin/python3 *)",
+      "Bash(git add *)",
+      "Bash(git rm *)",
+      "Bash(git commit *)",
+      "Bash(system_profiler SPDisplaysDataType)",
+      "Bash(sysctl hw.memsize)",
+      "Bash(awk '{printf \"Unified RAM: %.0f GB\\\\n\", $2/1024/1024/1024}')",
+      "Bash(grep -E \"\\\\.env|env$\" .gitignore)",
+      "Bash(git log *)"
     ]
   }
 }

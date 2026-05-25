@@ -10,6 +10,7 @@ uploads/
 bilingual_epub_staging/
 temp_*/
 !temp_debug_bw/
+.aligner_cache/
 books/output/*
 !books/output/*.md
 !books/output/backup_blackwater/

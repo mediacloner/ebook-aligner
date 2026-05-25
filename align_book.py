@@ -881,6 +881,7 @@ def align_tocs(en_toc, es_toc, en_toc_dir=None, es_toc_dir=None, aligner=None, m
                     path = os.path.join(en_toc_dir, src_full)
                     size = os.path.getsize(path) if os.path.exists(path) else 1000
                     en_sizes.append(size)
+                total_en_size = sum(en_sizes)
 
                 # If discovery found more files than TOC, use the discovered list
                 # This fixes 'Animal Farm' where TOC has 52, 53 but content is 50, 51, 52, 53

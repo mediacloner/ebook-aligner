@@ -23,4 +23,5 @@ fi
 
 # Run the application
 echo "Starting Tandem Reader on http://127.0.0.1:8080"
-python3 app.py
+# Silence SyntaxWarnings from the (unmaintained) pysbd dependency on Python 3.12+.
+PYTHONWARNINGS="ignore::SyntaxWarning" python3 app.py

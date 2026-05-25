@@ -3,6 +3,7 @@ sentence-transformers
 numpy
 scipy
 beautifulsoup4
+lxml
 pysbd
 openai>=1.50.0
 stanza

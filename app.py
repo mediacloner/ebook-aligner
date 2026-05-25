@@ -3,6 +3,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -120,13 +121,46 @@ def process_job_worker(
         final_name = f"{base_name} (Tandem).epub"
 
         saved_msg = ""
-        if output_dir and os.path.isdir(output_dir):
+        delivered_to_output_dir = False
+        dest_path: str | None = None
+        normalized_dir: str | None = None
+        if output_dir:
+            normalized_dir = os.path.abspath(os.path.expanduser(output_dir.strip()))
+            print(f"[job {job_id}] Output dir requested: {output_dir!r} -> {normalized_dir!r}")
             try:
-                dest = os.path.join(output_dir, final_name)
-                shutil.copy2(output_path, dest)
-                saved_msg = f"Saved to {os.path.abspath(dest)}"
+                os.makedirs(normalized_dir, exist_ok=True)
+            except OSError as exc:
+                saved_msg = f"Could not create output dir {normalized_dir}: {exc}"
+                print(f"[job {job_id}] {saved_msg}")
+                normalized_dir = None
+
+        if normalized_dir and os.path.isdir(normalized_dir):
+            try:
+                dest_path = os.path.join(normalized_dir, final_name)
+                shutil.copy2(output_path, dest_path)
+                saved_msg = f"Saved to {dest_path}"
+                delivered_to_output_dir = True
+                print(f"[job {job_id}] {saved_msg}")
             except Exception as exc:
-                print(f"Error copying to output dir: {exc}")
+                saved_msg = f"Save failed: {exc}"
+                print(f"[job {job_id}] Error copying to output dir: {exc}")
+
+        # Drop the large transient artefacts now that we don't need them. Either
+        # the EPUB has been copied to the user's output_dir (so the whole job
+        # folder is disposable) or we only keep the final tandem.epub for the
+        # /download route and discard the extracts and source EPUBs.
+        if delivered_to_output_dir and dest_path:
+            shutil.rmtree(job_dir, ignore_errors=True)
+            output_path = dest_path
+        else:
+            for path in (en_extract, es_extract, en_path, es_path):
+                try:
+                    if os.path.isdir(path):
+                        shutil.rmtree(path, ignore_errors=True)
+                    elif os.path.isfile(path):
+                        os.remove(path)
+                except Exception as exc:
+                    print(f"Cleanup warning ({path}): {exc}")
 
         active_jobs[job_id]["status"] = "completed"
         active_jobs[job_id]["progress"] = 100
@@ -222,14 +256,38 @@ def download_file(job_id):
     return send_file(job["file"], as_attachment=True, download_name=download_name)
 
 
+def _pick_directory_command() -> list[str] | None:
+    if sys.platform == "darwin":
+        return [
+            "osascript",
+            "-e",
+            'POSIX path of (choose folder with prompt "Select Output Directory")',
+        ]
+    if shutil.which("zenity"):
+        return ["zenity", "--file-selection", "--directory", "--title=Select Output Directory"]
+    if shutil.which("kdialog"):
+        return ["kdialog", "--getexistingdirectory", os.path.expanduser("~")]
+    return None
+
+
 @app.route("/select-directory", methods=["GET"])
 def select_directory():
+    cmd = _pick_directory_command()
+    if cmd is None:
+        return jsonify({
+            "error": "No folder picker available. Install zenity or kdialog, or type the path manually.",
+        }), 501
     try:
-        cmd = "osascript -e 'POSIX path of (choose folder with prompt \"Select Output Directory\")'"
-        result = subprocess.check_output(cmd, shell=True).decode("utf-8").strip()
-        return jsonify({"path": result})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 400
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "Folder picker timed out."}), 504
+    except FileNotFoundError as exc:
+        return jsonify({"error": str(exc)}), 500
+    if result.returncode != 0:
+        # User cancelled the dialog — not an error.
+        return jsonify({"path": ""})
+    path = result.stdout.strip()
+    return jsonify({"path": path})
 
 
 if __name__ == "__main__":

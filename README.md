@@ -1,119 +1,118 @@
-# Bilingual Ebook Aligner
+# Tandem
 
-This tool automatically aligns an English EPUB and its Spanish translation to create a single **Bilingual EPUB** file. It aligns content paragraph-by-paragraph, allowing for parallel reading.
+Read in English. Tap any paragraph when you get stuck — its Spanish
+translation pops up as a Kindle/iBooks footnote. Fluent reading on demand
+instead of constant inline parallel text.
 
-## Features
+## Why
 
-- **Web Interface**: Easy-to-use drag-and-drop web page.
-- **CLI Tool**: Scriptable command-line interface for batch processing.
-- **Smart Alignment**: Heuristic matching for headers and proportional splitting for long paragraphs.
-- **Customizable**: Configuration-based parsing rules to support different book formats.
+Side-by-side bilingual books let your brain skim the easier language. Lookup
+Mode keeps you in the target language by default and surfaces the translation
+only when you ask for it. Fewer crutches, faster acquisition.
 
-## Installation
+## How it works
 
-1. **Prerequisites**: Python 3.8+ installed.
-2. **Setup Virtual Environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-3. **Install Dependencies**:
-   ```bash
-   pip install flask
-   ```
+The aligner is a three-layer pipeline (`aligner/` module):
+
+1. **Reading Stream** — parse both EPUBs into ordered typed events
+   (paragraph / header / figure / caption / list-item / scene-break) with
+   DOM-node references for later injection.
+2. **Paragraph Aligner** — LaBSE embeddings + Bertalign-style two-step
+   alignment: top-k mutual nearest neighbours pick high-confidence anchors,
+   then DP over span pairs (1:1, 1:2, 2:1, 2:2, plus gap transitions) fills the
+   rest with a globally optimal monotonic alignment.
+3. **OpenAI Adjudicator** — for the small fraction of pairs where embedding
+   alignment is uncertain, send EN + ES + context to `gpt-5.5` with a strict
+   JSON schema; the model confirms or proposes a replacement Spanish text.
+   Disk-cached on `sha256(en + es + model)` so re-runs are free.
+
+Long paragraphs are split into 3–4-sentence sub-blocks at sentence boundaries.
+ES-only orphan content (translator notes, lost captions) is appended to the
+nearest block's footnote, prefixed with **Nota**.
+
+Every block ends with a faint middle-dot marker (`·`) that serves two
+purposes: it gives Kindle/KFX a real noteref token to fire the popup on
+(whole-paragraph anchors alone are unreliable on Amazon's reader), and
+it cues the reader that translation is available. The whole paragraph
+remains tappable; the marker is just a small grey "ping". A one-line
+onboarding notice in the first chapter explains the interaction.
+
+## Requirements
+
+- Python 3.10+
+- LaBSE via `sentence-transformers` (downloads on first run, ~470MB)
+- OpenAI API key (optional but recommended for the adjudicator pass)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+## Configuration
+
+Create a `.env` file in the repo root:
+
+```
+OPENAI_API_KEY=sk-...
+OPENAI_ALIGNER_MODEL=gpt-5.5
+ALIGNER_USE_LLM=true
+```
+
+The `.env` file is gitignored. To run without the adjudicator, set
+`ALIGNER_USE_LLM=false`.
 
 ## Usage
 
-### 1. Web Interface (Recommended)
+### Web
 
-The easiest way to use the tool is via the web browser.
-
-1. **Start the Server**:
-   ```bash
-   python3 app.py
-   ```
-2. **Open Browser**: Navigate to `http://127.0.0.1:8080`.
-3. **Generate**:
-   - Drag and drop your **English** EPUB.
-   - Drag and drop your **Spanish** EPUB.
-   - Click **Generate Bilingual Book**.
-   - The aligned EPUB will start downloading automatically.
-
-### 2. Command Line Interface (CLI)
-
-For valid output, you must extract the `OEBPS` (or OPS) folders from your EPUBs first (EPUBs are just Zip files).
-
-1. **Unzip EPUBs**:
-   ```bash
-   unzip english_book.epub -d en_folder
-   unzip spanish_book.epub -d es_folder
-   ```
-2. **Run Script**:
-   ```bash
-   python3 align_book.py --en en_folder/OEBPS --es es_folder/OEBPS --output output_book.epub
-   ```
-
-## Configuration for New Books
-
-The alignment logic relies on identifying headers and structure, which varies by publisher. To support a **different book**, open `align_book.py` and modify the `BOOK_CONFIG` dictionary at the top:
-
-```python
-BOOK_CONFIG = {
-    'en': {
-        'header_classes': ['CN', 'CT', 'My-New-Header-Class'],
-        # ...
-    },
-    'es': {
-        'header_indicators': ['Capitulo', 'Parte'],
-        # ...
-    }
-}
+```bash
+python3 app.py
 ```
 
-- **English Rules**: define which CSS classes on `<h1>` tags indicate a chapter start.
-- **Spanish Rules**: define classes or triggers for identifying headers (and merging split titles).
+Open http://127.0.0.1:8080. Drop both EPUBs, hit **Generate**, download the
+resulting `…(Lookup Mode).epub`.
 
-## Troubleshooting
+### CLI
 
-- **Desynchronization**: If text is misaligned (e.g., Chapter 1 English text appearing next to Chapter 2 Spanish), check if the `BOOK_CONFIG` matches the class names in your specific EPUB files. You may need to inspect the source XHTML.
-- **Missing Fonts**: This tool creates a "clean" EPUB relying on the e-reader's default fonts for maximum compatibility.
+EPUBs must be unzipped to OEBPS folders first (EPUBs are just ZIPs).
 
-## LLM Verification & Auto-Fix [NEW]
+```bash
+unzip english_book.epub -d en_folder
+unzip spanish_book.epub -d es_folder
+python3 align_book.py --en en_folder/OEBPS --es es_folder/OEBPS --output out.epub
+```
 
-The tool now includes an advanced module to verify alignment quality and automatically fix errors using a local LLM.
+## Cost expectations
 
-### Prerequisites for Verification
+LaBSE runs locally. The OpenAI adjudicator is called only on low-confidence
+paragraph pairs — typically 1–5% of paragraphs. Expected spend per book is
+**$0.20–$0.60** on `gpt-5.5`; subsequent re-runs hit the disk cache and cost
+nothing.
 
-1.  **Install Ollama**: [https://ollama.com/download](https://ollama.com/download)
-2.  **Pull the Model**:
-    ```bash
-    ollama pull qwen2.5:7b  # Recommended for EN/ES
-    ```
-3.  **Install Python Package**:
-    ```bash
-    pip install ollama sentence-transformers
-    ```
+## Reader compatibility
 
-### Verification Modes
+- **Apple Books / iBooks**: tap anywhere on the paragraph → native popup ✓
+- **Kindle (KFX/AZW3)**: the trailing `·` marker is the popup trigger;
+  newer Paperwhites and Send-to-Kindle conversions of EPUB3 footnotes show
+  the popup. Older Kindles fall back to navigating to an endnote.
+- **Kobo**: popup works on most models; a few older devices fall back to
+  endnote navigation.
+- **Calibre / Sigil**: footnote opens inline at the chapter's footnote section.
+- **Other EPUB3 readers**: graceful endnote fallback at chapter end.
 
-In the **Web Interface**, you will see a dropdown under "Advanced Options":
+## Project structure
 
-1.  **No Verification** (Default): Fast alignment, no LLM check.
-2.  **Validation Only**:
-    - Analyzes the aligned book.
-    - Generates a `_verification_report.md` next to your output file.
-    - Flags suspicious pairs (missing text, severe misalignment).
-3.  **Validation + Auto-Fix**:
-    - **Smart Repair**: If a translation is missing, it first searches the original Spanish chapter using **Vector Embeddings** to find the lost sentence.
-    - **Translation Fallback**: If the sentence is truly missing, the LLM generates a fresh translation to maintain continuity.
-    - **Dual Output**: Generates two files:
-      - `Book (bilingual).epub` (Original alignment)
-      - `Book (bilingual) (Fixed).epub` (With repairs injected)
-
-### Viewing the Report
-
-After generation, open the `(Report).md` file. It will show:
-
-- ⚠️ **Flagged** issues.
-- ✅ **Fixed** issues (showing the "Before" and "After").
-- **Method Used**: `🔍 Vector Search` (Found original text) or `✨ LLM Repair` (Generated translation).
+```
+aligner/
+  reading_stream.py    typed paragraph events from parsed chunks
+  paragraph_aligner.py LaBSE + Bertalign two-step DP
+  block_builder.py     sentence-level sub-blocks for long paragraphs
+  orphan_handler.py    attach ES-only content to nearest block
+  footnote_emitter.py  EPUB3 noteref + aside markup
+  adjudicator.py       OpenAI structured-output verifier with cache
+  pipeline.py          orchestrator
+  bridge.py            adapter into align_book.py's chapter loop
+align_book.py          EPUB I/O, OPF/NCX, TOC alignment, multi-chapter loop
+app.py                 Flask web UI
+```

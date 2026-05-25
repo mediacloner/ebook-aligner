@@ -4,4 +4,4 @@ numpy
 scipy
 beautifulsoup4
 pysbd
-ollama
+openai>=1.50.0

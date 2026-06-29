@@ -599,6 +599,9 @@
         useNeural: true,
         localMode: false,
         bypassAlignment: false,
+        wordBudgetSplit: true,
+        targetChunkWords: 25,
+        splitMinWords: 70,
       };
 
       function initConfig() {
@@ -606,10 +609,17 @@
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
+            const toInt = (v, d) => {
+              const n = parseInt(v, 10);
+              return Number.isFinite(n) ? n : d;
+            };
             bilingualConfig = {
               useNeural: parsed.useNeural !== false,
               localMode: !!parsed.localMode,
               bypassAlignment: !!parsed.bypassAlignment,
+              wordBudgetSplit: parsed.wordBudgetSplit !== false,
+              targetChunkWords: toInt(parsed.targetChunkWords, 25),
+              splitMinWords: toInt(parsed.splitMinWords, 70),
             };
           } catch (_) {}
         }

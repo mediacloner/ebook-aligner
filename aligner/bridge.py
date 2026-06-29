@@ -33,6 +33,23 @@ def reset_pipeline() -> None:
         _pipeline = None
 
 
+def _apply_split_overrides(cfg: AlignerConfig, config: dict) -> None:
+    """Apply per-job sentence-splitting overrides sent from the web config.
+
+    The pipeline is a process-wide singleton built from .env; these keys, when
+    present in the job config, let the UI tune splitting per run. cfg is shared
+    with the block builder (same object), so setting attributes here is enough.
+    """
+    if config.get("word_budget_split") is not None:
+        cfg.word_budget_split = bool(config["word_budget_split"])
+    target = config.get("target_chunk_words")
+    if isinstance(target, int) and target > 0:
+        cfg.target_chunk_words = target
+    min_words = config.get("split_min_words")
+    if isinstance(min_words, int) and min_words > 0:
+        cfg.split_min_words = min_words
+
+
 def _slice_shared_es(es_chunks, chunk_range):
     if not chunk_range:
         return es_chunks
@@ -112,6 +129,7 @@ def run_chapter_pair(args):
         ]
 
         pipeline = get_pipeline()
+        _apply_split_overrides(pipeline.config, config)
         chapter_id = f"ch{idx:03d}"
         install_onboarding = idx == 0
         result = pipeline.process_chapter(

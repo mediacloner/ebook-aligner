@@ -26,9 +26,15 @@ The aligner is a three-layer pipeline (`aligner/` module):
    JSON schema; the model confirms or proposes a replacement Spanish text.
    Disk-cached on `sha256(en + es + model)` so re-runs are free.
 
-Long paragraphs are split into 3–4-sentence sub-blocks at sentence boundaries.
-ES-only orphan content (translator notes, lost captions) is appended to the
-nearest block's footnote, prefixed with **Nota**.
+Long paragraphs are split into smaller sub-blocks so each chunk gets its own
+tap-to-reveal note. By default this uses a **word budget** (ported from the
+bilingual-epub-splitter): whole sentences are grouped into chunks of roughly
+`ALIGNER_TARGET_CHUNK_WORDS` words, splitting only once a paragraph exceeds
+`ALIGNER_SPLIT_MIN_WORDS` words and has at least two sentences. A single long
+sentence is never broken mid-sentence. Set `ALIGNER_WORD_BUDGET_SPLIT=false`
+for the legacy fixed 4-sentence-window split. ES-only orphan content
+(translator notes, lost captions) is appended to the nearest block's footnote,
+prefixed with **Nota**.
 
 Every block ends with a faint middle-dot marker (`·`) that serves two
 purposes: it gives Kindle/KFX a real noteref token to fire the popup on
@@ -57,10 +63,16 @@ Create a `.env` file in the repo root:
 OPENAI_API_KEY=sk-...
 OPENAI_ALIGNER_MODEL=gpt-5.5
 ALIGNER_USE_LLM=true
+
+# Sentence splitting (optional — defaults shown)
+ALIGNER_WORD_BUDGET_SPLIT=true   # false = legacy 4-sentence-window split
+ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk
+ALIGNER_SPLIT_MIN_WORDS=70       # only split paragraphs longer than this
 ```
 
 The `.env` file is gitignored. To run without the adjudicator, set
-`ALIGNER_USE_LLM=false`.
+`ALIGNER_USE_LLM=false`. The splitting knobs can also be set per-run in the web
+**Configuration** page (Sentence splitting section).
 
 ## Usage
 
@@ -107,7 +119,7 @@ nothing.
 aligner/
   reading_stream.py    typed paragraph events from parsed chunks
   paragraph_aligner.py LaBSE + Bertalign two-step DP
-  block_builder.py     sentence-level sub-blocks for long paragraphs
+  block_builder.py     word-budget / sentence sub-blocks for long paragraphs
   orphan_handler.py    attach ES-only content to nearest block
   footnote_emitter.py  EPUB3 noteref + aside markup
   adjudicator.py       OpenAI structured-output verifier with cache

@@ -21,10 +21,11 @@ class EmitResult:
 
 
 _CSS = """\
-a.es-block { color: inherit; text-decoration: none; }
+a.es-marker-link { text-decoration: none; color: inherit; }
 sup.es-marker {
-    color: #999; font-size: 0.7em; vertical-align: super;
-    margin-left: 2px; font-weight: normal; text-decoration: none;
+    color: #3a5b9c; font-size: 0.8em; vertical-align: super;
+    margin-left: 2px; font-weight: bold; text-decoration: none;
+    cursor: pointer;
 }
 aside.es-note { display: none; }
 aside.es-note p { margin: 0 0 0.4em 0; }
@@ -153,16 +154,20 @@ class FootnoteEmitter:
         return aside
 
     def _wrap_node_in_noteref(self, node: Tag, note_id: str, soup: BeautifulSoup) -> None:
+        # Standard EPUB3 footnote pattern: only the marker is the noteref.
+        # Wrapping the whole paragraph confuses popup readers (Calibre,
+        # Apple Books) into rendering the link's own text instead of the
+        # linked aside.
+        node.append(self._make_noteref(soup, note_id))
+
+    def _make_noteref(self, soup: BeautifulSoup, note_id: str) -> Tag:
         anchor = soup.new_tag("a")
         anchor["epub:type"] = "noteref"
+        anchor["role"] = "doc-noteref"
         anchor["href"] = f"#{note_id}"
-        anchor["class"] = "es-block"
-        children = list(node.contents)
-        for child in children:
-            child.extract()
-            anchor.append(child)
+        anchor["class"] = "es-marker-link"
         anchor.append(self._make_marker(soup))
-        node.append(anchor)
+        return anchor
 
     def _make_marker(self, soup: BeautifulSoup) -> Tag:
         marker = soup.new_tag("sup")
@@ -177,15 +182,13 @@ class FootnoteEmitter:
         ids: Sequence[str],
         soup: BeautifulSoup,
     ) -> None:
+        # Keep sub-block EN text as plain text and append a noteref marker
+        # after each sub-block. Standard EPUB3 pattern so popup readers
+        # show the linked aside, not the surrounding sentence.
         node.clear()
         for i, (block, note_id) in enumerate(zip(sub_blocks, ids)):
-            anchor = soup.new_tag("a")
-            anchor["epub:type"] = "noteref"
-            anchor["href"] = f"#{note_id}"
-            anchor["class"] = "es-block"
-            anchor.append(NavigableString(block.en_text))
-            anchor.append(self._make_marker(soup))
-            node.append(anchor)
+            node.append(NavigableString(block.en_text))
+            node.append(self._make_noteref(soup, note_id))
             if i < len(sub_blocks) - 1:
                 node.append(NavigableString(" "))
 

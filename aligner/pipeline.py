@@ -43,6 +43,7 @@ class AlignmentPipeline:
         soup: BeautifulSoup,
         chapter_id: str,
         install_onboarding: bool = False,
+        local_mode: bool = False,
     ) -> ChapterResult:
         en_stream = ReadingStream.from_chunks(en_chunks)
         es_stream = ReadingStream.from_chunks(es_chunks)
@@ -50,7 +51,7 @@ class AlignmentPipeline:
         blocks = self.block_builder.build(pairs)
         blocks = attach_orphans(blocks, pairs)
 
-        if self.adjudicator:
+        if self.adjudicator and not local_mode:
             try:
                 self.adjudicator.adjudicate_blocks(blocks)
             except Exception as exc:

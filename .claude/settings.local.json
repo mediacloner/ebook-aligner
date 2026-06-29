@@ -18,7 +18,8 @@
       "Bash(sysctl hw.memsize)",
       "Bash(awk '{printf \"Unified RAM: %.0f GB\\\\n\", $2/1024/1024/1024}')",
       "Bash(grep -E \"\\\\.env|env$\" .gitignore)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }

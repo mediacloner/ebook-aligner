@@ -30,7 +30,16 @@
       "Bash(venv/bin/python -c \"import aligner.bridge; print\\('bridge import OK'\\)\")",
       "Bash(venv/bin/python -c \"import pytest; print\\('pytest', pytest.__version__\\)\")",
       "Bash(venv/bin/python -m unittest tests.test_word_budget_split -v)",
-      "Bash(venv/bin/python -m py_compile aligner/config.py aligner/block_builder.py aligner/bridge.py app.py)"
+      "Bash(venv/bin/python -m py_compile aligner/config.py aligner/block_builder.py aligner/bridge.py app.py)",
+      "Bash(awk '{print $1, $NF}')",
+      "Bash(command -v uv)",
+      "Bash(echo \"uv installed? $\\(command -v uv || echo NO\\)\")",
+      "Bash(venv/bin/python -m py_compile aligner/config.py aligner/block_builder.py aligner/bridge.py aligner/inline_emitter.py aligner/pipeline.py app.py)",
+      "Bash(venv/bin/python -c \"import aligner.bridge, aligner.pipeline, aligner.inline_emitter; print\\('imports OK'\\)\")",
+      "Bash(venv/bin/python -m unittest tests.test_word_budget_split tests.test_inline_emitter -v)",
+      "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks status)",
+      "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks diff)",
+      "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks diff --stat)"
     ]
   }
 }

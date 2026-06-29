@@ -26,15 +26,25 @@ The aligner is a three-layer pipeline (`aligner/` module):
    JSON schema; the model confirms or proposes a replacement Spanish text.
    Disk-cached on `sha256(en + es + model)` so re-runs are free.
 
-Long paragraphs are split into smaller sub-blocks so each chunk gets its own
-tap-to-reveal note. By default this uses a **word budget** (ported from the
+### Output modes
+
+- **Inline pairs** (`ALIGNER_OUTPUT_MODE=inline`, the default) — each English
+  chunk is immediately followed by its visible Spanish translation, and the
+  pair is **kept together** (`page-break-after:avoid` on the English,
+  `page-break-before:avoid` on its Spanish) so an e-reader page break can never
+  strand the English without its Spanish. Ideal for learners. This is the
+  bilingual-epub-splitter layout, driven by this app's alignment.
+- **Footnote** (`ALIGNER_OUTPUT_MODE=footnote`) — Spanish is hidden in a
+  tap-to-reveal EPUB3 popup; each chunk gets a faint `·` marker.
+
+Long paragraphs are split into smaller chunks so each English+Spanish pair fits
+on a page. By default this uses a **word budget** (ported from the
 bilingual-epub-splitter): whole sentences are grouped into chunks of roughly
-`ALIGNER_TARGET_CHUNK_WORDS` words, splitting only once a paragraph exceeds
-`ALIGNER_SPLIT_MIN_WORDS` words and has at least two sentences. A single long
-sentence is never broken mid-sentence. Set `ALIGNER_WORD_BUDGET_SPLIT=false`
-for the legacy fixed 4-sentence-window split. ES-only orphan content
-(translator notes, lost captions) is appended to the nearest block's footnote,
-prefixed with **Nota**.
+`ALIGNER_TARGET_CHUNK_WORDS` words, splitting once a paragraph exceeds that size
+and has at least two sentences. A single long sentence is never broken
+mid-sentence. Set `ALIGNER_WORD_BUDGET_SPLIT=false` to keep whole paragraphs.
+ES-only orphan content (translator notes, lost captions) is attached to the
+nearest pair, prefixed with **Nota**.
 
 Every block ends with a faint middle-dot marker (`·`) that serves two
 purposes: it gives Kindle/KFX a real noteref token to fire the popup on
@@ -64,15 +74,16 @@ OPENAI_API_KEY=sk-...
 OPENAI_ALIGNER_MODEL=gpt-5.5
 ALIGNER_USE_LLM=true
 
-# Sentence splitting (optional — defaults shown)
-ALIGNER_WORD_BUDGET_SPLIT=true   # false = legacy 4-sentence-window split
-ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk
-ALIGNER_SPLIT_MIN_WORDS=70       # only split paragraphs longer than this
+# Output + splitting (optional — defaults shown)
+ALIGNER_OUTPUT_MODE=inline       # inline = visible EN/ES pairs; footnote = popup
+ALIGNER_KEEP_TOGETHER=flat       # flat = page-break-avoid CSS; none = off
+ALIGNER_WORD_BUDGET_SPLIT=true   # false = keep whole paragraphs
+ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk (also the split threshold)
 ```
 
 The `.env` file is gitignored. To run without the adjudicator, set
-`ALIGNER_USE_LLM=false`. The splitting knobs can also be set per-run in the web
-**Configuration** page (Sentence splitting section).
+`ALIGNER_USE_LLM=false`. Output mode and the split target can also be set
+per-run in the web **Configuration** page (Output + Sentence splitting).
 
 ## Usage
 
@@ -121,7 +132,8 @@ aligner/
   paragraph_aligner.py LaBSE + Bertalign two-step DP
   block_builder.py     word-budget / sentence sub-blocks for long paragraphs
   orphan_handler.py    attach ES-only content to nearest block
-  footnote_emitter.py  EPUB3 noteref + aside markup
+  inline_emitter.py    visible EN/ES pairs + keep-together CSS (default)
+  footnote_emitter.py  EPUB3 noteref + aside markup (popup mode)
   adjudicator.py       OpenAI structured-output verifier with cache
   pipeline.py          orchestrator
   bridge.py            adapter into align_book.py's chapter loop

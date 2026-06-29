@@ -73,7 +73,8 @@ class BlockBuilder:
 
     # ---------------------------------------------------------------- entrypoint
 
-    def build(self, pairs: Sequence[AlignedPair]) -> List[Block]:
+    def build(self, pairs: Sequence[AlignedPair], config: Optional[AlignerConfig] = None) -> List[Block]:
+        cfg = config if config is not None else self.config
         blocks: List[Block] = []
         for pair in pairs:
             if pair.is_es_only:
@@ -95,11 +96,11 @@ class BlockBuilder:
 
             en_text, es_text, primary_event, kind = self._combine_pair_texts(pair)
             needs_adj = (
-                pair.confidence < self.config.adjudicator_confidence_threshold
+                pair.confidence < cfg.adjudicator_confidence_threshold
                 and not pair.is_anchor
             )
 
-            if not self._should_split(primary_event, en_text):
+            if not self._should_split(primary_event, en_text, cfg):
                 blocks.append(
                     Block(
                         en_text=en_text,
@@ -116,7 +117,7 @@ class BlockBuilder:
                 continue
 
             sub_blocks = self._split_into_sub_blocks(
-                pair, primary_event, en_text, es_text, kind, needs_adj
+                pair, primary_event, en_text, es_text, kind, needs_adj, cfg
             )
             blocks.extend(sub_blocks)
         return blocks
@@ -138,40 +139,49 @@ class BlockBuilder:
     def _word_count(text: str) -> int:
         return len(text.split())
 
-    def _should_split(self, event: StreamEvent, en_text: str) -> bool:
+    def _should_split(
+        self, event: StreamEvent, en_text: str, config: Optional[AlignerConfig] = None
+    ) -> bool:
+        cfg = config if config is not None else self.config
         if event.kind != "paragraph":
             return False
-        if self.config.word_budget_split:
-            # Word-budget mode: split once the paragraph is long enough by word
-            # count and has at least two sentences (a single long sentence is
+        if cfg.word_budget_split:
+            # Word-budget mode: split once the paragraph exceeds the target chunk
+            # size and has at least two sentences (a single long sentence is
             # never broken mid-sentence, so it stays whole).
-            if self._word_count(en_text) <= self.config.split_min_words:
+            if self._word_count(en_text) <= cfg.target_chunk_words:
                 return False
             sentences = self._split_sentences(en_text, "en")
             return len(sentences) >= 2
         # Legacy sentence-window mode.
-        if len(en_text) <= self.config.long_paragraph_threshold:
+        if len(en_text) <= cfg.long_paragraph_threshold:
             return False
         sentences = self._split_sentences(en_text, "en")
-        return len(sentences) > self.config.max_sentences_per_block
+        return len(sentences) > cfg.max_sentences_per_block
 
-    def _chunk_windows(self, sentences: Sequence[str]) -> List[List[str]]:
+    def _chunk_windows(
+        self, sentences: Sequence[str], config: Optional[AlignerConfig] = None
+    ) -> List[List[str]]:
         """Group sentences into chunks. Word-budget mode targets
         ~target_chunk_words words per chunk; legacy mode uses fixed windows of
         max_sentences_per_block. Sentences are never broken mid-sentence."""
-        if self.config.word_budget_split:
-            return self._group_sentences_by_word_budget(sentences)
-        max_per = max(1, self.config.max_sentences_per_block)
+        cfg = config if config is not None else self.config
+        if cfg.word_budget_split:
+            return self._group_sentences_by_word_budget(sentences, cfg)
+        max_per = max(1, cfg.max_sentences_per_block)
         return [list(sentences[i : i + max_per]) for i in range(0, len(sentences), max_per)]
 
-    def _group_sentences_by_word_budget(self, sentences: Sequence[str]) -> List[List[str]]:
+    def _group_sentences_by_word_budget(
+        self, sentences: Sequence[str], config: Optional[AlignerConfig] = None
+    ) -> List[List[str]]:
         """Port of bilingual-epub-splitter's group_by_word_budget.
 
         Sentences accumulate into a chunk until adding the next one would push
         the chunk past an overshoot limit (and the chunk already carries enough
         words). A single sentence longer than the target stands alone.
         """
-        target = max(1, self.config.target_chunk_words)
+        cfg = config if config is not None else self.config
+        target = max(1, cfg.target_chunk_words)
         overshoot_limit = int(target * 1.4)
         min_carry = int(target * 0.5)
         chunks: List[List[str]] = []
@@ -202,9 +212,11 @@ class BlockBuilder:
         es_text: str,
         kind: str,
         needs_adj: bool,
+        config: Optional[AlignerConfig] = None,
     ) -> List[Block]:
+        cfg = config if config is not None else self.config
         en_sentences = self._split_sentences(en_text, "en")
-        windows = self._chunk_windows(en_sentences)
+        windows = self._chunk_windows(en_sentences, cfg)
         # Build sub-block strings with char offsets back into en_text
         sub_block_texts: List[str] = []
         sub_block_offsets: List[Tuple[int, int]] = []  # (start, end) within en_text

@@ -10,6 +10,7 @@ from aligner.adjudicator import Adjudicator
 from aligner.block_builder import Block, BlockBuilder
 from aligner.config import AlignerConfig
 from aligner.footnote_emitter import EmitResult, FootnoteEmitter
+from aligner.inline_emitter import InlineBilingualEmitter
 from aligner.orphan_handler import attach_orphans
 from aligner.paragraph_aligner import AlignedPair, ParagraphAligner
 from aligner.reading_stream import ReadingStream
@@ -33,8 +34,13 @@ class AlignmentPipeline:
         self.config = config or AlignerConfig.from_env()
         self.aligner = aligner or ParagraphAligner(self.config)
         self.block_builder = BlockBuilder(self.config, self.aligner)
-        self.footnote_emitter = FootnoteEmitter(self.config)
         self.adjudicator = Adjudicator(self.config) if self.config.has_llm() else None
+
+    def _select_emitter(self, config: Optional[AlignerConfig] = None):
+        cfg = config if config is not None else self.config
+        if cfg.output_mode == "inline":
+            return InlineBilingualEmitter(cfg)
+        return FootnoteEmitter(cfg)
 
     def process_chapter(
         self,
@@ -44,11 +50,13 @@ class AlignmentPipeline:
         chapter_id: str,
         install_onboarding: bool = False,
         local_mode: bool = False,
+        config: Optional[AlignerConfig] = None,
     ) -> ChapterResult:
+        cfg = config if config is not None else self.config
         en_stream = ReadingStream.from_chunks(en_chunks)
         es_stream = ReadingStream.from_chunks(es_chunks)
         pairs = self.aligner.align(en_stream, es_stream)
-        blocks = self.block_builder.build(pairs)
+        blocks = self.block_builder.build(pairs, config=cfg)
         blocks = attach_orphans(blocks, pairs)
 
         if self.adjudicator and not local_mode:
@@ -57,13 +65,14 @@ class AlignmentPipeline:
             except Exception as exc:
                 logger.warning("Adjudicator pass failed for %s: %s", chapter_id, exc)
 
-        self.footnote_emitter.reset_counter()
-        emit = self.footnote_emitter.emit(blocks, soup, chapter_prefix=f"{chapter_id}-")
-        self.footnote_emitter.install_asides(soup, emit.asides)
-        self.footnote_emitter.install_stylesheet(soup)
-        self.footnote_emitter.ensure_epub_namespace(soup)
+        emitter = self._select_emitter(cfg)
+        emitter.reset_counter()
+        emit = emitter.emit(blocks, soup, chapter_prefix=f"{chapter_id}-")
+        emitter.install_asides(soup, emit.asides)
+        emitter.install_stylesheet(soup)
+        emitter.ensure_epub_namespace(soup)
         if install_onboarding:
-            self.footnote_emitter.install_onboarding(soup)
+            emitter.install_onboarding(soup)
 
         stats = self._summarise(pairs, blocks, emit)
         logger.info(

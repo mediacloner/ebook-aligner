@@ -28,6 +28,14 @@ def _env_int(env, key: str, default: int) -> int:
     return value if value > 0 else default
 
 
+def _env_choice(env, key: str, default: str, choices) -> str:
+    raw = env.get(key)
+    if raw is None:
+        return default
+    value = str(raw).strip().lower()
+    return value if value in choices else default
+
+
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _load_dotenv(_REPO_ROOT / ".env")
 
@@ -46,11 +54,20 @@ class AlignerConfig:
     # long paragraphs are split into chunks of whole sentences targeting
     # ~target_chunk_words words each, instead of fixed max_sentences_per_block
     # windows. A single sentence longer than the target stands alone; sentences
-    # are never broken mid-sentence. Splitting only kicks in once a paragraph
-    # exceeds split_min_words words and has at least two sentences.
+    # are never broken mid-sentence. Splitting kicks in once a paragraph exceeds
+    # target_chunk_words words and has at least two sentences.
     word_budget_split: bool = True
     target_chunk_words: int = 25
-    split_min_words: int = 70
+
+    # Output layout. "inline" emits each English chunk immediately followed by
+    # its visible Spanish translation, kept together so an e-reader page break
+    # never separates a pair (ideal for learners). "footnote" hides the Spanish
+    # in a tap-to-reveal EPUB3 popup instead.
+    output_mode: str = "inline"
+    # Keep-together strategy for inline pairs. "flat" adds page-break-avoid CSS
+    # directly to the paragraphs (safe — no change to the book's structure);
+    # "none" disables it.
+    keep_together_mode: str = "flat"
 
     anchor_top_k: int = 5
     anchor_min_similarity: float = 0.55
@@ -84,8 +101,11 @@ class AlignerConfig:
             target_chunk_words=_env_int(
                 env, "ALIGNER_TARGET_CHUNK_WORDS", defaults.target_chunk_words
             ),
-            split_min_words=_env_int(
-                env, "ALIGNER_SPLIT_MIN_WORDS", defaults.split_min_words
+            output_mode=_env_choice(
+                env, "ALIGNER_OUTPUT_MODE", defaults.output_mode, ("inline", "footnote")
+            ),
+            keep_together_mode=_env_choice(
+                env, "ALIGNER_KEEP_TOGETHER", defaults.keep_together_mode, ("flat", "none")
             ),
             cache_dir=cache_dir,
         )

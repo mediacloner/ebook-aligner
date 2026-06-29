@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
 import threading
@@ -33,21 +34,29 @@ def reset_pipeline() -> None:
         _pipeline = None
 
 
-def _apply_split_overrides(cfg: AlignerConfig, config: dict) -> None:
-    """Apply per-job sentence-splitting overrides sent from the web config.
+def _resolve_job_config(base: AlignerConfig, config: dict) -> AlignerConfig:
+    """Return a per-job AlignerConfig with the web overrides applied.
 
-    The pipeline is a process-wide singleton built from .env; these keys, when
-    present in the job config, let the UI tune splitting per run. cfg is shared
-    with the block builder (same object), so setting attributes here is enough.
+    The pipeline is a process-wide singleton built from .env. We must NOT mutate
+    its config in place: jobs run on separate threads in one process, so an
+    in-place mutation lets one job clobber another's settings, and any key a job
+    omits would inherit the previous job's value. Instead we derive a fresh
+    config from the (unmutated) baseline via dataclasses.replace, so absent keys
+    fall back to the .env/default baseline rather than to a prior job.
     """
+    overrides: dict = {}
     if config.get("word_budget_split") is not None:
-        cfg.word_budget_split = bool(config["word_budget_split"])
+        overrides["word_budget_split"] = bool(config["word_budget_split"])
     target = config.get("target_chunk_words")
     if isinstance(target, int) and target > 0:
-        cfg.target_chunk_words = target
-    min_words = config.get("split_min_words")
-    if isinstance(min_words, int) and min_words > 0:
-        cfg.split_min_words = min_words
+        overrides["target_chunk_words"] = target
+    output_mode = config.get("output_mode")
+    if isinstance(output_mode, str) and output_mode.strip().lower() in ("inline", "footnote"):
+        overrides["output_mode"] = output_mode.strip().lower()
+    keep_together = config.get("keep_together_mode")
+    if isinstance(keep_together, str) and keep_together.strip().lower() in ("flat", "none"):
+        overrides["keep_together_mode"] = keep_together.strip().lower()
+    return dataclasses.replace(base, **overrides) if overrides else base
 
 
 def _slice_shared_es(es_chunks, chunk_range):
@@ -129,7 +138,7 @@ def run_chapter_pair(args):
         ]
 
         pipeline = get_pipeline()
-        _apply_split_overrides(pipeline.config, config)
+        job_config = _resolve_job_config(pipeline.config, config)
         chapter_id = f"ch{idx:03d}"
         install_onboarding = idx == 0
         result = pipeline.process_chapter(
@@ -139,6 +148,7 @@ def run_chapter_pair(args):
             chapter_id=chapter_id,
             install_onboarding=install_onboarding,
             local_mode=bool(config.get("local_mode")),
+            config=job_config,
         )
 
         with open(target_path, "w", encoding="utf-8") as fh:

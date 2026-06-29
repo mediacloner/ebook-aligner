@@ -95,11 +95,13 @@
         background: #f9fafb;
         margin-bottom: 12px;
       }
-      .toggle-row input[type="checkbox"] {
+      .toggle-row input[type="checkbox"],
+      .toggle-row input[type="radio"] {
         width: 18px;
         height: 18px;
         margin-top: 2px;
         cursor: pointer;
+        flex-shrink: 0;
       }
       .toggle-row .toggle-label { font-weight: 600; color: #374151; }
       .toggle-row .toggle-hint {
@@ -250,17 +252,44 @@
       </div>
 
       <div class="config-section">
+        <h3>📖 Output</h3>
+
+        <label class="toggle-row">
+          <input type="radio" name="outputMode" id="outputModeInline" value="inline" checked />
+          <span>
+            <span class="toggle-label">Inline pairs — both languages visible</span>
+            <span class="toggle-hint">
+              Each English passage is followed by its Spanish translation,
+              kept together so an e-reader page break never separates them.
+              Best for learning.
+            </span>
+          </span>
+        </label>
+
+        <label class="toggle-row">
+          <input type="radio" name="outputMode" id="outputModeFootnote" value="footnote" />
+          <span>
+            <span class="toggle-label">Tap-to-reveal popup</span>
+            <span class="toggle-hint">
+              Spanish stays hidden in a footnote popup; tap the · marker to
+              reveal it. Keeps the page in English only.
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <div class="config-section">
         <h3>✂️ Sentence splitting</h3>
 
         <label class="toggle-row">
           <input type="checkbox" id="wordBudgetSplit" checked />
           <span>
-            <span class="toggle-label">Split long paragraphs by word budget</span>
+            <span class="toggle-label">Split long paragraphs</span>
             <span class="toggle-hint">
-              Break long paragraphs into smaller chunks of whole sentences
-              (each its own tap-to-reveal note), aiming for the target word
-              count below. A single long sentence is never split mid-sentence.
-              Off = the legacy fixed sentence-window split.
+              Break paragraphs longer than the target into smaller chunks of
+              whole sentences, so each English+Spanish pair fits on a page and
+              stays together. A single long sentence is never split
+              mid-sentence. Off = keep whole paragraphs.
             </span>
           </span>
         </label>
@@ -268,17 +297,12 @@
         <div class="number-row" id="targetChunkWordsRow">
           <span>
             <span class="toggle-label">Target words per chunk</span>
-            <span class="toggle-hint">Aim for roughly this many words per chunk.</span>
+            <span class="toggle-hint">
+              Aim for roughly this many words per chunk. Paragraphs near or
+              below this size stay whole; longer ones are split.
+            </span>
           </span>
           <input type="number" id="targetChunkWords" min="5" max="200" value="25" />
-        </div>
-
-        <div class="number-row" id="splitMinWordsRow">
-          <span>
-            <span class="toggle-label">Only split above</span>
-            <span class="toggle-hint">Minimum paragraph length (words) before splitting.</span>
-          </span>
-          <input type="number" id="splitMinWords" min="10" max="500" value="70" />
         </div>
       </div>
 
@@ -293,9 +317,9 @@
         useNeural: true,
         localMode: false,
         bypassAlignment: false,
+        outputMode: "inline",
         wordBudgetSplit: true,
         targetChunkWords: 25,
-        splitMinWords: 70,
       };
 
       function clampInt(value, fallback, min, max) {
@@ -306,11 +330,9 @@
 
       function syncSplitRowsEnabled() {
         const on = document.getElementById("wordBudgetSplit").checked;
-        ["targetChunkWordsRow", "splitMinWordsRow"].forEach((id) => {
-          const row = document.getElementById(id);
-          row.classList.toggle("disabled", !on);
-          row.querySelector("input").disabled = !on;
-        });
+        const row = document.getElementById("targetChunkWordsRow");
+        row.classList.toggle("disabled", !on);
+        row.querySelector("input").disabled = !on;
       }
 
       function loadConfig() {
@@ -322,9 +344,9 @@
               useNeural: parsed.useNeural !== false,
               localMode: !!parsed.localMode,
               bypassAlignment: !!parsed.bypassAlignment,
+              outputMode: parsed.outputMode === "footnote" ? "footnote" : "inline",
               wordBudgetSplit: parsed.wordBudgetSplit !== false,
               targetChunkWords: clampInt(parsed.targetChunkWords, 25, 5, 200),
-              splitMinWords: clampInt(parsed.splitMinWords, 70, 10, 500),
             };
           } catch (_) {}
         }
@@ -332,12 +354,14 @@
         document.getElementById("localMode").checked = bilingualConfig.localMode;
         document.getElementById("bypassAlignment").checked =
           bilingualConfig.bypassAlignment;
+        document.getElementById("outputModeInline").checked =
+          bilingualConfig.outputMode === "inline";
+        document.getElementById("outputModeFootnote").checked =
+          bilingualConfig.outputMode === "footnote";
         document.getElementById("wordBudgetSplit").checked =
           bilingualConfig.wordBudgetSplit;
         document.getElementById("targetChunkWords").value =
           bilingualConfig.targetChunkWords;
-        document.getElementById("splitMinWords").value =
-          bilingualConfig.splitMinWords;
         syncSplitRowsEnabled();
       }
 
@@ -376,13 +400,12 @@
           document.getElementById("localMode").checked;
         bilingualConfig.bypassAlignment =
           document.getElementById("bypassAlignment").checked;
+        bilingualConfig.outputMode =
+          document.getElementById("outputModeFootnote").checked ? "footnote" : "inline";
         bilingualConfig.wordBudgetSplit =
           document.getElementById("wordBudgetSplit").checked;
         bilingualConfig.targetChunkWords = clampInt(
           document.getElementById("targetChunkWords").value, 25, 5, 200
-        );
-        bilingualConfig.splitMinWords = clampInt(
-          document.getElementById("splitMinWords").value, 70, 10, 500
         );
         localStorage.setItem("epubConfig", JSON.stringify(bilingualConfig));
         window.location.href = "/";

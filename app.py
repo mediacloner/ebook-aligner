@@ -94,12 +94,12 @@ def process_job_worker(
             "local_mode": bool(user_config.get("localMode", False)),
             "word_budget_split": user_config.get("wordBudgetSplit", True) is not False,
         }
+        output_mode = user_config.get("outputMode")
+        if isinstance(output_mode, str) and output_mode.strip().lower() in ("inline", "footnote"):
+            config["output_mode"] = output_mode.strip().lower()
         target_chunk_words = user_config.get("targetChunkWords")
         if isinstance(target_chunk_words, int) and target_chunk_words > 0:
             config["target_chunk_words"] = target_chunk_words
-        split_min_words = user_config.get("splitMinWords")
-        if isinstance(split_min_words, int) and split_min_words > 0:
-            config["split_min_words"] = split_min_words
         result = create_bilingual_epub(
             en_oebps, es_oebps, output_path, config=config,
             progress_callback=update_progress, cancel_check=cancel_check,

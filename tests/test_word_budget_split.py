@@ -41,7 +41,8 @@ class TestWordBudgetSplit(unittest.TestCase):
     def test_defaults(self):
         self.assertTrue(self.cfg.word_budget_split)
         self.assertEqual(self.cfg.target_chunk_words, 25)
-        self.assertEqual(self.cfg.split_min_words, 70)
+        self.assertEqual(self.cfg.output_mode, "inline")
+        self.assertEqual(self.cfg.keep_together_mode, "flat")
 
     def test_group_by_word_budget_targets_size_without_losing_sentences(self):
         sents = [f"This is sentence number {i} with some filler words here." for i in range(6)]

@@ -23,7 +23,8 @@
       "Bash(git fetch *)",
       "Bash(git rev-list *)",
       "Bash(git push *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash([ -f \"$F\" ])"
     ]
   }
 }

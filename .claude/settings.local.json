@@ -39,7 +39,14 @@
       "Bash(venv/bin/python -m unittest tests.test_word_budget_split tests.test_inline_emitter -v)",
       "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks status)",
       "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks diff)",
-      "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks diff --stat)"
+      "Bash(git -C /Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/ebooks diff --stat)",
+      "Bash(.venv/bin/python tests/test_word_budget_split.py)",
+      "Bash(venv/bin/python tests/test_word_budget_split.py)",
+      "Bash(venv/bin/python tests/test_inline_emitter.py)",
+      "Bash(venv/bin/python tests/test_job_config.py)",
+      "Bash(venv/bin/python -m unittest discover -s tests -t . -p \"test_*.py\")",
+      "Bash(venv/bin/python tests/test_multithreading.py)",
+      "Bash(cd *)"
     ]
   }
 }

@@ -35,14 +35,18 @@ def _pair(en_text, es_text):
 
 class TestWordBudgetSplit(unittest.TestCase):
     def setUp(self):
-        self.cfg = AlignerConfig()  # word_budget_split=True, target=25, min=70
+        # This class exercises the word-budget splitting path, so enable it
+        # explicitly (splitting is off by default — see test_defaults).
+        self.cfg = AlignerConfig(word_budget_split=True)
         self.bb = BlockBuilder(self.cfg, _FakeAligner())
 
     def test_defaults(self):
-        self.assertTrue(self.cfg.word_budget_split)
-        self.assertEqual(self.cfg.target_chunk_words, 25)
-        self.assertEqual(self.cfg.output_mode, "inline")
-        self.assertEqual(self.cfg.keep_together_mode, "flat")
+        defaults = AlignerConfig()
+        # Splitting is off by default: each paragraph stays a whole EN+ES pair.
+        self.assertFalse(defaults.word_budget_split)
+        self.assertEqual(defaults.target_chunk_words, 25)
+        self.assertEqual(defaults.output_mode, "inline")
+        self.assertEqual(defaults.keep_together_mode, "flat")
 
     def test_group_by_word_budget_targets_size_without_losing_sentences(self):
         sents = [f"This is sentence number {i} with some filler words here." for i in range(6)]
@@ -80,14 +84,16 @@ class TestWordBudgetSplit(unittest.TestCase):
             sum(_words(b.en_text) for b in blocks), _words(en)
         )
 
-    def test_legacy_mode_uses_sentence_windows(self):
+    def test_split_disabled_keeps_paragraph_whole(self):
         cfg = AlignerConfig(word_budget_split=False)
         bb = BlockBuilder(cfg, _FakeAligner())
         en = " ".join(f"Sentence number {i} has enough words to matter here today." for i in range(10))
         es = " ".join(f"Oracion {i} con relleno." for i in range(10))
         blocks = bb.build([_pair(en, es)])
-        # 10 sentences / window of 4 -> 3 sub-blocks
-        self.assertEqual(len(blocks), 3)
+        # Splitting disabled -> the whole paragraph stays a single block/pair,
+        # never broken in the middle.
+        self.assertEqual(len(blocks), 1)
+        self.assertEqual(blocks[0].en_text, en)
 
 
 if __name__ == "__main__":

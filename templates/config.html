@@ -282,14 +282,15 @@
         <h3>✂️ Sentence splitting</h3>
 
         <label class="toggle-row">
-          <input type="checkbox" id="wordBudgetSplit" checked />
+          <input type="checkbox" id="wordBudgetSplit" />
           <span>
             <span class="toggle-label">Split long paragraphs</span>
             <span class="toggle-hint">
               Break paragraphs longer than the target into smaller chunks of
               whole sentences, so each English+Spanish pair fits on a page and
               stays together. A single long sentence is never split
-              mid-sentence. Off = keep whole paragraphs.
+              mid-sentence. Default: off — each paragraph stays a whole
+              EN+ES pair and is never broken in the middle.
             </span>
           </span>
         </label>
@@ -318,7 +319,7 @@
         localMode: false,
         bypassAlignment: false,
         outputMode: "inline",
-        wordBudgetSplit: true,
+        wordBudgetSplit: false,
         targetChunkWords: 25,
       };
 
@@ -345,7 +346,7 @@
               localMode: !!parsed.localMode,
               bypassAlignment: !!parsed.bypassAlignment,
               outputMode: parsed.outputMode === "footnote" ? "footnote" : "inline",
-              wordBudgetSplit: parsed.wordBudgetSplit !== false,
+              wordBudgetSplit: parsed.wordBudgetSplit === true,
               targetChunkWords: clampInt(parsed.targetChunkWords, 25, 5, 200),
             };
           } catch (_) {}

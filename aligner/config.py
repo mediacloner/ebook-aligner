@@ -55,8 +55,10 @@ class AlignerConfig:
     # ~target_chunk_words words each, instead of fixed max_sentences_per_block
     # windows. A single sentence longer than the target stands alone; sentences
     # are never broken mid-sentence. Splitting kicks in once a paragraph exceeds
-    # target_chunk_words words and has at least two sentences.
-    word_budget_split: bool = True
+    # target_chunk_words words and has at least two sentences. This is the master
+    # split switch: when False (the default) paragraphs are never split, so each
+    # source paragraph stays a single EN + ES pair (no mid-block breaks).
+    word_budget_split: bool = False
     target_chunk_words: int = 25
 
     # Output layout. "inline" emits each English chunk immediately followed by

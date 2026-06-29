@@ -14,8 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 _CSS = """\
-p[lang="es"].es-tandem, .es-tandem { }
-.es-tandem.es-nota { font-size: 0.85em; color: #555; }
+p[lang="es"].es-tandem, .es-tandem { color: #555; }
 .es-onboarding {
     font-size: 0.9em; color: #555; border-left: 3px solid #888;
     padding-left: 0.8em; margin: 1em 0;
@@ -182,9 +181,19 @@ class InlineBilingualEmitter:
             text = (getattr(extra, "text", "") or "").strip()
             if not text:
                 continue
-            p = soup.new_tag("p")
+            name = base_node.name if base_node is not None and base_node.name else "p"
+            p = soup.new_tag(name)
+            # Orphan Spanish (text the aligner couldn't pair with an English
+            # paragraph) renders identically to a normal translation: same tag,
+            # the same structural class and es-tandem grey. "es-nota" is kept only
+            # as a semantic marker — it carries no visual difference (see _CSS),
+            # so the note no longer looks like a broken mid-block fragment.
+            self._copy_class(base_node, p, extra=ES_CLASS)
+            classes = list(p.get("class") or [])
+            if "es-nota" not in classes:
+                classes.append("es-nota")
+            p["class"] = classes
             p["lang"] = "es"
-            p["class"] = [ES_CLASS, "es-nota"]
             p.append(NavigableString(text))
             out.append(p)
         return out

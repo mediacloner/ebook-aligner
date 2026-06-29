@@ -145,19 +145,18 @@ class BlockBuilder:
         cfg = config if config is not None else self.config
         if event.kind != "paragraph":
             return False
-        if cfg.word_budget_split:
-            # Word-budget mode: split once the paragraph exceeds the target chunk
-            # size and has at least two sentences (a single long sentence is
-            # never broken mid-sentence, so it stays whole).
-            if self._word_count(en_text) <= cfg.target_chunk_words:
-                return False
-            sentences = self._split_sentences(en_text, "en")
-            return len(sentences) >= 2
-        # Legacy sentence-window mode.
-        if len(en_text) <= cfg.long_paragraph_threshold:
+        if not cfg.word_budget_split:
+            # Splitting disabled (the default): keep every paragraph whole, so a
+            # source paragraph always becomes exactly one EN + one ES pair and is
+            # never broken in the middle.
+            return False
+        # Word-budget mode: split once the paragraph exceeds the target chunk
+        # size and has at least two sentences (a single long sentence is never
+        # broken mid-sentence, so it stays whole).
+        if self._word_count(en_text) <= cfg.target_chunk_words:
             return False
         sentences = self._split_sentences(en_text, "en")
-        return len(sentences) > cfg.max_sentences_per_block
+        return len(sentences) >= 2
 
     def _chunk_windows(
         self, sentences: Sequence[str], config: Optional[AlignerConfig] = None

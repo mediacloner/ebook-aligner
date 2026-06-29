@@ -132,6 +132,33 @@ class TestInlineEmitter(unittest.TestCase):
             self.assertNotIn("dropcap", para.get("class", []))
             self.assertNotIn("first-para", para.get("class", []))
 
+    def test_orphan_extra_matches_translation_style(self):
+        # An ES orphan attached as an "extra" must look like a normal grey
+        # translation, not a smaller broken fragment: same tag, the EN node's
+        # structural class, es-tandem, plus an invisible es-nota marker.
+        soup = _soup('<p class="indent">She spoke.</p>')
+        p = soup.find("p")
+        block = _block(p, "She spoke.", "Ella habló.")
+        block.es_extras = [StreamEvent(kind="paragraph", text="—Hola.", source={"node": object()})]
+        self.emitter.emit([block], soup)
+
+        notes = [t for t in soup.find_all("p") if "es-nota" in (t.get("class") or [])]
+        self.assertEqual(len(notes), 1)
+        note = notes[0]
+        self.assertEqual(note["lang"], "es")
+        self.assertIn("es-tandem", note.get("class"))
+        self.assertIn("indent", note.get("class"))  # structural class copied
+        self.assertIn("—Hola.", note.get_text())
+
+    def test_css_makes_translations_grey_without_shrinking_notes(self):
+        soup = _soup("<p>Hi.</p>")
+        self.emitter.install_stylesheet(soup)
+        css = soup.find("style").string
+        # Main translations are grey...
+        self.assertIn(".es-tandem { color: #555; }", css)
+        # ...and notes are not singled out with a smaller font any more.
+        self.assertNotIn("es-nota", css)
+
     def test_stylesheet_installed_once(self):
         soup = _soup('<p>Hi.</p>')
         self.emitter.install_stylesheet(soup)

@@ -92,7 +92,7 @@ def process_job_worker(
             "use_neural": user_config.get("useNeural", True) is not False,
             "bypass_alignment": bool(user_config.get("bypassAlignment", False)),
             "local_mode": bool(user_config.get("localMode", False)),
-            "word_budget_split": user_config.get("wordBudgetSplit", True) is not False,
+            "word_budget_split": user_config.get("wordBudgetSplit", False) is True,
         }
         output_mode = user_config.get("outputMode")
         if isinstance(output_mode, str) and output_mode.strip().lower() in ("inline", "footnote"):

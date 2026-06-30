@@ -30,10 +30,22 @@ The aligner is a three-layer pipeline (`aligner/` module):
 
 - **Inline pairs** (`ALIGNER_OUTPUT_MODE=inline`, the default) — each English
   chunk is immediately followed by its visible Spanish translation, and the
-  pair is **kept together** (`page-break-after:avoid` on the English,
-  `page-break-before:avoid` on its Spanish) so an e-reader page break can never
-  strand the English without its Spanish. Ideal for learners. This is the
-  bilingual-epub-splitter layout, driven by this app's alignment.
+  pair is **kept together** so an e-reader page break can never strand the
+  English without its Spanish. Ideal for learners. This is the
+  bilingual-epub-splitter layout, driven by this app's alignment. The
+  keep-together strategy is set by `ALIGNER_KEEP_TOGETHER`:
+    - `merge` — fold each pair into a **single block** (`EN<br/><span>ES</span>`).
+      A single block has no between-block break point, so the pair survives even
+      on readers that implement no CSS break support — **Onyx Boox NeoReader,
+      Moon+ Reader, and most custom-paginating Android readers** (the ones that
+      ignore `break-inside:avoid` and split a wrapper `<div>`). Most robust
+      across devices; recommended.
+    - `wrap` (code default) — enclose each pair in a `<div>` with
+      `break-inside:avoid`. Honored by Calibre / Adobe-DE-class engines; ignored
+      by the multicolumn-paginating readers above.
+    - `flat` — `page-break-after:avoid` on the English + `page-break-before:avoid`
+      on its Spanish. No structural change; weakly honored between siblings.
+    - `none` — disable keep-together.
 - **Footnote** (`ALIGNER_OUTPUT_MODE=footnote`) — Spanish is hidden in a
   tap-to-reveal EPUB3 popup; each chunk gets a faint `·` marker.
 
@@ -76,7 +88,7 @@ ALIGNER_USE_LLM=true
 
 # Output + splitting (optional — defaults shown)
 ALIGNER_OUTPUT_MODE=inline       # inline = visible EN/ES pairs; footnote = popup
-ALIGNER_KEEP_TOGETHER=flat       # flat = page-break-avoid CSS; none = off
+ALIGNER_KEEP_TOGETHER=merge      # merge = one block (Boox/Moon+); wrap/flat/none
 ALIGNER_WORD_BUDGET_SPLIT=true   # false = keep whole paragraphs
 ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk (also the split threshold)
 ```

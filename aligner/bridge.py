@@ -54,7 +54,7 @@ def _resolve_job_config(base: AlignerConfig, config: dict) -> AlignerConfig:
     if isinstance(output_mode, str) and output_mode.strip().lower() in ("inline", "footnote"):
         overrides["output_mode"] = output_mode.strip().lower()
     keep_together = config.get("keep_together_mode")
-    if isinstance(keep_together, str) and keep_together.strip().lower() in ("flat", "none"):
+    if isinstance(keep_together, str) and keep_together.strip().lower() in ("merge", "flat", "wrap", "none"):
         overrides["keep_together_mode"] = keep_together.strip().lower()
     return dataclasses.replace(base, **overrides) if overrides else base
 

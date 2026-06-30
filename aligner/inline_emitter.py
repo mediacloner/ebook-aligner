@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from aligner.block_builder import Block
 from aligner.config import AlignerConfig
 from aligner.footnote_emitter import EmitResult
+from aligner.keep_together import ES_CLASS, merge_pairs, wrap_pairs
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +20,21 @@ p[lang="es"].es-tandem, .es-tandem { color: #555; }
     font-size: 0.9em; color: #555; border-left: 3px solid #888;
     padding-left: 0.8em; margin: 1em 0;
 }
+/* Readers that fake pagination with CSS multi-columns (many Android readers)
+   do not alias page-break-* to column-break-*, so the wrapper's inline
+   break-inside:avoid is a no-op there. Add the column-break fallback ONLY
+   behind @supports: declaring -webkit-column-break-inside alongside
+   page-break-inside in the same rule makes some WebKit readers ignore both
+   (standardebooks/tools#101), and @supports cannot live in an inline style. */
+@supports not ((page-break-inside: avoid) and (break-inside: avoid)) {
+    .keeptogether { -webkit-column-break-inside: avoid; }
+}
 """
 
 ONBOARDING_CLASS = "es-onboarding"
-ES_CLASS = "es-tandem"
+# ES_CLASS ("es-tandem") and the wrap_pairs keep-together pass live in
+# aligner.keep_together (BeautifulSoup-only) so post-processing tools can reuse
+# them without the alignment pipeline's ML dependencies.
 
 # Cosmetic first-of-paragraph classes (drop caps / chapter openers) that must
 # not be repeated on mid-paragraph English chunks or on Spanish paragraphs.
@@ -39,11 +51,27 @@ class InlineBilingualEmitter:
     - Split (sub-blocks): replace the English paragraph with a sequence of
       English-chunk / Spanish-chunk pairs, each kept together.
 
-    Keep-together uses the "flat" strategy (CSS directly on the paragraphs):
-    ``page-break-after:avoid`` on the English side and ``page-break-before:avoid``
-    on its Spanish side. Breaks between pairs are still allowed. Note this is a
-    hint, not a guarantee: Apple Books and most Kobo readers honor it, but
-    Kindle/KFX may still break a pair (``avoid`` is the strongest CSS offers).
+    Keep-together has three strategies, chosen by ``config.keep_together_mode``:
+
+    - ``"merge"`` folds each EN + its Spanish translation(s) into a *single*
+      block (EN text + ``<br/>`` + ``<span class="es-tandem">`` per ES part).
+      A single block has no between-block break point, so it cannot be split
+      across a page even by readers that implement no CSS fragmentation at all
+      (Onyx Boox NeoReader, Moon+ Reader, most custom-paginating Android
+      readers). This is the most robust strategy across e-readers.
+    - ``"wrap"`` (default) encloses each EN + its Spanish translation(s) in a
+      single ``<div class="keeptogether" style="…break-inside:avoid">``.
+      ``break-inside:avoid`` on a *container* is the most reliably honored break
+      hint among fragmentation-aware engines (Calibre, ADE): the whole pair
+      moves to the next page (leaving a gap) rather than splitting. Readers that
+      fake pagination with CSS multi-columns ignore it — see ``merge``.
+    - ``"flat"`` instead adds ``page-break-after:avoid`` to the English side and
+      ``page-break-before:avoid`` to its Spanish side. It makes no structural
+      change, but break-avoid *between sibling blocks* is weakly supported and
+      many readers split the pair anyway.
+
+    ``"none"`` disables keep-together entirely. Breaks between one pair and the
+    next are always allowed; only within a pair are they discouraged.
     """
 
     def __init__(self, config: AlignerConfig):
@@ -91,6 +119,12 @@ class InlineBilingualEmitter:
             else:
                 sub_split += 1
                 pair_count += self._replace_with_inline_pairs(node, node_blocks, soup)
+
+        mode = (self.config.keep_together_mode or "wrap").lower()
+        if mode == "wrap":
+            wrap_pairs(soup)
+        elif mode == "merge":
+            merge_pairs(soup)
 
         return EmitResult(
             asides=[],
@@ -216,13 +250,26 @@ class InlineBilingualEmitter:
     def _apply_keep(self, p: Optional[Tag], role: str) -> None:
         if p is None:
             return
-        mode = (self.config.keep_together_mode or "flat").lower()
-        if mode == "none":
+        mode = (self.config.keep_together_mode or "wrap").lower()
+        if mode in ("none", "merge"):
+            # "none": breaks allowed everywhere. "merge": merge_pairs folds the
+            # pair into one block in a final pass and puts break-inside:avoid on
+            # that block itself, so the per-paragraph hints here are redundant.
             return
+        # Margin tightening collapses the gap *within* an EN/ES pair so the two
+        # read as one unit (the gap *between* pairs is left intact). In "wrap"
+        # mode the surrounding keeptogether <div> (added by wrap_pairs in a final
+        # pass) owns the page-break behavior, so the paragraphs only need the
+        # margin tweak; in "flat" mode the break-avoid hints live on the
+        # paragraphs themselves.
         if role == "en":
-            rule = "page-break-after:avoid;break-after:avoid;margin-bottom:0"
+            rule = "margin-bottom:0"
+            if mode == "flat":
+                rule = "page-break-after:avoid;break-after:avoid;" + rule
         else:
-            rule = "page-break-before:avoid;break-before:avoid;margin-top:0"
+            rule = "margin-top:0"
+            if mode == "flat":
+                rule = "page-break-before:avoid;break-before:avoid;" + rule
         style = (p.get("style") or "").strip()
         if style and not style.endswith(";"):
             style += ";"

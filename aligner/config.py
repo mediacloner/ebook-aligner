@@ -13,7 +13,24 @@ def _load_dotenv(path: Path) -> None:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
-        value = value.strip().strip('"').strip("'")
+        value = value.strip()
+        if value[:1] in ("'", '"'):
+            # Quoted value: keep what's inside the matching quote; anything after
+            # the closing quote (e.g. an inline comment) is dropped.
+            quote = value[0]
+            end = value.find(quote, 1)
+            value = value[1:end] if end != -1 else value[1:]
+        else:
+            # Unquoted value: strip an inline comment starting at the first '#'
+            # that follows whitespace, so a value can still contain '#' (e.g. a
+            # colour like #555). Without this, "VAR=foo   # note" would store the
+            # comment as part of the value and silently defeat _env_choice — e.g.
+            # "ALIGNER_KEEP_TOGETHER=merge  # ..." would not match any valid mode.
+            for sep in (" #", "\t#"):
+                idx = value.find(sep)
+                if idx != -1:
+                    value = value[:idx]
+            value = value.rstrip()
         os.environ.setdefault(key, value)
 
 
@@ -66,10 +83,22 @@ class AlignerConfig:
     # never separates a pair (ideal for learners). "footnote" hides the Spanish
     # in a tap-to-reveal EPUB3 popup instead.
     output_mode: str = "inline"
-    # Keep-together strategy for inline pairs. "flat" adds page-break-avoid CSS
-    # directly to the paragraphs (safe — no change to the book's structure);
-    # "none" disables it.
-    keep_together_mode: str = "flat"
+    # Keep-together strategy for inline pairs.
+    # "merge" folds each EN + ES pair into a single block (EN text + <br/> +
+    # <span> ES) that also carries break-inside:avoid + the keeptogether class.
+    # Fragmentation-aware engines (Calibre, Kindle, ADE) honor break-inside and
+    # push the whole pair to the next page; readers that ignore it (Onyx Boox
+    # NeoReader, Moon+ Reader, most custom-paginating Android readers) at least
+    # have no *between-block* split point, so a pair only splits if it is taller
+    # than the page — keep word_budget_split on so pairs stay short. Most robust
+    # across devices.
+    # "wrap" (default) encloses each EN + ES pair in a <div> with
+    # break-inside:avoid — honored by fragmentation-aware engines, but leaves a
+    # block boundary between EN and ES that multicolumn-paginating readers split
+    # at every time the pair crosses a page region.
+    # "flat" instead puts break-before/after:avoid on the paragraphs (no
+    # structural change, but weakly honored between siblings). "none" disables it.
+    keep_together_mode: str = "wrap"
 
     anchor_top_k: int = 5
     anchor_min_similarity: float = 0.55
@@ -107,7 +136,7 @@ class AlignerConfig:
                 env, "ALIGNER_OUTPUT_MODE", defaults.output_mode, ("inline", "footnote")
             ),
             keep_together_mode=_env_choice(
-                env, "ALIGNER_KEEP_TOGETHER", defaults.keep_together_mode, ("flat", "none")
+                env, "ALIGNER_KEEP_TOGETHER", defaults.keep_together_mode, ("merge", "flat", "wrap", "none")
             ),
             cache_dir=cache_dir,
         )

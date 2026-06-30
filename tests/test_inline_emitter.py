@@ -475,5 +475,68 @@ class TestMergePairsHelper(unittest.TestCase):
         self.assertEqual(len(soup.find_all("p")), 1)
 
 
+class TestSplitContinuationMarker(unittest.TestCase):
+    """A long paragraph split into N pairs marks every English chunk EXCEPT the
+    last with a trailing ⁂ (U+2042), so the reader sees the paragraph continues.
+    English side only; never on a single unsplit pair or the final chunk."""
+
+    MARK = "⁂"
+
+    def _split_blocks(self, p):
+        return [
+            _block(p, "S1.", "E1.", sub_index=0, sub_count=3),
+            _block(p, "S2.", "E2.", sub_index=1, sub_count=3),
+            _block(p, "S3.", "E3.", sub_index=2, sub_count=3),
+        ]
+
+    def _emit_split(self, mode, **cfg_kw):
+        cfg = AlignerConfig(keep_together_mode=mode, **cfg_kw)
+        emitter = InlineBilingualEmitter(cfg)
+        soup = _soup('<p class="body">S1. S2. S3.</p>')
+        emitter.emit(self._split_blocks(soup.find("p")), soup)
+        return soup
+
+    def test_marker_on_non_final_english_chunks_only(self):
+        # wrap keeps EN and ES as separate <p>, so EN chunks are easy to isolate.
+        soup = self._emit_split("wrap")
+        en = [p for p in soup.find_all("p") if p.get("lang") != "es"]
+        self.assertEqual(len(en), 3)
+        self.assertTrue(en[0].get_text().rstrip().endswith(self.MARK))
+        self.assertTrue(en[1].get_text().rstrip().endswith(self.MARK))
+        self.assertNotIn(self.MARK, en[2].get_text())  # final chunk: no marker
+
+    def test_spanish_never_marked(self):
+        soup = self._emit_split("wrap")
+        es = [p for p in soup.find_all("p") if p.get("lang") == "es"]
+        self.assertEqual(len(es), 3)
+        for p in es:
+            self.assertNotIn(self.MARK, p.get_text())
+
+    def test_single_unsplit_pair_has_no_marker(self):
+        cfg = AlignerConfig(keep_together_mode="wrap")
+        emitter = InlineBilingualEmitter(cfg)
+        soup = _soup('<p class="body">Just one.</p>')
+        emitter.emit([_block(soup.find("p"), "Just one.", "Solo una.")], soup)
+        for p in soup.find_all("p"):
+            self.assertNotIn(self.MARK, p.get_text())
+
+    def test_merge_mode_keeps_marker_on_english_side(self):
+        soup = self._emit_split("merge")
+        blocks = soup.find_all("p")
+        self.assertEqual(len(blocks), 3)  # three merged single blocks
+        self.assertIn(self.MARK, blocks[0].get_text())
+        self.assertIn(self.MARK, blocks[1].get_text())
+        self.assertNotIn(self.MARK, blocks[2].get_text())  # final chunk
+        for blk in blocks:
+            span = blk.find("span", class_="es-tandem")
+            self.assertIsNotNone(span)
+            self.assertNotIn(self.MARK, span.get_text())  # marker is English-side
+
+    def test_flag_off_disables_marker(self):
+        soup = self._emit_split("wrap", split_continuation_marker=False)
+        for p in soup.find_all("p"):
+            self.assertNotIn(self.MARK, p.get_text())
+
+
 if __name__ == "__main__":
     unittest.main()

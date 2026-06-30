@@ -100,6 +100,11 @@ class AlignerConfig:
     # structural change, but weakly honored between siblings). "none" disables it.
     keep_together_mode: str = "wrap"
 
+    # Append a ⁂ (U+2042) marker to the end of every English split chunk except
+    # the last, so a reader can see a long paragraph was broken into several
+    # EN/ES pairs (the marker reads as "continues"). English side only.
+    split_continuation_marker: bool = True
+
     anchor_top_k: int = 5
     anchor_min_similarity: float = 0.55
     dp_max_span: int = 4
@@ -138,6 +143,9 @@ class AlignerConfig:
             keep_together_mode=_env_choice(
                 env, "ALIGNER_KEEP_TOGETHER", defaults.keep_together_mode, ("merge", "flat", "wrap", "none")
             ),
+            split_continuation_marker=env.get(
+                "ALIGNER_SPLIT_MARKER", str(defaults.split_continuation_marker)
+            ).lower() == "true",
             cache_dir=cache_dir,
         )
 

@@ -13,6 +13,13 @@ from aligner.keep_together import ES_CLASS, merge_pairs, wrap_pairs
 
 logger = logging.getLogger(__name__)
 
+# ⁂ (U+2042 ASTERISM) appended to the end of every English split chunk EXCEPT
+# the last one, so a reader can see a long paragraph was broken into several
+# EN/ES pairs (the marker reads as "continues"). Plain text, English side only;
+# matches the older bilingual-epub-splitter's " ⁂" convention. Inline at end of
+# text — never alone on a line — so it is not mistaken for a scene-break asterism.
+SPLIT_CONTINUATION_MARKER = "⁂"
+
 
 _CSS = """\
 p[lang="es"].es-tandem, .es-tandem { color: #555; }
@@ -144,6 +151,19 @@ class InlineBilingualEmitter:
             return None
         return source.get("node")
 
+    def _en_text_with_marker(self, block: Block) -> str:
+        """English text for a split chunk, with the ⁂ continuation marker
+        appended when this chunk is NOT the last of its paragraph. A single
+        unsplit paragraph (sub_count == 1) and the final chunk get no marker."""
+        text = block.en_text
+        if (
+            self.config.split_continuation_marker
+            and block.is_sub_block
+            and block.sub_index < block.sub_count - 1
+        ):
+            text = f"{text} {SPLIT_CONTINUATION_MARKER}"
+        return text
+
     def _replace_with_inline_pairs(
         self, node: Tag, sub_blocks: Sequence[Block], soup: BeautifulSoup
     ) -> int:
@@ -156,7 +176,7 @@ class InlineBilingualEmitter:
         pairs = 0
         first = sub_blocks[0]
         node.clear()
-        node.append(NavigableString(first.en_text))
+        node.append(NavigableString(self._en_text_with_marker(first)))
         ref, emitted = self._emit_es(node, first, node, soup)
         if emitted:
             self._apply_keep(node, "en")
@@ -166,7 +186,7 @@ class InlineBilingualEmitter:
             # Strip cosmetic drop-cap/first-letter classes so they don't repeat
             # mid-paragraph; structural classes (indent, etc.) are preserved.
             self._copy_class(node, en_p)
-            en_p.append(NavigableString(sub.en_text))
+            en_p.append(NavigableString(self._en_text_with_marker(sub)))
             ref.insert_after(en_p)
             ref, emitted = self._emit_es(en_p, sub, node, soup)
             if emitted:

@@ -91,7 +91,14 @@ ALIGNER_OUTPUT_MODE=inline       # inline = visible EN/ES pairs; footnote = popu
 ALIGNER_KEEP_TOGETHER=merge      # merge = one block (Boox/Moon+); wrap/flat/none
 ALIGNER_WORD_BUDGET_SPLIT=true   # false = keep whole paragraphs
 ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk (also the split threshold)
+ALIGNER_SPLIT_MARKER=true        # append ⁂ to every English split chunk but the last
 ```
+
+When a long paragraph is split into several EN/ES pairs, every English chunk
+except the last ends with a `⁂` (asterism) so the reader can tell the paragraph
+continues into the next pair rather than being a new paragraph. Set
+`ALIGNER_SPLIT_MARKER=false` to turn it off. (Inline output mode only; footnote
+mode already signals continuation with its note marker.)
 
 The `.env` file is gitignored. To run without the adjudicator, set
 `ALIGNER_USE_LLM=false`. Output mode and the split target can also be set

@@ -46,7 +46,20 @@
       "Bash(venv/bin/python tests/test_job_config.py)",
       "Bash(venv/bin/python -m unittest discover -s tests -t . -p \"test_*.py\")",
       "Bash(venv/bin/python tests/test_multithreading.py)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Read(//Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/AI/bilingual-epub-splitter/**)",
+      "Read(//Volumes/ExternalHD/Users/alex.sanchez/Documents/repos/**)",
+      "Bash(rm -rf /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad/skyward_extract)",
+      "Bash(mkdir -p /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad/skyward_extract)",
+      "Bash([ -f \"$SRC\" ])",
+      "Bash(unzip -o '/Volumes/ExternalHD/Users/alex.sanchez/Desktop/fonts/Skyward \\(bilingual\\) \\(Tandem\\).epub' -d /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad/skyward_extract)",
+      "Bash(python3 - /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad/skyward_extract/text/part0054.html)",
+      "Bash(find /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad/skyward_extract -iname *.ttf -o -iname *.otf -o -iname *.woff*)",
+      "Bash(cd /private/tmp/claude-501/-Volumes-ExternalHD-Users-alex-sanchez-Documents-repos-AI-ebooks/4eb2eeba-8ef0-47bc-92e9-71aaefa5c8d2/scratchpad)",
+      "Bash(ls skyward_extract)",
+      "Bash(git *)",
+      "WebFetch(domain:www.mobileread.com)",
+      "WebFetch(domain:friendsofepub.github.io)"
     ]
   }
 }

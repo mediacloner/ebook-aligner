@@ -21,8 +21,19 @@ logger = logging.getLogger(__name__)
 SPLIT_CONTINUATION_MARKER = "⁂"
 
 
+# Visual de-emphasis declarations for the translated run, selected by
+# config.es_style. "grey" is colour-only (ignored by black/white e-readers such
+# as CrossPoint, which dither the run instead); "italic" is the axis such readers
+# render reliably; "both" combines them. See AlignerConfig.es_style.
+_ES_TANDEM_DECLS = {
+    "grey": "color: #555;",
+    "italic": "font-style: italic;",
+    "both": "color: #555; font-style: italic;",
+}
+
+# __ES_TANDEM_DECLS__ is substituted per-book in install_stylesheet().
 _CSS = """\
-p[lang="es"].es-tandem, .es-tandem { color: #555; }
+p[lang="es"].es-tandem, .es-tandem { __ES_TANDEM_DECLS__ }
 .es-onboarding {
     font-size: 0.9em; color: #555; border-left: 3px solid #888;
     padding-left: 0.8em; margin: 1em 0;
@@ -308,8 +319,11 @@ class InlineBilingualEmitter:
         for existing in head.find_all("style"):
             if existing.string and "es-tandem" in existing.string:
                 return
+        decls = _ES_TANDEM_DECLS.get(
+            (self.config.es_style or "grey").lower(), _ES_TANDEM_DECLS["grey"]
+        )
         style = soup.new_tag("style")
-        style.string = _CSS
+        style.string = _CSS.replace("__ES_TANDEM_DECLS__", decls)
         head.append(style)
 
     def install_onboarding(self, soup: BeautifulSoup) -> None:

@@ -92,7 +92,27 @@ ALIGNER_KEEP_TOGETHER=merge      # merge = one block (Boox/Moon+); wrap/flat/non
 ALIGNER_WORD_BUDGET_SPLIT=true   # false = keep whole paragraphs
 ALIGNER_TARGET_CHUNK_WORDS=25    # target words per chunk (also the split threshold)
 ALIGNER_SPLIT_MARKER=true        # append ⁂ to every English split chunk but the last
+ALIGNER_ES_STYLE=grey            # grey | italic | both — how the Spanish run is de-emphasised
 ```
+
+### Reading on the CrossPoint e-reader (button-only, monochrome)
+
+The open-source [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader)
+firmware ignores `color` and all `break-inside`/`page-break` CSS, and treats a
+paragraph as splittable line-by-line — so a plain bilingual EPUB would render the
+Spanish in the same black and split EN/ES pairs across pages. A companion
+firmware change adds a **Bilingual (Tandem)** reader setting that recognises this
+app's output directly:
+
+- pairs wrapped in `class="keeptogether"` (the `wrap` — default — and `merge`
+  keep-together modes) are kept whole on a page, pushing the pair to the next
+  page and leaving blank space rather than splitting it;
+- the translated run (`class="es-tandem"`) is dithered to grey on the 1-bit panel.
+
+For that device, generate with `ALIGNER_KEEP_TOGETHER=wrap` (or `merge`) and pick
+`ALIGNER_ES_STYLE`: `grey` (dithered grey on-device), `italic` (rendered as true
+italic — needs the reader's *Embedded Style* setting, on by default), or `both`.
+All three still degrade gracefully on Apple Books / Kindle / Kobo.
 
 When a long paragraph is split into several EN/ES pairs, every English chunk
 except the last ends with a `⁂` (asterism) so the reader can tell the paragraph

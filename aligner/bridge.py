@@ -56,6 +56,9 @@ def _resolve_job_config(base: AlignerConfig, config: dict) -> AlignerConfig:
     keep_together = config.get("keep_together_mode")
     if isinstance(keep_together, str) and keep_together.strip().lower() in ("merge", "flat", "wrap", "none"):
         overrides["keep_together_mode"] = keep_together.strip().lower()
+    es_style = config.get("es_style")
+    if isinstance(es_style, str) and es_style.strip().lower() in ("grey", "italic", "both"):
+        overrides["es_style"] = es_style.strip().lower()
     return dataclasses.replace(base, **overrides) if overrides else base
 
 

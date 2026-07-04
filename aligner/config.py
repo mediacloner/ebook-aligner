@@ -105,6 +105,16 @@ class AlignerConfig:
     # EN/ES pairs (the marker reads as "continues"). English side only.
     split_continuation_marker: bool = True
 
+    # How the translated (Spanish) run is visually de-emphasised, via the
+    # ``.es-tandem`` stylesheet rule (inline output mode). "grey" dims it to #555
+    # (the default; ignored by pure black/white e-readers such as CrossPoint,
+    # which instead dither the run to grey when their Bilingual mode is on).
+    # "italic" uses ``font-style:italic`` — the one axis a minimalist reflow
+    # engine like CrossPoint renders reliably (requires its Embedded Style
+    # setting, on by default). "both" applies grey + italic. All three degrade
+    # gracefully on full-colour readers (Apple Books, Kindle, Kobo).
+    es_style: str = "grey"
+
     anchor_top_k: int = 5
     anchor_min_similarity: float = 0.55
     dp_max_span: int = 4
@@ -146,6 +156,9 @@ class AlignerConfig:
             split_continuation_marker=env.get(
                 "ALIGNER_SPLIT_MARKER", str(defaults.split_continuation_marker)
             ).lower() == "true",
+            es_style=_env_choice(
+                env, "ALIGNER_ES_STYLE", defaults.es_style, ("grey", "italic", "both")
+            ),
             cache_dir=cache_dir,
         )
 

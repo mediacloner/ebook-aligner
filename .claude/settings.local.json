@@ -59,7 +59,10 @@
       "Bash(ls skyward_extract)",
       "Bash(git *)",
       "WebFetch(domain:www.mobileread.com)",
-      "WebFetch(domain:friendsofepub.github.io)"
+      "WebFetch(domain:friendsofepub.github.io)",
+      "Bash(git rev-parse *)",
+      "Bash(echo \"name : $\\(git config --global --get user.name\\)\")",
+      "Bash(echo \"email: $\\(git config --global --get user.email\\)\")"
     ]
   }
 }
